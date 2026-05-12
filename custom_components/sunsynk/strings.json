@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sunsynk / Deye Inverter Setup",
+        "description": "Connect to the Sunsynk cloud API. Separate multiple inverter serial numbers with semicolons.",
+        "data": {
+          "api_server": "API Server",
+          "username": "Sunsynk Account Email",
+          "password": "Sunsynk Account Password",
+          "serials": "Inverter Serial Number(s)",
+          "refresh_interval": "Refresh Interval (seconds)"
+        },
+        "data_description": {
+          "serials": "For multiple inverters: SN123456;SN789012",
+          "refresh_interval": "How often to poll the Sunsynk API (minimum 60 seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
+      "invalid_serials": "Invalid serial number(s). Enter at least one serial."
+    },
+    "abort": {
+      "already_configured": "This Sunsynk account is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sunsynk Options",
+        "data": {
+          "serials": "Inverter Serial Number(s)",
+          "refresh_interval": "Refresh Interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_serials": "Invalid serial number(s). Enter at least one serial."
+    }
+  }
+}

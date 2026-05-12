@@ -1,0 +1,415 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Sunsynk / Deye Solar Inverter Dashboard
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# HOW TO FIND YOUR INVERTER PREFIX
+# ─────────────────────────────────
+# 1. Go to Settings → Devices & Services → Sunsynk / Deye Solar Inverter
+# 2. Click on your inverter device
+# 3. Click on any sensor, e.g. "Battery SOC"
+# 4. Note the Entity ID shown — e.g.  sensor.sunsynk_battery_soc
+#    Your INVERTER prefix is:          sunsynk
+#
+# 5. In this file replace every occurrence of  INVERTER  with your prefix.
+#    In VS Code / any editor: Ctrl+H → Find "INVERTER" → Replace with yours.
+#
+# HOW TO IMPORT THIS DASHBOARD
+# ─────────────────────────────
+# Option A – as a new Lovelace dashboard (recommended):
+#   Settings → Dashboards → Add Dashboard → Start with an empty dashboard
+#   Give it a name (e.g. "Solar"), then open it, click Edit Dashboard
+#   → three-dot menu → Raw Configuration Editor → paste this file content.
+#
+# Option B – add as extra views inside an existing dashboard:
+#   Edit your dashboard → Raw Configuration Editor → copy the views below.
+#
+# REQUIRED CUSTOM CARD (install via HACS → Frontend):
+# ─────────────────────────────────────────────────────
+#   • sunsynk-power-flow-card  (by slipx06)
+#     https://github.com/slipx06/sunsynk-power-flow-card
+#
+# OPTIONAL custom cards for nicer charts:
+#   • apexcharts-card           (by RomRider)
+#   • mini-graph-card           (by kalkih)
+#   Without them the Charts view falls back to built-in history-graph cards.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+title: Sunsynk Solar
+views:
+
+  # ╔═══════════════════════════════════════════════════════╗
+  # ║  VIEW 1 — OVERVIEW                                    ║
+  # ╚═══════════════════════════════════════════════════════╝
+  - title: Overview
+    path: sunsynk-overview
+    icon: mdi:solar-power-variant
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+
+          # ── POWER FLOW CARD ──────────────────────────────
+          - type: custom:sunsynk-power-flow-card
+            cardstyle: lite
+            panel_mode: false
+            show_solar: true
+            show_battery: true
+            show_grid: true
+            large_font: false
+            show_daily_solar: true
+            show_daily_grid: true
+            show_daily_battery: true
+            entities:
+              solar_power: sensor.INVERTER_pv_total_power
+              pv1_power: sensor.INVERTER_pv_mppt_1_power          # optional – remove if no MPPT data
+              pv2_power: sensor.INVERTER_pv_mppt_2_power          # optional – remove if no MPPT data
+              pv1_voltage: sensor.INVERTER_pv_mppt_1_voltage      # optional
+              pv2_voltage: sensor.INVERTER_pv_mppt_2_voltage      # optional
+              battery_power: sensor.INVERTER_battery_power
+              battery_soc: sensor.INVERTER_battery_soc
+              battery_voltage: sensor.INVERTER_battery_voltage
+              battery_current: sensor.INVERTER_battery_current
+              battery_temp: sensor.INVERTER_battery_temperature
+              grid_power: sensor.INVERTER_grid_power
+              grid_frequency: sensor.INVERTER_grid_frequency
+              load_power: sensor.INVERTER_load_total_power
+              day_solar_energy: sensor.INVERTER_pv_generation_today
+              day_battery_charge: sensor.INVERTER_battery_charge_today
+              day_battery_discharge: sensor.INVERTER_battery_discharge_today
+              day_grid_import: sensor.INVERTER_grid_import_today
+              day_grid_export: sensor.INVERTER_grid_export_today
+              day_load_energy: sensor.INVERTER_load_energy_used_today
+            battery:
+              shutdown_soc: 10                 # adjust to your battery_shutdown_cap setting
+            grid:
+              show_nonessential: false
+
+          # ── QUICK STATS ──────────────────────────────────
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                entity: sensor.INVERTER_battery_soc
+                name: Battery
+                min: 0
+                max: 100
+                needle: true
+                severity:
+                  green: 60
+                  yellow: 30
+                  red: 0
+
+              - type: entities
+                title: Solar PV
+                entities:
+                  - entity: sensor.INVERTER_pv_total_power
+                    name: Power now
+                  - entity: sensor.INVERTER_pv_generation_today
+                    name: Today
+                  - entity: sensor.INVERTER_generation_today
+                    name: Inverter today
+                  - entity: sensor.INVERTER_pv_generation_total
+                    name: Total
+
+              - type: entities
+                title: Battery
+                entities:
+                  - entity: sensor.INVERTER_battery_soc
+                    name: SOC
+                  - entity: sensor.INVERTER_battery_bms_soc
+                    name: BMS SOC
+                  - entity: sensor.INVERTER_battery_power
+                    name: Power
+                  - entity: sensor.INVERTER_battery_voltage
+                    name: Voltage
+                  - entity: sensor.INVERTER_battery_current
+                    name: Current
+                  - entity: sensor.INVERTER_battery_temperature
+                    name: Temperature
+
+              - type: entities
+                title: Grid
+                entities:
+                  - entity: sensor.INVERTER_grid_power
+                    name: Power
+                  - entity: sensor.INVERTER_grid_frequency
+                    name: Frequency
+                  - entity: sensor.INVERTER_grid_import_today
+                    name: Import today
+                  - entity: sensor.INVERTER_grid_export_today
+                    name: Export today
+
+          # ── TODAY'S ENERGY SUMMARY ───────────────────────
+          - type: glance
+            title: "Today's Energy"
+            show_state: true
+            entities:
+              - entity: sensor.INVERTER_pv_generation_today
+                name: PV Generated
+                icon: mdi:solar-power
+              - entity: sensor.INVERTER_load_energy_used_today
+                name: Consumed
+                icon: mdi:home-lightning-bolt
+              - entity: sensor.INVERTER_battery_charge_today
+                name: Bat Charged
+                icon: mdi:battery-arrow-up
+              - entity: sensor.INVERTER_battery_discharge_today
+                name: Bat Discharged
+                icon: mdi:battery-arrow-down
+              - entity: sensor.INVERTER_grid_import_today
+                name: Grid Import
+                icon: mdi:transmission-tower-import
+              - entity: sensor.INVERTER_grid_export_today
+                name: Grid Export
+                icon: mdi:transmission-tower-export
+
+
+  # ╔═══════════════════════════════════════════════════════╗
+  # ║  VIEW 2 — CHARTS                                      ║
+  # ╚═══════════════════════════════════════════════════════╝
+  - title: Charts
+    path: sunsynk-charts
+    icon: mdi:chart-line
+
+    cards:
+      # ── POWER HISTORY 24h ────────────────────────────────
+      - type: history-graph
+        title: Power — last 24 hours
+        hours_to_show: 24
+        logarithmic_scale: false
+        entities:
+          - entity: sensor.INVERTER_pv_total_power
+            name: Solar
+          - entity: sensor.INVERTER_battery_power
+            name: Battery
+          - entity: sensor.INVERTER_grid_power
+            name: Grid
+          - entity: sensor.INVERTER_load_total_power
+            name: Load
+
+      # ── BATTERY SOC 48h ──────────────────────────────────
+      - type: history-graph
+        title: Battery SOC — last 48 hours
+        hours_to_show: 48
+        entities:
+          - entity: sensor.INVERTER_battery_soc
+            name: SOC
+          - entity: sensor.INVERTER_battery_bms_soc
+            name: BMS SOC
+
+      # ── DAILY PV GENERATION — last 30 days ───────────────
+      - type: statistics-graph
+        title: Daily PV Generation — last 30 days
+        entities:
+          - entity: sensor.INVERTER_pv_generation_today
+            name: PV Generated
+        stat_types:
+          - sum
+        days_to_show: 30
+        chart_type: bar
+        period: day
+
+      # ── DAILY ENERGY BALANCE — last 14 days ──────────────
+      - type: statistics-graph
+        title: Daily Energy Balance — last 14 days
+        entities:
+          - entity: sensor.INVERTER_grid_import_today
+            name: Grid Import
+          - entity: sensor.INVERTER_battery_charge_today
+            name: Battery Charge
+          - entity: sensor.INVERTER_battery_discharge_today
+            name: Battery Discharge
+          - entity: sensor.INVERTER_load_energy_used_today
+            name: Load
+        stat_types:
+          - sum
+        days_to_show: 14
+        chart_type: bar
+        period: day
+
+      # ── TEMPERATURE HISTORY 24h ───────────────────────────
+      - type: history-graph
+        title: Temperatures — last 24 hours
+        hours_to_show: 24
+        entities:
+          - entity: sensor.INVERTER_battery_temperature
+            name: Battery
+          - entity: sensor.INVERTER_inverter_dc_temperature
+            name: DC
+          - entity: sensor.INVERTER_inverter_ac_igbt_temperature
+            name: AC (IGBT)
+
+
+  # ╔═══════════════════════════════════════════════════════╗
+  # ║  VIEW 3 — SETTINGS                                    ║
+  # ╚═══════════════════════════════════════════════════════╝
+  - title: Settings
+    path: sunsynk-settings
+    icon: mdi:cog
+
+    cards:
+      # ── SYSTEM MODE ──────────────────────────────────────
+      - type: entities
+        title: System Mode
+        entities:
+          - entity: switch.INVERTER_solar_sell
+          - entity: switch.INVERTER_battery_on
+          - entity: switch.INVERTER_grid_always_on
+          - entity: switch.INVERTER_allow_remote_control
+          - entity: switch.INVERTER_peak_and_valley
+          - entity: number.INVERTER_system_work_mode
+          - entity: number.INVERTER_battery_mode
+          - entity: number.INVERTER_energy_mode
+          - entity: number.INVERTER_zero_export_power
+          - entity: number.INVERTER_solar_max_sell_power
+          - entity: number.INVERTER_pv_max_limit
+
+      # ── BATTERY SETTINGS ─────────────────────────────────
+      - type: entities
+        title: Battery Settings
+        entities:
+          - entity: number.INVERTER_battery_shutdown_capacity
+          - entity: number.INVERTER_battery_restart_capacity
+          - entity: number.INVERTER_battery_low_capacity
+          - entity: number.INVERTER_battery_max_charge_current
+          - entity: number.INVERTER_battery_max_discharge_current
+          - entity: number.INVERTER_charge_current
+          - entity: number.INVERTER_discharge_current
+
+      # ── TIME SLOTS ───────────────────────────────────────
+      - type: entities
+        title: Time Slots
+        entities:
+          - type: section
+            label: Slot 1
+          - entity: switch.INVERTER_time_slot_1_on
+          - entity: number.INVERTER_time_slot_1_capacity
+          - entity: number.INVERTER_sell_time_1_power
+          - type: section
+            label: Slot 2
+          - entity: switch.INVERTER_time_slot_2_on
+          - entity: number.INVERTER_time_slot_2_capacity
+          - entity: number.INVERTER_sell_time_2_power
+          - type: section
+            label: Slot 3
+          - entity: switch.INVERTER_time_slot_3_on
+          - entity: number.INVERTER_time_slot_3_capacity
+          - entity: number.INVERTER_sell_time_3_power
+          - type: section
+            label: Slot 4
+          - entity: switch.INVERTER_time_slot_4_on
+          - entity: number.INVERTER_time_slot_4_capacity
+          - entity: number.INVERTER_sell_time_4_power
+          - type: section
+            label: Slot 5
+          - entity: switch.INVERTER_time_slot_5_on
+          - entity: number.INVERTER_time_slot_5_capacity
+          - entity: number.INVERTER_sell_time_5_power
+          - type: section
+            label: Slot 6
+          - entity: switch.INVERTER_time_slot_6_on
+          - entity: number.INVERTER_time_slot_6_capacity
+          - entity: number.INVERTER_sell_time_6_power
+
+      # ── DAY SCHEDULE ─────────────────────────────────────
+      - type: entities
+        title: Active Days
+        entities:
+          - entity: switch.INVERTER_monday_active
+          - entity: switch.INVERTER_tuesday_active
+          - entity: switch.INVERTER_wednesday_active
+          - entity: switch.INVERTER_thursday_active
+          - entity: switch.INVERTER_friday_active
+          - entity: switch.INVERTER_saturday_active
+          - entity: switch.INVERTER_sunday_active
+
+      # ── GENERATOR ────────────────────────────────────────
+      - type: entities
+        title: Generator
+        entities:
+          - entity: switch.INVERTER_generator_charge_on
+          - entity: switch.INVERTER_sd_charge_on
+          - entity: number.INVERTER_generator_start_capacity
+          - entity: number.INVERTER_generator_on_capacity
+          - entity: number.INVERTER_generator_off_capacity
+          - type: section
+            label: Generator Time Slots
+          - entity: switch.INVERTER_generator_time_slot_1_on
+          - entity: switch.INVERTER_generator_time_slot_2_on
+          - entity: switch.INVERTER_generator_time_slot_3_on
+          - entity: switch.INVERTER_generator_time_slot_4_on
+          - entity: switch.INVERTER_generator_time_slot_5_on
+          - entity: switch.INVERTER_generator_time_slot_6_on
+
+
+  # ╔═══════════════════════════════════════════════════════╗
+  # ║  VIEW 4 — DIAGNOSTICS                                 ║
+  # ╚═══════════════════════════════════════════════════════╝
+  - title: Diagnostics
+    path: sunsynk-diagnostics
+    icon: mdi:information-outline
+
+    cards:
+      # ── INVERTER INFO ─────────────────────────────────────
+      - type: entities
+        title: Inverter Info
+        entities:
+          - entity: sensor.INVERTER_status
+          - entity: sensor.INVERTER_run_status
+          - entity: sensor.INVERTER_ac_power
+          - entity: sensor.INVERTER_rated_power
+          - entity: sensor.INVERTER_last_cloud_update
+          - entity: sensor.INVERTER_firmware_master_version
+          - entity: sensor.INVERTER_firmware_soft_version
+          - entity: sensor.INVERTER_serial_number
+          - entity: sensor.INVERTER_brand
+          - entity: sensor.INVERTER_model
+          - entity: sensor.INVERTER_number_of_batteries
+
+      # ── GRID DETAILS ──────────────────────────────────────
+      - type: entities
+        title: Grid Details
+        entities:
+          - entity: sensor.INVERTER_grid_power
+          - entity: sensor.INVERTER_grid_reactive_power
+          - entity: sensor.INVERTER_grid_frequency
+          - entity: sensor.INVERTER_grid_power_factor
+          - entity: sensor.INVERTER_grid_status
+          - entity: sensor.INVERTER_grid_import_total
+          - entity: sensor.INVERTER_grid_export_total
+
+      # ── BATTERY DETAILS ───────────────────────────────────
+      - type: entities
+        title: Battery Details
+        entities:
+          - entity: sensor.INVERTER_battery_soc
+          - entity: sensor.INVERTER_battery_bms_soc
+          - entity: sensor.INVERTER_battery_power
+          - entity: sensor.INVERTER_battery_voltage
+          - entity: sensor.INVERTER_battery_current
+          - entity: sensor.INVERTER_battery_temperature
+          - entity: sensor.INVERTER_battery_bms_voltage
+          - entity: sensor.INVERTER_battery_bms_current
+          - entity: sensor.INVERTER_battery_bms_temperature
+          - entity: sensor.INVERTER_battery_capacity
+          - entity: sensor.INVERTER_battery_charge_voltage
+          - entity: sensor.INVERTER_battery_discharge_voltage
+          - entity: sensor.INVERTER_battery_charge_current_limit
+          - entity: sensor.INVERTER_battery_discharge_current_limit
+          - entity: sensor.INVERTER_battery_type
+          - entity: sensor.INVERTER_battery_status
+
+      # ── TOTALS ────────────────────────────────────────────
+      - type: entities
+        title: All-Time Totals
+        entities:
+          - entity: sensor.INVERTER_generation_total
+            name: Inverter Generation
+          - entity: sensor.INVERTER_pv_generation_total
+            name: PV Generation
+          - entity: sensor.INVERTER_battery_charge_total
+          - entity: sensor.INVERTER_battery_discharge_total
+          - entity: sensor.INVERTER_grid_import_total
+          - entity: sensor.INVERTER_grid_export_total
+          - entity: sensor.INVERTER_battery_charge_this_year
+          - entity: sensor.INVERTER_battery_discharge_this_year

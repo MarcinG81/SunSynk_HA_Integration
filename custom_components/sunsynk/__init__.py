@@ -1,0 +1,189 @@
+"""Sunsynk / Deye Solar Inverter integration for Home Assistant."""
+from __future__ import annotations
+
+import logging
+import re
+from pathlib import Path
+
+import homeassistant.helpers.config_validation as cv
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.core import HomeAssistant
+
+from .api.auth import SunsynkAuth
+from .const import CONF_API_SERVER, CONF_REFRESH_INTERVAL, CONF_SERIALS, DEFAULT_REFRESH_INTERVAL, DOMAIN
+from .coordinator import SunsynkCoordinator
+from .dashboard import build_dashboard
+
+_LOGGER = logging.getLogger(__name__)
+
+PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SWITCH, Platform.TEXT]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+_CARD_JS = "sunsynk-power-flow-card.js"
+_CARD_URL = f"/sunsynk/{_CARD_JS}"
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Register the bundled Sunsynk Power Flow Card frontend resource."""
+    card_path = str(Path(__file__).parent / "www" / _CARD_JS)
+
+    # Register static path — API changed in HA 2024.7
+    try:
+        from homeassistant.components.http import StaticPathConfig  # HA 2024.7+
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(_CARD_URL, card_path, False)]
+        )
+    except (ImportError, AttributeError):
+        try:
+            hass.http.register_static_path(_CARD_URL, card_path, cache_headers=False)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Could not serve card static file: %s", err)
+            return True
+
+    # Register as extra frontend module so HA loads it automatically
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+        add_extra_js_url(hass, _CARD_URL)
+    except Exception:  # noqa: BLE001
+        pass
+
+    _LOGGER.debug("Sunsynk Power Flow Card registered at %s", _CARD_URL)
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Sunsynk from a config entry."""
+    hass.data.setdefault(DOMAIN, {})
+
+    refresh_interval = entry.options.get(
+        CONF_REFRESH_INTERVAL,
+        entry.data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL),
+    )
+    serials: list[str] = entry.options.get(
+        CONF_SERIALS, entry.data.get(CONF_SERIALS, [])
+    )
+
+    auth = SunsynkAuth(
+        api_server=entry.data[CONF_API_SERVER],
+        username=entry.data[CONF_USERNAME],
+        password=entry.data[CONF_PASSWORD],
+    )
+
+    coordinator = SunsynkCoordinator(
+        hass,
+        auth=auth,
+        serials=serials,
+        refresh_interval=refresh_interval,
+    )
+
+    await coordinator.async_config_entry_first_refresh()
+
+    hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    hass.async_create_task(_async_setup_dashboard(hass, entry, coordinator))
+
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        coordinator: SunsynkCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
+        await coordinator.async_close()
+
+    return unload_ok
+
+
+async def _async_setup_dashboard(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: SunsynkCoordinator,
+) -> None:
+    """Auto-create a Lovelace dashboard with correct entity IDs for this inverter."""
+    first_serial = coordinator.serials[0] if coordinator.serials else ""
+    inverter_data = (coordinator.data or {}).get(first_serial, {}).get("inverter", {})
+    alias = inverter_data.get("alias") or f"Sunsynk {first_serial}"
+    prefix = re.sub(r"[^a-z0-9]+", "_", alias.lower()).strip("_")
+    url_path = f"sunsynk-{entry.entry_id[:8].lower()}"
+
+    # Look up actual entity IDs from the registry (unique_id = "{serial}_{key}")
+    from homeassistant.helpers import entity_registry as er
+    reg = er.async_get(hass)
+    uid_map: dict[str, str] = {
+        e.unique_id[len(first_serial) + 1:]: e.entity_id
+        for e in reg.entities.values()
+        if e.platform == DOMAIN and e.unique_id.startswith(f"{first_serial}_")
+    }
+    def eid(key: str) -> str | None:
+        return uid_map.get(key)
+
+    dashboard_config = build_dashboard(prefix, eid)
+
+    lovelace = hass.data.get("lovelace")
+    dashboards = getattr(lovelace, "dashboards", None)
+
+    # ── Path A: dashboard already registered in lovelace (in-memory dict) ──
+    # dashboards is a dict: url_path → LovelaceStorage object.
+    # Save our config ON that object so it updates both its cache and the file.
+    if isinstance(dashboards, dict) and url_path in dashboards:
+        ha_config = dashboards[url_path]
+        if hasattr(ha_config, "async_save"):
+            try:
+                await ha_config.async_save(dashboard_config)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.error("Sunsynk: dashboard save failed: %s", err)
+        return
+
+    # ── Path B: dashboard NOT registered yet — register + save content ──
+    try:
+        from homeassistant.components.lovelace.dashboard import LovelaceStorage
+        ls = LovelaceStorage(hass, {"url_path": url_path, "mode": "storage"})
+        await ls.async_save(dashboard_config)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Sunsynk: LovelaceStorage save failed: %s", err)
+        try:
+            from homeassistant.helpers.storage import Store
+            await Store(hass, 1, f"lovelace.{url_path}").async_save({"config": dashboard_config})
+        except Exception as err2:  # noqa: BLE001
+            _LOGGER.error("Sunsynk: dashboard Store fallback also failed: %s", err2)
+
+    # Step 2: Register in sidebar — try DashboardsCollection first, then storage file
+    _item = {
+        "url_path": url_path,
+        "require_admin": False,
+        "mode": "storage",
+        "title": f"Solar {alias}",
+        "icon": "mdi:solar-power-variant",
+        "show_in_sidebar": True,
+    }
+    if dashboards is not None and hasattr(dashboards, "async_create_item"):
+        try:
+            await dashboards.async_create_item(_item)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Sunsynk: dashboard registration failed: %s", err)
+    else:
+        try:
+            import uuid
+            from homeassistant.helpers.storage import Store
+            ds = Store(hass, 1, "lovelace_dashboards")
+            data = await ds.async_load() or {}
+            items: list = data.get("items") or []
+            if not isinstance(items, list):
+                items = []
+            if not any(isinstance(v, dict) and v.get("url_path") == url_path for v in items):
+                items.append({"id": uuid.uuid4().hex, **_item})
+                data["items"] = items
+                await ds.async_save(data)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Sunsynk: lovelace_dashboards write failed: %s", err)
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options update."""
+    await hass.config_entries.async_reload(entry.entry_id)

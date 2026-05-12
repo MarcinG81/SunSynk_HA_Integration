@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sunsynk / Deye Inverter Setup",
+        "description": "Connect to the Sunsynk cloud API. Separate multiple inverter serial numbers with semicolons (e.g. SN123456;SN789012). MFA is not supported on Sunsynk accounts.",
+        "data": {
+          "api_server": "API Server",
+          "username": "Sunsynk Account Email",
+          "password": "Sunsynk Account Password",
+          "serials": "Inverter Serial Number(s)",
+          "refresh_interval": "Refresh Interval (seconds)"
+        },
+        "data_description": {
+          "serials": "For multiple inverters separate with semicolons: SN123456;SN789012",
+          "refresh_interval": "Minimum 60 seconds, default 300 (5 minutes)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password. Note: MFA accounts are not supported.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check the API server selection and your internet connection.",
+      "invalid_serials": "No valid serial numbers provided. Enter at least one inverter serial."
+    },
+    "abort": {
+      "already_configured": "This Sunsynk account is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sunsynk Options",
+        "description": "Update inverter serials or refresh interval.",
+        "data": {
+          "serials": "Inverter Serial Number(s)",
+          "refresh_interval": "Refresh Interval (seconds)"
+        },
+        "data_description": {
+          "serials": "Separate multiple serials with semicolons",
+          "refresh_interval": "Minimum 60 seconds"
+        }
+      }
+    },
+    "error": {
+      "invalid_serials": "No valid serial numbers provided."
+    }
+  }
+}
