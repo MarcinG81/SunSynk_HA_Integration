@@ -30,19 +30,28 @@
     "step": {
       "init": {
         "title": "Sunsynk Options",
-        "description": "Update inverter serials or refresh interval.",
+        "description": "Update inverter serials, refresh interval, or solar forecast settings.",
         "data": {
           "serials": "Inverter Serial Number(s)",
-          "refresh_interval": "Refresh Interval (seconds)"
+          "refresh_interval": "Refresh Interval (seconds)",
+          "latitude": "Latitude (Solar Forecast)",
+          "longitude": "Longitude (Solar Forecast)",
+          "panel_kwp": "Panel Peak Power (kWp)",
+          "performance_ratio": "Performance Ratio (0–1)"
         },
         "data_description": {
           "serials": "Separate multiple serials with semicolons",
-          "refresh_interval": "Minimum 60 seconds"
+          "refresh_interval": "Minimum 60 seconds",
+          "latitude": "Optional — defaults to your HA home location",
+          "longitude": "Optional — defaults to your HA home location",
+          "panel_kwp": "Total installed panel capacity in kilowatt-peak (e.g. 10.5). Leave blank to disable solar forecast.",
+          "performance_ratio": "System efficiency factor accounting for wiring/inverter losses, default 0.80"
         }
       }
     },
     "error": {
-      "invalid_serials": "No valid serial numbers provided."
+      "invalid_serials": "No valid serial numbers provided.",
+      "invalid_forecast_config": "Solar forecast requires valid latitude, longitude and panel kWp (all numeric, kWp > 0). Leave all three blank to disable."
     }
   }
 }

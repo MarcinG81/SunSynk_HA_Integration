@@ -16,6 +16,7 @@ A native Home Assistant **integration** (not an add-on) for monitoring and contr
 - **Multi-MPPT support** — Automatically discovers all MPPT strings on your inverter
 - **3-phase support** — Per-phase voltage, current and power for grid, load and inverter output
 - **Writable settings** — Change key inverter parameters directly from HA (battery thresholds, charge/discharge current, time slots, sell power limits, etc.)
+- **Solar Forecast** — Optional sensors for predicted PV yield today/tomorrow, cloud cover, precipitation and solar irradiance (GHI/DNI) via Open-Meteo (free, no API key)
 - **Multiple inverters** — One integration entry supports multiple serial numbers
 - **Config Flow** — Fully configured through the Home Assistant UI (no YAML needed)
 - **HACS compatible** — Install and update through HACS
@@ -182,6 +183,25 @@ Serial number, model, firmware versions, plant name, status, run status, last cl
 
 ---
 
+### Solar Forecast Sensors (optional)
+
+These sensors appear under a separate **Solar Forecast** device (powered by [Open-Meteo](https://open-meteo.com)) when forecast is configured.
+
+| Entity | Unit | Description |
+|---|---|---|
+| Solar Forecast Today | kWh | Predicted PV yield for today |
+| Solar Forecast Tomorrow | kWh | Predicted PV yield for tomorrow |
+| Cloud Cover | % | Current hour cloud coverage |
+| Precipitation | mm | Current hour precipitation |
+| Solar Irradiance GHI | W/m² | Global Horizontal Irradiance (current hour) |
+| Solar Irradiance DNI | W/m² | Direct Normal Irradiance (current hour) |
+
+> kWh estimates use: `Σ(GHI per hour) / 1000 × panel_kWp × performance_ratio`
+
+To enable, go to **Settings → Devices & Services → Sunsynk → Configure** and fill in the forecast fields (see [Solar Forecast Setup](#solar-forecast-setup)).
+
+---
+
 ### Writable Settings
 
 These appear under **Settings** entities on the device page.
@@ -218,6 +238,24 @@ These appear under **Settings** entities on the device page.
 | Grid Always On | Keep grid connection always active |
 | Peak and Valley | Enable peak/valley tariff mode |
 | Allow Remote Control | Enable remote API control |
+
+---
+
+## Solar Forecast Setup
+
+1. Go to **Settings → Devices & Services → Sunsynk → Configure**
+2. Fill in the forecast fields:
+
+| Field | Description |
+|---|---|
+| **Panel Peak Power (kWp)** | Total installed panel capacity in kilowatt-peak (e.g. `10.5`) — **required** to enable forecast |
+| **Latitude** | Optional — leave blank to use your HA home location |
+| **Longitude** | Optional — leave blank to use your HA home location |
+| **Performance Ratio** | System efficiency factor 0–1, default `0.80` |
+
+Leave **Panel kWp** blank to disable forecast sensors entirely. Latitude and longitude always fall back to your Home Assistant home location if not filled in.
+
+Forecast data refreshes every **30 minutes**. No API key or account needed.
 
 ---
 
@@ -268,6 +306,23 @@ automation:
           entity_id: switch.sunsynk_YOURSERIAL_setting_solar_sell
 ```
 
+### Adjust charge current based on tomorrow's forecast
+
+```yaml
+automation:
+  - alias: "High charge current when forecast is poor"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.solar_forecast_tomorrow
+        below: 5
+    action:
+      - service: number.set_value
+        target:
+          entity_id: number.sunsynk_YOURSERIAL_setting_charge_current
+        data:
+          value: 100
+```
+
 ---
 
 ## Troubleshooting
@@ -295,6 +350,11 @@ automation:
 - Enter serial numbers separated by a semicolon with no spaces: `SN123456;SN789012`
 - Each inverter appears as a separate device in HA
 
+### Solar forecast sensors not appearing
+- Ensure all three fields (latitude, longitude, panel kWp) are filled in the options form
+- Check HA logs for `Open-Meteo request failed` — verify internet access from your HA host
+- Reload the integration after saving forecast settings
+
 ---
 
 ## Architecture
@@ -302,13 +362,14 @@ automation:
 ```
 Home Assistant
 └── Integration: sunsynk
-    ├── Config Flow (UI setup)
-    ├── Coordinator (polls every 5 min, all endpoints concurrently)
-    │   ├── api/auth.py     — RSA + OAuth2 token (cached, auto-refreshed on expiry)
-    │   └── api/client.py   — 8 endpoints fetched in parallel via aiohttp
-    ├── sensor.py           — ~60 static + dynamic MPPT/phase sensors
-    ├── number.py           — ~30 writable numeric settings
-    └── switch.py           — ~25 writable boolean settings
+    ├── Config Flow (UI setup, includes optional solar forecast config)
+    ├── SunsynkCoordinator (polls every 5 min, all endpoints concurrently)
+    │   ├── api/auth.py            — RSA + OAuth2 token (cached, auto-refreshed on expiry)
+    │   └── api/client.py          — 8 endpoints fetched in parallel via aiohttp
+    ├── SolarForecastCoordinator   — Open-Meteo fetch every 30 min (optional)
+    ├── sensor.py                  — ~60 static + dynamic MPPT/phase sensors + 6 forecast sensors
+    ├── number.py                  — ~30 writable numeric settings
+    └── switch.py                  — ~25 writable boolean settings
 ```
 
 **Sunsynk API endpoints used:**

@@ -38,6 +38,14 @@ DEFAULT_REFRESH_INTERVAL: Final = 300  # seconds
 MIN_REFRESH_INTERVAL: Final = 60
 MAX_REFRESH_INTERVAL: Final = 3600
 
+# Solar Forecast (Open-Meteo)
+CONF_LATITUDE: Final = "latitude"
+CONF_LONGITUDE: Final = "longitude"
+CONF_PANEL_KWP: Final = "panel_kwp"
+CONF_PERFORMANCE_RATIO: Final = "performance_ratio"
+DEFAULT_PERFORMANCE_RATIO: Final = 0.80
+SOLAR_FORECAST_UPDATE_INTERVAL: Final = 30  # minutes
+
 
 @dataclass(frozen=True)
 class SunsynkSensorEntityDescription(SensorEntityDescription):

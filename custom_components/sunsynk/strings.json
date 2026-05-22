@@ -32,12 +32,23 @@
         "title": "Sunsynk Options",
         "data": {
           "serials": "Inverter Serial Number(s)",
-          "refresh_interval": "Refresh Interval (seconds)"
+          "refresh_interval": "Refresh Interval (seconds)",
+          "latitude": "Latitude (Solar Forecast)",
+          "longitude": "Longitude (Solar Forecast)",
+          "panel_kwp": "Panel Peak Power (kWp)",
+          "performance_ratio": "Performance Ratio (0–1)"
+        },
+        "data_description": {
+          "latitude": "Optional — defaults to your HA home location",
+          "longitude": "Optional — defaults to your HA home location",
+          "panel_kwp": "Total installed panel capacity in kilowatt-peak. Leave blank to disable solar forecast.",
+          "performance_ratio": "System efficiency factor, default 0.80"
         }
       }
     },
     "error": {
-      "invalid_serials": "Invalid serial number(s). Enter at least one serial."
+      "invalid_serials": "Invalid serial number(s). Enter at least one serial.",
+      "invalid_forecast_config": "Solar forecast requires valid latitude, longitude and panel kWp (all numeric, kWp > 0)."
     }
   }
 }

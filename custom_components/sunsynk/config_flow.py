@@ -15,8 +15,13 @@ from .const import (
     API_SERVER_SUNSYNK,
     API_SERVERS,
     CONF_API_SERVER,
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
+    CONF_PANEL_KWP,
+    CONF_PERFORMANCE_RATIO,
     CONF_REFRESH_INTERVAL,
     CONF_SERIALS,
+    DEFAULT_PERFORMANCE_RATIO,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
     MAX_REFRESH_INTERVAL,
@@ -119,19 +124,46 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
             if not serials:
                 errors[CONF_SERIALS] = "invalid_serials"
             else:
-                return self.async_create_entry(
-                    title="",
-                    data={
-                        CONF_REFRESH_INTERVAL: user_input[CONF_REFRESH_INTERVAL],
-                        CONF_SERIALS: serials,
-                    },
-                )
+                kwp_raw = str(user_input.get(CONF_PANEL_KWP, "")).strip()
 
-        current_serials = self._config_entry.data.get(CONF_SERIALS, [])
-        current_refresh = self._config_entry.options.get(
+                forecast_fields: dict[str, Any] = {}
+                if kwp_raw:
+                    try:
+                        kwp = float(kwp_raw)
+                        if not (kwp > 0):
+                            raise ValueError
+                        forecast_fields[CONF_PANEL_KWP] = kwp
+                        lat_raw = str(user_input.get(CONF_LATITUDE, "")).strip()
+                        lon_raw = str(user_input.get(CONF_LONGITUDE, "")).strip()
+                        forecast_fields[CONF_LATITUDE] = float(lat_raw) if lat_raw else self.hass.config.latitude
+                        forecast_fields[CONF_LONGITUDE] = float(lon_raw) if lon_raw else self.hass.config.longitude
+                        pr_raw = str(user_input.get(CONF_PERFORMANCE_RATIO, "")).strip()
+                        forecast_fields[CONF_PERFORMANCE_RATIO] = float(pr_raw) if pr_raw else DEFAULT_PERFORMANCE_RATIO
+                    except (ValueError, TypeError):
+                        errors["base"] = "invalid_forecast_config"
+
+                if not errors:
+                    return self.async_create_entry(
+                        title="",
+                        data={
+                            CONF_REFRESH_INTERVAL: user_input[CONF_REFRESH_INTERVAL],
+                            CONF_SERIALS: serials,
+                            **forecast_fields,
+                        },
+                    )
+
+        opts = self._config_entry.options
+        data = self._config_entry.data
+        current_serials = opts.get(CONF_SERIALS, data.get(CONF_SERIALS, []))
+        current_refresh = opts.get(
             CONF_REFRESH_INTERVAL,
-            self._config_entry.data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL),
+            data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL),
         )
+        # Default to HA home location if not previously overridden
+        current_lat = opts.get(CONF_LATITUDE, data.get(CONF_LATITUDE, self.hass.config.latitude))
+        current_lon = opts.get(CONF_LONGITUDE, data.get(CONF_LONGITUDE, self.hass.config.longitude))
+        current_kwp = opts.get(CONF_PANEL_KWP, data.get(CONF_PANEL_KWP, ""))
+        current_pr = opts.get(CONF_PERFORMANCE_RATIO, data.get(CONF_PERFORMANCE_RATIO, ""))
 
         schema = vol.Schema(
             {
@@ -144,6 +176,13 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     vol.Coerce(int),
                     vol.Range(min=MIN_REFRESH_INTERVAL, max=MAX_REFRESH_INTERVAL),
                 ),
+                vol.Optional(CONF_LATITUDE, default=str(current_lat) if current_lat != "" else ""): str,
+                vol.Optional(CONF_LONGITUDE, default=str(current_lon) if current_lon != "" else ""): str,
+                vol.Optional(CONF_PANEL_KWP, default=str(current_kwp) if current_kwp != "" else ""): str,
+                vol.Optional(
+                    CONF_PERFORMANCE_RATIO,
+                    default=str(current_pr) if current_pr != "" else str(DEFAULT_PERFORMANCE_RATIO),
+                ): str,
             }
         )
 

@@ -1,11 +1,13 @@
 """Sensor platform for Sunsynk integration."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
+    SensorEntityDescription,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -13,6 +15,8 @@ from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfIrradiance,
     UnitOfPower,
     UnitOfTemperature,
 )
@@ -26,8 +30,69 @@ from .const import (
     DOMAIN,
     SunsynkSensorEntityDescription,
 )
-from .coordinator import SunsynkCoordinator
+from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .helpers import build_device_info
+
+
+@dataclass(frozen=True)
+class ForecastSensorDescription(SensorEntityDescription):
+    forecast_key: str = ""
+
+
+FORECAST_SENSOR_DESCRIPTIONS: tuple[ForecastSensorDescription, ...] = (
+    ForecastSensorDescription(
+        key="forecast_today_kwh",
+        name="Solar Forecast Today",
+        forecast_key="today_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+    ),
+    ForecastSensorDescription(
+        key="forecast_tomorrow_kwh",
+        name="Solar Forecast Tomorrow",
+        forecast_key="tomorrow_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+    ),
+    ForecastSensorDescription(
+        key="forecast_cloud_cover",
+        name="Cloud Cover",
+        forecast_key="cloud_cover",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+    ),
+    ForecastSensorDescription(
+        key="forecast_precipitation",
+        name="Precipitation",
+        forecast_key="precipitation",
+        native_unit_of_measurement="mm",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+    ),
+    ForecastSensorDescription(
+        key="forecast_ghi",
+        name="Solar Irradiance GHI",
+        forecast_key="ghi",
+        native_unit_of_measurement=UnitOfIrradiance.WATTS_PER_SQUARE_METER,
+        device_class=SensorDeviceClass.IRRADIANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+    ),
+    ForecastSensorDescription(
+        key="forecast_dni",
+        name="Solar Irradiance DNI",
+        forecast_key="dni",
+        native_unit_of_measurement=UnitOfIrradiance.WATTS_PER_SQUARE_METER,
+        device_class=SensorDeviceClass.IRRADIANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+    ),
+)
 
 
 async def async_setup_entry(
@@ -65,6 +130,21 @@ async def async_setup_entry(
 
     entry.async_on_unload(coordinator.async_add_listener(_add_dynamic_sensors))
     _add_dynamic_sensors()
+
+    forecast_coordinator: SolarForecastCoordinator | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_forecast"
+    )
+    if forecast_coordinator is not None:
+        forecast_device = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_forecast")},
+            name="Solar Forecast",
+            manufacturer="Open-Meteo",
+            model="Weather Forecast",
+        )
+        async_add_entities([
+            SolarForecastSensor(forecast_coordinator, entry.entry_id, desc, forecast_device)
+            for desc in FORECAST_SENSOR_DESCRIPTIONS
+        ])
 
 
 
@@ -193,3 +273,28 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
             return float(value)
         except (TypeError, ValueError):
             return str(value) if value != "" else None
+
+
+class SolarForecastSensor(CoordinatorEntity[SolarForecastCoordinator], SensorEntity):
+    """A single solar forecast sensor backed by Open-Meteo data."""
+
+    entity_description: ForecastSensorDescription
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: SolarForecastCoordinator,
+        entry_id: str,
+        description: ForecastSensorDescription,
+        device_info: DeviceInfo,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry_id}_forecast_{description.key}"
+        self._attr_device_info = device_info
+
+    @property
+    def native_value(self) -> float | None:
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get(self.entity_description.forecast_key)

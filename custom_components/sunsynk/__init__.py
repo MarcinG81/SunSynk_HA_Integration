@@ -11,8 +11,19 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 
 from .api.auth import SunsynkAuth
-from .const import CONF_API_SERVER, CONF_REFRESH_INTERVAL, CONF_SERIALS, DEFAULT_REFRESH_INTERVAL, DOMAIN
-from .coordinator import SunsynkCoordinator
+from .const import (
+    CONF_API_SERVER,
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
+    CONF_PANEL_KWP,
+    CONF_PERFORMANCE_RATIO,
+    CONF_REFRESH_INTERVAL,
+    CONF_SERIALS,
+    DEFAULT_PERFORMANCE_RATIO,
+    DEFAULT_REFRESH_INTERVAL,
+    DOMAIN,
+)
+from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .dashboard import build_dashboard
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,6 +93,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    kwp = entry.options.get(CONF_PANEL_KWP, entry.data.get(CONF_PANEL_KWP))
+    if kwp is not None:
+        lat = entry.options.get(CONF_LATITUDE, entry.data.get(CONF_LATITUDE, hass.config.latitude))
+        lon = entry.options.get(CONF_LONGITUDE, entry.data.get(CONF_LONGITUDE, hass.config.longitude))
+        pr = entry.options.get(
+            CONF_PERFORMANCE_RATIO,
+            entry.data.get(CONF_PERFORMANCE_RATIO, DEFAULT_PERFORMANCE_RATIO),
+        )
+        forecast_coordinator = SolarForecastCoordinator(
+            hass,
+            latitude=float(lat),
+            longitude=float(lon),
+            panel_kwp=float(kwp),
+            performance_ratio=float(pr),
+        )
+        try:
+            await forecast_coordinator.async_config_entry_first_refresh()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Solar forecast initial fetch failed (will retry): %s", err)
+        hass.data[DOMAIN][f"{entry.entry_id}_forecast"] = forecast_coordinator
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     hass.async_create_task(_async_setup_dashboard(hass, entry, coordinator))
@@ -96,6 +128,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         coordinator: SunsynkCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
         await coordinator.async_close()
+        forecast_coordinator: SolarForecastCoordinator | None = hass.data[DOMAIN].pop(
+            f"{entry.entry_id}_forecast", None
+        )
+        if forecast_coordinator is not None:
+            await forecast_coordinator.async_close()
 
     return unload_ok
 

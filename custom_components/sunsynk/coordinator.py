@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
@@ -11,7 +11,12 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api.auth import SunsynkAuth, SunsynkAuthError
 from .api.client import SunsynkApiError, SunsynkClient
-from .const import BATTERY_SETTING_KEYS, DOMAIN, SYSTEM_MODE_SETTING_KEYS
+from .const import (
+    BATTERY_SETTING_KEYS,
+    DOMAIN,
+    SOLAR_FORECAST_UPDATE_INTERVAL,
+    SYSTEM_MODE_SETTING_KEYS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -105,5 +110,109 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
     async def async_close(self) -> None:
         """Close the aiohttp session."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+
+
+class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Fetches solar irradiance and weather forecast from Open-Meteo (no API key)."""
+
+    _URL = "https://api.open-meteo.com/v1/forecast"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        latitude: float,
+        longitude: float,
+        panel_kwp: float,
+        performance_ratio: float,
+    ) -> None:
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_forecast",
+            update_interval=timedelta(minutes=SOLAR_FORECAST_UPDATE_INTERVAL),
+        )
+        self._latitude = latitude
+        self._longitude = longitude
+        self._panel_kwp = panel_kwp
+        self._performance_ratio = performance_ratio
+        self._session: aiohttp.ClientSession | None = None
+
+    async def _async_get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        session = await self._async_get_session()
+        params = {
+            "latitude": self._latitude,
+            "longitude": self._longitude,
+            "hourly": "shortwave_radiation,direct_normal_irradiance,cloud_cover,precipitation",
+            "forecast_days": 2,
+            "timezone": "auto",
+        }
+        try:
+            async with session.get(
+                self._URL,
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                resp.raise_for_status()
+                raw = await resp.json()
+        except Exception as err:
+            raise UpdateFailed(f"Open-Meteo request failed: {err}") from err
+
+        return self._parse(raw)
+
+    def _parse(self, raw: dict[str, Any]) -> dict[str, Any]:
+        hourly = raw.get("hourly", {})
+        times: list[str] = hourly.get("time", [])
+        ghi: list[Any] = hourly.get("shortwave_radiation", [])
+        dni: list[Any] = hourly.get("direct_normal_irradiance", [])
+        cloud: list[Any] = hourly.get("cloud_cover", [])
+        precip: list[Any] = hourly.get("precipitation", [])
+
+        now = datetime.now()
+        today = now.date()
+        tomorrow = today + timedelta(days=1)
+
+        today_kwh = 0.0
+        tomorrow_kwh = 0.0
+        for i, ts in enumerate(times):
+            try:
+                dt = datetime.fromisoformat(ts)
+            except ValueError:
+                continue
+            g = float(ghi[i]) if i < len(ghi) and ghi[i] is not None else 0.0
+            contribution = g / 1000.0 * self._panel_kwp * self._performance_ratio
+            if dt.date() == today:
+                today_kwh += contribution
+            elif dt.date() == tomorrow:
+                tomorrow_kwh += contribution
+
+        current_hour_str = now.strftime("%Y-%m-%dT%H:00")
+        idx: int | None = None
+        for i, ts in enumerate(times):
+            if ts == current_hour_str:
+                idx = i
+                break
+
+        def _val(lst: list[Any], i: int | None) -> float | None:
+            if i is None or i >= len(lst) or lst[i] is None:
+                return None
+            return round(float(lst[i]), 1)
+
+        return {
+            "today_kwh": round(today_kwh, 2),
+            "tomorrow_kwh": round(tomorrow_kwh, 2),
+            "cloud_cover": _val(cloud, idx),
+            "precipitation": _val(precip, idx),
+            "ghi": _val(ghi, idx),
+            "dni": _val(dni, idx),
+        }
+
+    async def async_close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
