@@ -7,6 +7,7 @@ from typing import Any, Callable
 def build_dashboard(
     prefix: str,
     eid: Callable[[str], str | None] | None = None,
+    forecast_eid: Callable[[str], str | None] | None = None,
 ) -> dict[str, Any]:
     """Return a full Lovelace dashboard config dict with correct entity IDs.
 
@@ -86,6 +87,20 @@ def build_dashboard(
     sw = lambda k: e(k, k, "switch")   # noqa: E731
     nm = lambda k: e(k, k, "number")   # noqa: E731
     tx = lambda k: e(k, k, "text")     # noqa: E731
+
+    # Forecast entity IDs — only populated when forecast is configured
+    def fc(key: str, fallback: str) -> str | None:
+        if forecast_eid is not None:
+            return forecast_eid(key)
+        return None
+
+    fc_today    = fc("forecast_today_kwh",    "solar_forecast_today")
+    fc_tomorrow = fc("forecast_tomorrow_kwh", "solar_forecast_tomorrow")
+    fc_cloud    = fc("forecast_cloud_cover",  "solar_forecast_cloud_cover")
+    fc_precip   = fc("forecast_precipitation","solar_forecast_precipitation")
+    fc_ghi      = fc("forecast_ghi",          "solar_forecast_ghi")
+    fc_dni      = fc("forecast_dni",          "solar_forecast_dni")
+    has_forecast = fc_today is not None
 
     return {
         "views": [
@@ -190,6 +205,38 @@ def build_dashboard(
                                     {"entity": grid_exp_today, "name": "Export", "icon": "mdi:transmission-tower-export"},
                                 ],
                             },
+                            *([
+                                {
+                                    "type": "horizontal-stack",
+                                    "cards": [
+                                        {
+                                            "type": "tile",
+                                            "entity": fc_today,
+                                            "name": "Forecast Today",
+                                            "icon": "mdi:solar-power",
+                                            "color": "amber",
+                                        },
+                                        {
+                                            "type": "tile",
+                                            "entity": fc_tomorrow,
+                                            "name": "Forecast Tomorrow",
+                                            "icon": "mdi:weather-partly-cloudy",
+                                            "color": "orange",
+                                        },
+                                    ],
+                                },
+                                {
+                                    "type": "glance",
+                                    "title": "Weather Conditions (Open-Meteo)",
+                                    "show_state": True,
+                                    "entities": [
+                                        {"entity": fc_cloud,  "name": "Cloud Cover",    "icon": "mdi:cloud-percent"},
+                                        {"entity": fc_precip, "name": "Precipitation",  "icon": "mdi:weather-rainy"},
+                                        {"entity": fc_ghi,    "name": "Irradiance GHI", "icon": "mdi:weather-sunny"},
+                                        {"entity": fc_dni,    "name": "Irradiance DNI", "icon": "mdi:sun-wireless"},
+                                    ],
+                                },
+                            ] if has_forecast else []),
                         ],
                     }
                 ],

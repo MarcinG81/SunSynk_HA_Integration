@@ -160,7 +160,15 @@ async def _async_setup_dashboard(
     def eid(key: str) -> str | None:
         return uid_map.get(key)
 
-    dashboard_config = build_dashboard(prefix, eid)
+    forecast_prefix = f"{entry.entry_id}_forecast_"
+    forecast_uid_map: dict[str, str] = {
+        e.unique_id[len(forecast_prefix):]: e.entity_id
+        for e in reg.entities.values()
+        if e.platform == DOMAIN and e.unique_id.startswith(forecast_prefix)
+    }
+    forecast_eid_fn = (lambda key: forecast_uid_map.get(key)) if forecast_uid_map else None
+
+    dashboard_config = build_dashboard(prefix, eid, forecast_eid_fn)
 
     lovelace = hass.data.get("lovelace")
     dashboards = getattr(lovelace, "dashboards", None)
