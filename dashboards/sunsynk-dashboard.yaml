@@ -139,6 +139,39 @@ views:
                   - entity: sensor.INVERTER_grid_export_today
                     name: Export today
 
+          # ── SOLAR FORECAST ───────────────────────────────
+          # Entity IDs assume device name "Solar Forecast" (set by the integration).
+          # Friendly names: "Solar Forecast Today", "Solar Forecast Tomorrow", etc.
+          - type: horizontal-stack
+            cards:
+              - type: tile
+                entity: sensor.solar_forecast_today
+                name: "Forecast Today"
+                icon: mdi:solar-power
+                color: amber
+              - type: tile
+                entity: sensor.solar_forecast_tomorrow
+                name: "Forecast Tomorrow"
+                icon: mdi:weather-partly-cloudy
+                color: orange
+
+          - type: glance
+            title: "Weather Conditions (Open-Meteo)"
+            show_state: true
+            entities:
+              - entity: sensor.solar_forecast_cloud_cover
+                name: Cloud Cover
+                icon: mdi:cloud-percent
+              - entity: sensor.solar_forecast_precipitation
+                name: Precipitation
+                icon: mdi:weather-rainy
+              - entity: sensor.solar_forecast_ghi
+                name: Irradiance GHI
+                icon: mdi:weather-sunny
+              - entity: sensor.solar_forecast_dni
+                name: Irradiance DNI
+                icon: mdi:sun-wireless
+
           # ── TODAY'S ENERGY SUMMARY ───────────────────────
           - type: glance
             title: "Today's Energy"

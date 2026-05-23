@@ -42,7 +42,7 @@ class ForecastSensorDescription(SensorEntityDescription):
 FORECAST_SENSOR_DESCRIPTIONS: tuple[ForecastSensorDescription, ...] = (
     ForecastSensorDescription(
         key="forecast_today_kwh",
-        name="Solar Forecast Today",
+        name="Today",
         forecast_key="today_kwh",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
@@ -51,7 +51,7 @@ FORECAST_SENSOR_DESCRIPTIONS: tuple[ForecastSensorDescription, ...] = (
     ),
     ForecastSensorDescription(
         key="forecast_tomorrow_kwh",
-        name="Solar Forecast Tomorrow",
+        name="Tomorrow",
         forecast_key="tomorrow_kwh",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
@@ -76,7 +76,7 @@ FORECAST_SENSOR_DESCRIPTIONS: tuple[ForecastSensorDescription, ...] = (
     ),
     ForecastSensorDescription(
         key="forecast_ghi",
-        name="Solar Irradiance GHI",
+        name="GHI",
         forecast_key="ghi",
         native_unit_of_measurement=UnitOfIrradiance.WATTS_PER_SQUARE_METER,
         device_class=SensorDeviceClass.IRRADIANCE,
@@ -85,7 +85,7 @@ FORECAST_SENSOR_DESCRIPTIONS: tuple[ForecastSensorDescription, ...] = (
     ),
     ForecastSensorDescription(
         key="forecast_dni",
-        name="Solar Irradiance DNI",
+        name="DNI",
         forecast_key="dni",
         native_unit_of_measurement=UnitOfIrradiance.WATTS_PER_SQUARE_METER,
         device_class=SensorDeviceClass.IRRADIANCE,
