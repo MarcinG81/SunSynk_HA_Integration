@@ -50,7 +50,7 @@ FORECAST_SENSOR_DESCRIPTIONS: tuple[ForecastSensorDescription, ...] = (
         forecast_key="today_kwh",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=None,
         suggested_display_precision=2,
     ),
     ForecastSensorDescription(
@@ -59,7 +59,7 @@ FORECAST_SENSOR_DESCRIPTIONS: tuple[ForecastSensorDescription, ...] = (
         forecast_key="tomorrow_kwh",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
+        state_class=None,
         suggested_display_precision=2,
     ),
     ForecastSensorDescription(

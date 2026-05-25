@@ -298,7 +298,7 @@ async def _async_setup_dashboard(
     # ── Path B: dashboard NOT registered yet — register + save content ──
     try:
         from homeassistant.components.lovelace.dashboard import LovelaceStorage
-        ls = LovelaceStorage(hass, {"url_path": url_path, "mode": "storage"})
+        ls = LovelaceStorage(hass, {"id": url_path, "url_path": url_path, "mode": "storage"})
         await ls.async_save(dashboard_config)
     except Exception as err:  # noqa: BLE001
         _LOGGER.error("Sunsynk: LovelaceStorage save failed: %s", err)
