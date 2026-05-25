@@ -8,6 +8,7 @@ def build_dashboard(
     prefix: str,
     eid: Callable[[str], str | None] | None = None,
     forecast_eid: Callable[[str], str | None] | None = None,
+    tariff_eid: Callable[[str], str | None] | None = None,
 ) -> dict[str, Any]:
     """Return a full Lovelace dashboard config dict with correct entity IDs.
 
@@ -101,6 +102,10 @@ def build_dashboard(
     fc_ghi      = fc("forecast_ghi",          "solar_forecast_ghi")
     fc_dni      = fc("forecast_dni",          "solar_forecast_dni")
     has_forecast = fc_today is not None
+
+    # Tariff entity IDs — only populated when tariff manager is configured
+    tariff_mode = tariff_eid("tariff_mode") if tariff_eid else None
+    has_tariff = tariff_mode is not None
 
     return {
         "views": [
@@ -237,6 +242,16 @@ def build_dashboard(
                                     ],
                                 },
                             ] if has_forecast else []),
+                            *([
+                                {
+                                    "type": "entities",
+                                    "title": "Tariff Manager",
+                                    "entities": [
+                                        {"entity": f"switch.{prefix}_tariff_manager", "name": "Enable Tariff Manager"},
+                                        {"entity": tariff_mode, "name": "Current Mode"},
+                                    ],
+                                },
+                            ] if has_tariff else []),
                         ],
                     }
                 ],
@@ -300,6 +315,17 @@ def build_dashboard(
                             {"entity": inv_ac_temp, "name": "AC (IGBT)"},
                         ],
                     },
+                    *([
+                        {
+                            "type": "history-graph",
+                            "title": "Tariff Manager — last 24 hours",
+                            "hours_to_show": 24,
+                            "entities": [
+                                {"entity": tariff_mode, "name": "Mode"},
+                                {"entity": bat_soc, "name": "SOC"},
+                            ],
+                        },
+                    ] if has_tariff else []),
                 ],
             },
 
