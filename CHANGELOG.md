@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.8] - 2026-05-25
+
+### Changed
+- Tariff dashboard tab is now always visible — when no price entity is configured, shows a markdown card with a direct link to the integration settings to set one up.
+
 ## [1.6.7] - 2026-05-25
 
 ### Fixed
