@@ -3,6 +3,8 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](custom_components/sunsynk/LICENSE)
 ![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue)
+[![Validate](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/validate.yaml/badge.svg)](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/validate.yaml)
+[![CodeQL](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/codeql.yml/badge.svg)](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/codeql.yml)
 
 A native Home Assistant **integration** (not an add-on) for monitoring and controlling Sunsynk and Deye hybrid solar inverters via the Sunsynk cloud API.
 
@@ -17,6 +19,7 @@ A native Home Assistant **integration** (not an add-on) for monitoring and contr
 - **3-phase support** — Per-phase voltage, current and power for grid, load and inverter output
 - **Writable settings** — Change key inverter parameters directly from HA (battery thresholds, charge/discharge current, time slots, sell power limits, etc.)
 - **Solar Forecast** — Optional sensors for predicted PV yield today/tomorrow, cloud cover, precipitation and solar irradiance (GHI/DNI) via Open-Meteo (free, no API key)
+- **Tariff Manager** — Automatic cheap-rate charging and peak-rate discharging based on any HA electricity price sensor (Octopus Agile, NordPool, Tibber, G12, `input_number`, etc.)
 - **Multiple inverters** — One integration entry supports multiple serial numbers
 - **Config Flow** — Fully configured through the Home Assistant UI (no YAML needed)
 - **HACS compatible** — Install and update through HACS
@@ -183,6 +186,18 @@ Serial number, model, firmware versions, plant name, status, run status, last cl
 
 ---
 
+### Tariff Manager Entities (optional)
+
+These entities appear on the inverter device when Tariff Manager is configured.
+
+| Entity | Type | Description |
+|---|---|---|
+| Tariff Manager | Switch | Enable / disable the tariff manager (default **off**) |
+| Tariff Mode | Sensor | Current mode: `disabled` / `idle` / `charging` / `discharging` |
+| Tariff Price Quality | Sensor (diagnostic) | Price data quality: `ok` / `stale` / `unavailable` / `invalid` / `not_found` |
+
+---
+
 ### Solar Forecast Sensors (optional)
 
 These sensors appear under a separate **Solar Forecast** device (powered by [Open-Meteo](https://open-meteo.com)) when forecast is configured.
@@ -238,6 +253,33 @@ These appear under **Settings** entities on the device page.
 | Grid Always On | Keep grid connection always active |
 | Peak and Valley | Enable peak/valley tariff mode |
 | Allow Remote Control | Enable remote API control |
+
+---
+
+## Tariff Manager Setup
+
+The Tariff Manager automatically charges the battery when electricity is cheap and discharges (sells to grid) when it's expensive. It works with any HA sensor that provides a numeric price.
+
+1. Go to **Settings → Devices & Services → Sunsynk → Configure**
+2. Fill in the tariff fields:
+
+| Field | Description |
+|---|---|
+| **Price sensor** | Any HA sensor with a numeric electricity price (e.g. `sensor.octopus_current_rate`) |
+| **Cheap threshold** | Price at or below which charging activates (e.g. `0.10`) |
+| **Cheap charge current (A)** | Charge current during cheap rate |
+| **Normal charge current (A)** | Current restored when cheap rate ends |
+| **Charge target SOC (%)** | Stop charging when battery reaches this SOC (default 100) |
+| **Expensive threshold** | Price at or above which discharging activates |
+| **Peak discharge current (A)** | Discharge current during expensive rate |
+| **Normal discharge current (A)** | Current restored when expensive rate ends |
+| **Minimum SOC (%)** | Stop discharging when battery reaches this SOC (default 10) |
+| **Active from / Active until** | Optional hours to restrict tariff activity (supports midnight wrap, e.g. 22–06) |
+| **Price max age (minutes)** | How old price data can be before it's considered stale (default 90) |
+
+3. After setup, go to your inverter device and **turn on the Tariff Manager switch** — it starts **off** by default.
+
+> Both cheap-rate charging and expensive-rate discharging are independent — configure one, both, or neither.
 
 ---
 
@@ -350,6 +392,12 @@ automation:
 - Enter serial numbers separated by a semicolon with no spaces: `SN123456;SN789012`
 - Each inverter appears as a separate device in HA
 
+### Tariff Manager not doing anything
+- Make sure the **Tariff Manager switch** is turned **on** — it starts off by default
+- Check the **Tariff Price Quality** sensor — if it shows `stale`, `unavailable`, or `not_found`, the price sensor is the issue
+- Check the **Tariff Mode** sensor — `idle` means the manager is running but price conditions aren't met
+- HA persistent notifications appear on every mode change — check the notification bell
+
 ### Solar forecast sensors not appearing
 - Ensure all three fields (latitude, longitude, panel kWp) are filled in the options form
 - Check HA logs for `Open-Meteo request failed` — verify internet access from your HA host
@@ -367,9 +415,10 @@ Home Assistant
     │   ├── api/auth.py            — RSA + OAuth2 token (cached, auto-refreshed on expiry)
     │   └── api/client.py          — 8 endpoints fetched in parallel via aiohttp
     ├── SolarForecastCoordinator   — Open-Meteo fetch every 30 min (optional)
-    ├── sensor.py                  — ~60 static + dynamic MPPT/phase sensors + 6 forecast sensors
+    ├── TariffChargingManager      — price-aware charge/discharge automation (optional)
+    ├── sensor.py                  — ~60 static + dynamic MPPT/phase sensors + 6 forecast + 2 tariff sensors
     ├── number.py                  — ~30 writable numeric settings
-    └── switch.py                  — ~25 writable boolean settings
+    └── switch.py                  — ~25 writable boolean settings + tariff manager toggle
 ```
 
 **Sunsynk API endpoints used:**
