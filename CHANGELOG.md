@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.7] - 2026-05-25
+
+### Fixed
+- Dashboard not appearing after delete + reload — `async_create_item` was creating its own empty `LovelaceStorage` internally, overwriting the content saved beforehand. Fixed by registering the dashboard first, then saving content into the registered object.
+
 ## [1.6.6] - 2026-05-25
 
 ### Added
