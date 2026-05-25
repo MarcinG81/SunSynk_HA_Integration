@@ -299,20 +299,10 @@ async def _async_setup_dashboard(
                 _LOGGER.error("Sunsynk: dashboard save failed: %s", err)
         return
 
-    # ── Path B: dashboard NOT registered yet — register + save content ──
-    try:
-        from homeassistant.components.lovelace.dashboard import LovelaceStorage
-        ls = LovelaceStorage(hass, {"id": url_path, "url_path": url_path, "mode": "storage"})
-        await ls.async_save(dashboard_config)
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.error("Sunsynk: LovelaceStorage save failed: %s", err)
-        try:
-            from homeassistant.helpers.storage import Store
-            await Store(hass, 1, f"lovelace.{url_path}").async_save({"config": dashboard_config})
-        except Exception as err2:  # noqa: BLE001
-            _LOGGER.error("Sunsynk: dashboard Store fallback also failed: %s", err2)
-
-    # Step 2: Register in sidebar — try DashboardsCollection first, then storage file
+    # ── Path B: dashboard NOT registered yet ────────────────────────────
+    # Register in sidebar FIRST, then save content into the registered object.
+    # async_create_item creates its own LovelaceStorage internally — if we save
+    # content before registering, that content gets overwritten by the empty init.
     _item = {
         "url_path": url_path,
         "require_admin": False,
@@ -324,9 +314,25 @@ async def _async_setup_dashboard(
     if dashboards is not None and hasattr(dashboards, "async_create_item"):
         try:
             await dashboards.async_create_item(_item)
+            _LOGGER.info("Sunsynk: dashboard registered at /%s", url_path)
         except Exception as err:  # noqa: BLE001
             _LOGGER.error("Sunsynk: dashboard registration failed: %s", err)
+
+        # Save content into the freshly registered dashboard object
+        if isinstance(dashboards, dict) and url_path in dashboards:
+            try:
+                await dashboards[url_path].async_save(dashboard_config)
+                _LOGGER.info("Sunsynk: dashboard content saved")
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.error("Sunsynk: dashboard content save failed: %s", err)
     else:
+        # Fallback: write content and registration directly to storage files.
+        # Only takes effect after a full HA restart.
+        try:
+            from homeassistant.helpers.storage import Store
+            await Store(hass, 1, f"lovelace.{url_path}").async_save({"config": dashboard_config})
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Sunsynk: dashboard content store failed: %s", err)
         try:
             import uuid
             from homeassistant.helpers.storage import Store
@@ -339,6 +345,7 @@ async def _async_setup_dashboard(
                 items.append({"id": uuid.uuid4().hex, **_item})
                 data["items"] = items
                 await ds.async_save(data)
+            _LOGGER.warning("Sunsynk: dashboard saved to storage — restart HA to see it in sidebar")
         except Exception as err:  # noqa: BLE001
             _LOGGER.error("Sunsynk: lovelace_dashboards write failed: %s", err)
 
