@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -33,7 +33,9 @@ from .const import (
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .helpers import build_device_info
-from .tariff import QUALITY_OK, TariffChargingManager
+
+if TYPE_CHECKING:
+    from .tariff import TariffChargingManager
 
 
 @dataclass(frozen=True)
@@ -147,6 +149,8 @@ async def async_setup_entry(
             SolarForecastSensor(forecast_coordinator, entry.entry_id, desc, forecast_device)
             for desc in FORECAST_SENSOR_DESCRIPTIONS
         ])
+
+    from .tariff import TariffChargingManager  # lazy import — avoids blocking load at module level
 
     tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
         f"{entry.entry_id}_tariff"
@@ -394,7 +398,7 @@ class TariffPriceQualitySensor(SensorEntity):
     @callback
     def _handle_update(self) -> None:
         quality = self._manager.price_quality
-        self._attr_icon = "mdi:check-circle" if quality == QUALITY_OK else "mdi:alert-circle"
+        self._attr_icon = "mdi:check-circle" if quality == "ok" else "mdi:alert-circle"
         self.async_write_ha_state()
 
     @property

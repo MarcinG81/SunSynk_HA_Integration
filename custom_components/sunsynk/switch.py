@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -15,7 +15,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .helpers import build_device_info
-from .tariff import TariffChargingManager
+
+if TYPE_CHECKING:
+    from .tariff import TariffChargingManager
 
 
 @dataclass(frozen=True)
@@ -188,6 +190,8 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    from .tariff import TariffChargingManager  # lazy import — avoids blocking load at module level
+
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities: list[SunsynkSwitchEntity | TariffManagerSwitch] = []
 
