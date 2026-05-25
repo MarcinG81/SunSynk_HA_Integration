@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.4] - 2026-05-25
+
+### Fixed
+- Dashboard not appearing after delete + reload — `LovelaceStorage` constructor requires an `"id"` field which was missing, causing a silent `KeyError` and preventing dashboard creation.
+- `SolarForecastSensor` for Today/Tomorrow raised a HA warning about incompatible `state_class=measurement` with `device_class=energy`. Fixed by setting `state_class=None` on forecast energy sensors (they are point-in-time predictions, not accumulating counters).
+
 ## [1.6.3] - 2026-05-25
 
 ### Added
