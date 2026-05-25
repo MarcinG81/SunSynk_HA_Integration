@@ -5,6 +5,8 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](custom_components/sunsynk/LICENSE)
 ![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue)
 [![Validate](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/validate.yaml/badge.svg)](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/validate.yaml)
+[![Tests](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/tests.yaml/badge.svg)](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/tests.yaml)
+[![GitHub release](https://img.shields.io/github/v/release/MarcinG81/SunSynk_HA_Integration?sort=semver)](https://github.com/MarcinG81/SunSynk_HA_Integration/releases/latest)
 
 A native Home Assistant **integration** (not an add-on) for monitoring and controlling Sunsynk and Deye hybrid solar inverters via the Sunsynk cloud API.
 
@@ -253,6 +255,46 @@ These appear under **Settings** entities on the device page.
 | Grid Always On | Keep grid connection always active |
 | Peak and Valley | Enable peak/valley tariff mode |
 | Allow Remote Control | Enable remote API control |
+
+---
+
+## HA Energy Dashboard
+
+This integration works out of the box with the built-in Home Assistant **Energy Dashboard** (Settings → Energy). Use the following sensors:
+
+| Energy Dashboard slot | Sensor to select |
+|---|---|
+| **Solar production** | `PV Generation Total` |
+| **Grid consumption** | `Grid Import Total` |
+| **Return to grid** | `Grid Export Total` |
+| **Battery going in** | `Battery Charge Total` |
+| **Battery coming out** | `Battery Discharge Total` |
+| **Home consumption** | `Load Total Energy Used` |
+
+> Use the **Total** sensors (lifetime counters), not the **Today** sensors — they give more accurate historical data in the Energy Dashboard.
+
+---
+
+## HA Services / Actions
+
+Three services are available for use in automations and scripts (**Developer Tools → Actions → sunsynk**):
+
+| Service | Description |
+|---|---|
+| `sunsynk.force_charge` | Set battery charge current to any value (A). Call again with your normal value to restore. |
+| `sunsynk.force_discharge` | Set battery discharge current to any value (A). |
+| `sunsynk.set_work_mode` | Set inverter work mode: 0 = Sell First, 1 = Zero Export, 2 = Time-of-Use, 3 = Self-Use, 4 = Peak-Shaving. |
+
+All services require a `serial` parameter (your inverter serial number) and the value to set.
+
+Example automation:
+```yaml
+action:
+  - action: sunsynk.force_charge
+    data:
+      serial: "SN123456"
+      current: 100
+```
 
 ---
 

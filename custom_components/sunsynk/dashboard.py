@@ -104,7 +104,19 @@ def build_dashboard(
     has_forecast = fc_today is not None
 
     # Tariff entity IDs — only populated when tariff manager is configured
-    tariff_mode = tariff_eid("tariff_mode") if tariff_eid else None
+    def t(key: str) -> str | None:
+        return tariff_eid(key) if tariff_eid else None
+
+    tariff_mode            = t("mode")
+    tariff_sw              = t("enabled")
+    tariff_cheap_thr       = t("cheap_threshold")
+    tariff_cheap_cur       = t("cheap_charge_current")
+    tariff_normal_chg_cur  = t("normal_charge_current")
+    tariff_target_soc      = t("target_soc")
+    tariff_exp_thr         = t("expensive_threshold")
+    tariff_peak_dis_cur    = t("peak_discharge_current")
+    tariff_normal_dis_cur  = t("normal_discharge_current")
+    tariff_min_soc         = t("discharge_min_soc")
     has_tariff = tariff_mode is not None
 
     return {
@@ -247,7 +259,7 @@ def build_dashboard(
                                     "type": "entities",
                                     "title": "Tariff Manager",
                                     "entities": [
-                                        {"entity": f"switch.{prefix}_tariff_manager", "name": "Enable Tariff Manager"},
+                                        *([{"entity": tariff_sw, "name": "Enable Tariff Manager"}] if tariff_sw else []),
                                         {"entity": tariff_mode, "name": "Current Mode"},
                                     ],
                                 },
@@ -394,6 +406,26 @@ def build_dashboard(
                             sw("setting_sunday_on"),
                         ],
                     },
+                    *([
+                        {
+                            "type": "entities",
+                            "title": "Tariff Manager Configuration",
+                            "entities": [
+                                *([{"entity": tariff_sw, "name": "Enable"}] if tariff_sw else []),
+                                *([{"entity": tariff_mode, "name": "Mode"}] if tariff_mode else []),
+                                {"type": "section", "label": "Cheap-rate charging"},
+                                *([{"entity": tariff_cheap_thr, "name": "Cheap threshold (price ≤)"}] if tariff_cheap_thr else []),
+                                *([{"entity": tariff_cheap_cur, "name": "Charge current (A)"}] if tariff_cheap_cur else []),
+                                *([{"entity": tariff_normal_chg_cur, "name": "Normal charge current (A)"}] if tariff_normal_chg_cur else []),
+                                *([{"entity": tariff_target_soc, "name": "Target SOC (%)"}] if tariff_target_soc else []),
+                                {"type": "section", "label": "Peak-rate discharging"},
+                                *([{"entity": tariff_exp_thr, "name": "Expensive threshold (price ≥)"}] if tariff_exp_thr else []),
+                                *([{"entity": tariff_peak_dis_cur, "name": "Discharge current (A)"}] if tariff_peak_dis_cur else []),
+                                *([{"entity": tariff_normal_dis_cur, "name": "Normal discharge current (A)"}] if tariff_normal_dis_cur else []),
+                                *([{"entity": tariff_min_soc, "name": "Min SOC (%)"}] if tariff_min_soc else []),
+                            ],
+                        },
+                    ] if has_tariff else []),
                     {
                         "type": "entities",
                         "title": "Generator",

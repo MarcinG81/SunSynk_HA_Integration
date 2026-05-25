@@ -7,6 +7,7 @@ from typing import Any
 
 import aiohttp
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api.auth import SunsynkAuth, SunsynkAuthError
@@ -30,6 +31,7 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         auth: SunsynkAuth,
         serials: list[str],
         refresh_interval: int,
+        entry_id: str = "",
     ) -> None:
         super().__init__(
             hass,
@@ -39,6 +41,7 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         )
         self._auth = auth
         self.serials = serials
+        self._entry_id = entry_id
         self._session: aiohttp.ClientSession | None = None
 
     async def _async_get_session(self) -> aiohttp.ClientSession:
@@ -53,7 +56,17 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         try:
             token = await self._auth.async_get_token(session)
         except SunsynkAuthError as err:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                f"auth_failed_{self._entry_id}",
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="auth_failed",
+            )
             raise UpdateFailed(f"Authentication failed: {err}") from err
+
+        ir.async_delete_issue(self.hass, DOMAIN, f"auth_failed_{self._entry_id}")
 
         client = SunsynkClient(self._auth._api_server, token)
 
@@ -62,9 +75,19 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             try:
                 result[serial] = await client.async_fetch_all(session, serial)
                 _LOGGER.debug("Data updated for inverter %s", serial)
+                ir.async_delete_issue(self.hass, DOMAIN, f"inverter_offline_{serial}")
             except Exception as err:  # noqa: BLE001
                 _LOGGER.error("Failed to fetch data for inverter %s: %s", serial, err)
                 result[serial] = self.data.get(serial, {}) if self.data else {}
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    f"inverter_offline_{serial}",
+                    is_fixable=False,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key="inverter_offline",
+                    translation_placeholders={"serial": serial},
+                )
 
         return result
 
