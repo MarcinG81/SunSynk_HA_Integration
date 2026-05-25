@@ -186,9 +186,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.warning("Solar forecast initial fetch failed (will retry): %s", err)
         hass.data[DOMAIN][f"{entry.entry_id}_forecast"] = forecast_coordinator
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # Tariff charging/discharging manager (optional)
+    # Tariff manager must be created before platform setup so number.py can find it
     price_entity = entry.options.get(CONF_PRICE_ENTITY, entry.data.get(CONF_PRICE_ENTITY))
     if price_entity:
         def _opt(key: str, default: Any = None) -> Any:
@@ -210,8 +208,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             end_hour=_opt(CONF_TARIFF_END_HOUR),
             price_max_age_minutes=_opt(CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE),
         )
-        tariff_manager.start()
         hass.data[DOMAIN][f"{entry.entry_id}_tariff"] = tariff_manager
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Start tariff manager after platforms are set up (switch/sensor already registered)
+    tariff_manager = hass.data[DOMAIN].get(f"{entry.entry_id}_tariff")
+    if tariff_manager is not None:
+        tariff_manager.start()
 
     hass.async_create_task(_async_setup_dashboard(hass, entry, coordinator))
 
