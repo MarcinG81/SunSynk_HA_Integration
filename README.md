@@ -5,6 +5,8 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](custom_components/sunsynk/LICENSE)
 ![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue)
 [![Validate](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/validate.yaml/badge.svg)](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/validate.yaml)
+[![Tests](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/tests.yaml/badge.svg)](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/tests.yaml)
+[![GitHub release](https://img.shields.io/github/v/release/MarcinG81/SunSynk_HA_Integration?sort=semver)](https://github.com/MarcinG81/SunSynk_HA_Integration/releases/latest)
 
 A native Home Assistant **integration** (not an add-on) for monitoring and controlling Sunsynk and Deye hybrid solar inverters via the Sunsynk cloud API.
 
