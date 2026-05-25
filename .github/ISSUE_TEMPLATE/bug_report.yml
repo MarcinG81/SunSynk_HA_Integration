@@ -5,7 +5,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for reporting a bug! Please fill in as much detail as possible so we can reproduce and fix it quickly.
+        Thank you for reporting a bug! Please follow these steps **before** submitting:
+
+        1. **Check [Repairs](https://my.home-assistant.io/redirect/repairs/)** — the integration raises issues there automatically for auth failures and offline inverters.
+        2. **Check the [Troubleshooting wiki](https://github.com/MarcinG81/SunSynk_HA_Integration/wiki/Troubleshooting)** — most common problems are documented there.
+        3. **Download diagnostics** — go to **Settings → Devices & Services → Sunsynk → (⋮) → Download diagnostics** and attach the file below. It includes coordinator state, inverter data and Tariff Manager state with sensitive fields already redacted.
+        4. **Enable debug logging** and include relevant log lines (see the Logs field below).
+
+        Fill in as much detail as possible so we can reproduce and fix it quickly.
 
   - type: input
     id: ha_version
@@ -53,12 +60,19 @@ body:
       required: true
 
   - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics file
+      description: |
+        Attach the diagnostics file downloaded from **Settings → Devices & Services → Sunsynk → (⋮) → Download diagnostics**.
+        Drag and drop the `.json` file into this box, or paste its contents. Sensitive fields are already redacted automatically.
+
+  - type: textarea
     id: logs
     attributes:
       label: Relevant logs
       description: |
-        Enable debug logging for the integration and paste relevant lines.
-        Add this to `configuration.yaml`:
+        Enable debug logging and paste relevant lines. Add this to `configuration.yaml`, restart HA, reproduce the problem, then paste the output:
         ```yaml
         logger:
           logs:
@@ -70,4 +84,4 @@ body:
     id: additional
     attributes:
       label: Additional context
-      description: Any other information — inverter model, number of inverters, screenshots, etc.
+      description: Inverter model, firmware version (`sensor.{prefix}_firmware_master_version`), number of inverters, screenshots, etc.
