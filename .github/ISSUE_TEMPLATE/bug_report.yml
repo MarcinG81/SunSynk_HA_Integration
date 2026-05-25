@@ -1,0 +1,73 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in the Sunsynk integration
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please fill in as much detail as possible so we can reproduce and fix it quickly.
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "e.g. 2025.5.3"
+    validations:
+      required: true
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: Integration version
+      placeholder: "e.g. 1.5.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api_server
+    attributes:
+      label: API server
+      options:
+        - api.sunsynk.net (Sunsynk)
+        - pv.inteless.com (Deye / Inteless)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear description of what the bug is and what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click on ...
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Enable debug logging for the integration and paste relevant lines.
+        Add this to `configuration.yaml`:
+        ```yaml
+        logger:
+          logs:
+            custom_components.sunsynk: debug
+        ```
+      render: text
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any other information — inverter model, number of inverters, screenshots, etc.
