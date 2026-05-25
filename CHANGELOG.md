@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.5] - 2026-05-25
+
+### Fixed
+- Tariff Manager config number entities (cheap threshold, charge/discharge currents, target SOC, min SOC) were never registered because the tariff manager was created **after** `async_forward_entry_setups`. Moved tariff manager creation before platform setup so `number.py` finds it in `hass.data` when entities are registered.
+
 ## [1.6.4] - 2026-05-25
 
 ### Fixed
