@@ -197,6 +197,16 @@ These entities appear on the inverter device when Tariff Manager is configured.
 | Tariff Manager | Switch | Enable / disable the tariff manager (default **off**) |
 | Tariff Mode | Sensor | Current mode: `disabled` / `idle` / `charging` / `discharging` |
 | Tariff Price Quality | Sensor (diagnostic) | Price data quality: `ok` / `stale` / `unavailable` / `invalid` / `not_found` |
+| Tariff Cheap Threshold | Number (config) | Price at or below which cheap charging activates |
+| Tariff Cheap Charge Current | Number (config) | Charge current used during cheap rate (A) |
+| Tariff Normal Charge Current | Number (config) | Charge current restored after cheap period (A) |
+| Tariff Charge Target SOC | Number (config) | Stop charging when battery reaches this SOC (%) |
+| Tariff Expensive Threshold | Number (config) | Price at or above which peak discharging activates |
+| Tariff Peak Discharge Current | Number (config) | Discharge current used during expensive rate (A) |
+| Tariff Normal Discharge Current | Number (config) | Discharge current restored after expensive period (A) |
+| Tariff Discharge Min SOC | Number (config) | Stop discharging when battery drops to this SOC (%) |
+
+> Tariff config number entities are in the **Config** entity category — they are hidden by default in the entity list but visible on the device page and the auto-generated dashboard.
 
 ---
 
@@ -272,6 +282,29 @@ This integration works out of the box with the built-in Home Assistant **Energy 
 | **Home consumption** | `Load Total Energy Used` |
 
 > Use the **Total** sensors (lifetime counters), not the **Today** sensors — they give more accurate historical data in the Energy Dashboard.
+
+---
+
+## HA Diagnostics
+
+Download a full diagnostic snapshot of the integration:
+
+**Settings → Devices & Services → Sunsynk → (⋮) → Download diagnostics**
+
+The file includes coordinator state, inverter data, forecast readings and Tariff Manager state. Sensitive fields (password, serial numbers) are automatically redacted before download. Useful when reporting bugs — attach the file to your GitHub issue.
+
+---
+
+## HA Repair Flows
+
+The integration raises issues in the HA **Repair** dashboard automatically:
+
+| Issue | Trigger | Clears when |
+|---|---|---|
+| Authentication failed | Cloud API rejects credentials | Next successful login |
+| Inverter offline | No data returned for a serial number | Next successful data fetch for that serial |
+
+To view current issues: **Settings → System → Repairs**.
 
 ---
 

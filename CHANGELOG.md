@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.3] - 2026-05-25
+
+### Added
+- **HA Diagnostics** — download a full diagnostic snapshot (inverter data, coordinator state, config, forecast, tariff) via **Settings → Devices & Services → Sunsynk → Download diagnostics**. Sensitive fields (password, serial numbers) are automatically redacted.
+- **Repair Flows** — the integration now raises issues in the HA Repair dashboard when cloud authentication fails or an inverter goes offline. Issues clear automatically when the problem is resolved.
+- **HA Services / Actions** — three new services callable from automations and scripts:
+  - `sunsynk.force_charge` — immediately set battery charge current
+  - `sunsynk.force_discharge` — immediately set battery discharge current
+  - `sunsynk.set_work_mode` — switch inverter work mode on demand
+- **Tariff Manager config entities** — all Tariff Manager thresholds and currents are now exposed as **Number entities** (entity category: Config). Adjust cheap threshold, charge currents, target SOC, expensive threshold, discharge currents and minimum SOC directly from the HA UI without restarting the integration. Changes take effect immediately and trigger a re-evaluation.
+- Tariff Manager Configuration card added to the auto-generated **Settings** dashboard view.
+
+### Added (CI/Dev)
+- pytest test suite covering mode property, price quality, schedule logic (including midnight wrap), charging/discharging evaluation, `set_enabled`, and no-op cases when thresholds are `None`.
+- `tests.yaml` GitHub Actions workflow — runs pytest on every push and pull request.
+- `Tests` and `GitHub release` badges added to README.
+
 ## [1.6.2] - 2026-05-25
 
 ### Fixed
