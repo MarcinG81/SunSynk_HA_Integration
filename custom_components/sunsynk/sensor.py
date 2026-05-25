@@ -150,8 +150,6 @@ async def async_setup_entry(
             for desc in FORECAST_SENSOR_DESCRIPTIONS
         ])
 
-    from .tariff import TariffChargingManager  # lazy import — avoids blocking load at module level
-
     tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
         f"{entry.entry_id}_tariff"
     )

@@ -190,8 +190,6 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    from .tariff import TariffChargingManager  # lazy import — avoids blocking load at module level
-
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities: list[SunsynkSwitchEntity | TariffManagerSwitch] = []
 
