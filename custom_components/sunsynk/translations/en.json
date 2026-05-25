@@ -75,5 +75,15 @@
       "invalid_forecast_config": "Solar forecast requires valid latitude, longitude and panel kWp (all numeric, kWp > 0).",
       "invalid_tariff_config": "Tariff configuration error. Cheap charging needs threshold + charge current + normal current (all three). Discharge needs threshold + peak current + normal current (all three)."
     }
+  },
+  "issues": {
+    "auth_failed": {
+      "title": "Sunsynk authentication failed",
+      "description": "The Sunsynk cloud API rejected the credentials. Go to **Settings → Devices & Services → Sunsynk** and reconfigure the integration to update your password."
+    },
+    "inverter_offline": {
+      "title": "Inverter {serial} is offline",
+      "description": "Data for inverter **{serial}** could not be fetched. Check that the inverter dongle is connected and the Sunsynk app shows live data."
+    }
   }
 }

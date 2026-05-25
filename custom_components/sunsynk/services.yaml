@@ -1,0 +1,65 @@
+force_charge:
+  name: Force Charge
+  description: >
+    Set the battery charge current to a specific value.
+    Call again with your normal value to restore.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Serial number of the target inverter.
+      required: true
+      selector:
+        text:
+    current:
+      name: Charge Current
+      description: Charge current in Amperes (0 = stop charging).
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 500
+          unit_of_measurement: A
+
+force_discharge:
+  name: Force Discharge
+  description: >
+    Set the battery discharge current to a specific value.
+    Call again with your normal value to restore.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Serial number of the target inverter.
+      required: true
+      selector:
+        text:
+    current:
+      name: Discharge Current
+      description: Discharge current in Amperes (0 = stop discharging).
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 500
+          unit_of_measurement: A
+
+set_work_mode:
+  name: Set Work Mode
+  description: >
+    Set the inverter system work mode.
+    0 = Sell First, 1 = Zero Export, 2 = Time-of-Use, 3 = Self-Use, 4 = Peak-Shaving.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Serial number of the target inverter.
+      required: true
+      selector:
+        text:
+    mode:
+      name: Work Mode
+      description: System work mode (0–4).
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: box

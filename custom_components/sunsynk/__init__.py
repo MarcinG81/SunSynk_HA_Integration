@@ -6,10 +6,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 
 from .api.auth import SunsynkAuth
 from .const import (
@@ -47,10 +48,31 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SWITCH, Platform.TEXT]
 
+SERVICE_FORCE_CHARGE = "force_charge"
+SERVICE_FORCE_DISCHARGE = "force_discharge"
+SERVICE_SET_WORK_MODE = "set_work_mode"
+
+_SERVICE_SERIAL_CURRENT_SCHEMA = vol.Schema({
+    vol.Required("serial"): str,
+    vol.Required("current"): vol.All(vol.Coerce(int), vol.Range(min=0, max=500)),
+})
+_SERVICE_SET_WORK_MODE_SCHEMA = vol.Schema({
+    vol.Required("serial"): str,
+    vol.Required("mode"): vol.All(vol.Coerce(int), vol.Range(min=0, max=4)),
+})
+
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _CARD_JS = "sunsynk-power-flow-card.js"
 _CARD_URL = f"/sunsynk/{_CARD_JS}"
+
+
+def _find_coordinator(hass: HomeAssistant, serial: str) -> SunsynkCoordinator | None:
+    """Find the coordinator that owns a given inverter serial."""
+    for val in hass.data.get(DOMAIN, {}).values():
+        if isinstance(val, SunsynkCoordinator) and serial in val.serials:
+            return val
+    return None
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -78,6 +100,38 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         pass
 
     _LOGGER.debug("Sunsynk Power Flow Card registered at %s", _CARD_URL)
+
+    async def _handle_force_charge(call: ServiceCall) -> None:
+        serial: str = call.data["serial"]
+        coordinator = _find_coordinator(hass, serial)
+        if coordinator is None:
+            raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
+        await coordinator.async_write_setting(serial, "chargeCurrent", call.data["current"])
+
+    async def _handle_force_discharge(call: ServiceCall) -> None:
+        serial: str = call.data["serial"]
+        coordinator = _find_coordinator(hass, serial)
+        if coordinator is None:
+            raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
+        await coordinator.async_write_setting(serial, "dischargeCurrent", call.data["current"])
+
+    async def _handle_set_work_mode(call: ServiceCall) -> None:
+        serial: str = call.data["serial"]
+        coordinator = _find_coordinator(hass, serial)
+        if coordinator is None:
+            raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
+        await coordinator.async_write_setting(serial, "sysWorkMode", call.data["mode"])
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_FORCE_CHARGE, _handle_force_charge, _SERVICE_SERIAL_CURRENT_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_FORCE_DISCHARGE, _handle_force_discharge, _SERVICE_SERIAL_CURRENT_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_WORK_MODE, _handle_set_work_mode, _SERVICE_SET_WORK_MODE_SCHEMA
+    )
+
     return True
 
 
@@ -104,6 +158,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         auth=auth,
         serials=serials,
         refresh_interval=refresh_interval,
+        entry_id=entry.entry_id,
     )
 
     await coordinator.async_config_entry_first_refresh()
