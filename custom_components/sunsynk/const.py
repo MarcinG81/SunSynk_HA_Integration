@@ -60,6 +60,8 @@ CONF_DISCHARGE_MIN_SOC: Final = "discharge_min_soc"
 DEFAULT_DISCHARGE_MIN_SOC: Final = 10
 CONF_TARIFF_START_HOUR: Final = "tariff_start_hour"
 CONF_TARIFF_END_HOUR: Final = "tariff_end_hour"
+CONF_PRICE_MAX_AGE: Final = "price_max_age"
+DEFAULT_PRICE_MAX_AGE: Final = 90  # minutes
 
 
 @dataclass(frozen=True)

@@ -7,12 +7,20 @@ from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.util import dt as dt_util
 
 from .coordinator import SunsynkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 _NOTIFICATION_ID = "sunsynk_tariff"
+
+# Human-readable quality state values
+QUALITY_OK = "ok"
+QUALITY_NOT_FOUND = "not_found"
+QUALITY_UNAVAILABLE = "unavailable"
+QUALITY_INVALID = "invalid"
+QUALITY_STALE = "stale"
 
 
 class TariffChargingManager:
@@ -31,6 +39,11 @@ class TariffChargingManager:
     An optional schedule (start_hour / end_hour) limits activity to
     specific hours of the day.  If start_hour > end_hour the range
     wraps midnight (e.g., 22–06).
+
+    price_max_age_minutes: if the price sensor has not updated within
+    this many minutes the data is considered stale and any active mode
+    is cancelled to avoid acting on outdated prices.  Pass None to
+    skip the staleness check.
     """
 
     def __init__(
@@ -51,6 +64,8 @@ class TariffChargingManager:
         # schedule (both None = always active)
         start_hour: int | None = None,
         end_hour: int | None = None,
+        # price data quality
+        price_max_age_minutes: int | None = 90,
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
@@ -68,10 +83,12 @@ class TariffChargingManager:
 
         self._start_hour = start_hour
         self._end_hour = end_hour
+        self._price_max_age_minutes = price_max_age_minutes
 
         self._enabled = False  # user must explicitly enable via switch
         self._charging_active = False
         self._discharging_active = False
+        self._price_quality: str = QUALITY_NOT_FOUND
         self._listeners: list[Callable[[], None]] = []
         self._unsub_price: Any = None
         self._unsub_coordinator: Any = None
@@ -99,21 +116,14 @@ class TariffChargingManager:
         self._unsub_coordinator = self._coordinator.async_add_listener(
             self._on_coordinator_update
         )
-        state = self._hass.states.get(self._price_entity)
-        if state is None:
-            _LOGGER.warning("Tariff: price entity '%s' not found", self._price_entity)
-        elif state.state in ("unknown", "unavailable"):
+        # Assess initial quality and log result
+        quality, _ = self._compute_price_quality()
+        self._price_quality = quality
+        if quality != QUALITY_OK:
             _LOGGER.warning(
-                "Tariff: price entity '%s' is currently %s", self._price_entity, state.state
+                "Tariff: price entity '%s' quality at startup: %s",
+                self._price_entity, quality,
             )
-        else:
-            try:
-                float(state.state)
-            except (ValueError, TypeError):
-                _LOGGER.warning(
-                    "Tariff: price entity '%s' has non-numeric state '%s'",
-                    self._price_entity, state.state,
-                )
 
     def stop(self) -> None:
         """Unregister all listeners."""
@@ -154,6 +164,73 @@ class TariffChargingManager:
                 self._hass.async_create_task(self._evaluate(state.state))
         self._notify_listeners()
 
+    # ── Price quality ──────────────────────────────────────────────────────
+
+    def _compute_price_quality(self) -> tuple[str, str]:
+        """Return (quality_state, detail_message) without side effects."""
+        state = self._hass.states.get(self._price_entity)
+        if state is None:
+            return QUALITY_NOT_FOUND, f"Entity '{self._price_entity}' not found"
+        if state.state in ("unknown", "unavailable"):
+            return QUALITY_UNAVAILABLE, f"State is '{state.state}'"
+        try:
+            float(state.state)
+        except (ValueError, TypeError):
+            return QUALITY_INVALID, f"Non-numeric state '{state.state}'"
+        if self._price_max_age_minutes is not None:
+            age_seconds = (dt_util.utcnow() - state.last_updated).total_seconds()
+            age_minutes = age_seconds / 60
+            if age_minutes > self._price_max_age_minutes:
+                return (
+                    QUALITY_STALE,
+                    f"Last updated {age_minutes:.0f} min ago (max {self._price_max_age_minutes} min)",
+                )
+        return QUALITY_OK, "ok"
+
+    def _refresh_quality(self) -> bool:
+        """Recompute quality; if changed notify listeners; return True if quality is OK."""
+        quality, detail = self._compute_price_quality()
+        if quality != self._price_quality:
+            prev = self._price_quality
+            self._price_quality = quality
+            _LOGGER.info(
+                "Tariff: price quality changed %s → %s (%s)",
+                prev, quality, detail,
+            )
+            if quality != QUALITY_OK:
+                self._hass.async_create_task(self._handle_bad_quality(detail))
+            self._notify_listeners()
+        return quality == QUALITY_OK
+
+    async def _handle_bad_quality(self, detail: str) -> None:
+        """Stop any active mode when price data quality drops."""
+        stopped_something = False
+        for serial in self._coordinator.serials:
+            if self._charging_active and self._normal_charge_current is not None:
+                _LOGGER.warning(
+                    "Tariff: stopping charging [%s] due to bad price quality — %s", serial, detail
+                )
+                await self._coordinator.async_write_setting(
+                    serial, "chargeCurrent", self._normal_charge_current
+                )
+                self._charging_active = False
+                stopped_something = True
+            if self._discharging_active and self._normal_discharge_current is not None:
+                _LOGGER.warning(
+                    "Tariff: stopping discharging [%s] due to bad price quality — %s", serial, detail
+                )
+                await self._coordinator.async_write_setting(
+                    serial, "dischargeCurrent", self._normal_discharge_current
+                )
+                self._discharging_active = False
+                stopped_something = True
+        if stopped_something:
+            self._send_notification(
+                "Tariff: stopped — price data quality issue",
+                f"Normal currents restored. Reason: {detail}",
+            )
+            self._notify_listeners()
+
     # ── Scheduler ─────────────────────────────────────────────────────────
 
     def _is_in_schedule(self) -> bool:
@@ -173,17 +250,32 @@ class TariffChargingManager:
         new_state = event.data.get("new_state")
         if new_state and new_state.state not in ("unknown", "unavailable"):
             self._hass.async_create_task(self._evaluate(new_state.state))
+        else:
+            # State went unavailable — refresh quality immediately
+            self._refresh_quality()
 
     @callback
     def _on_coordinator_update(self) -> None:
-        state = self._hass.states.get(self._price_entity)
-        if state and state.state not in ("unknown", "unavailable"):
-            self._hass.async_create_task(self._evaluate(state.state))
+        # Periodic quality check (catches staleness between price updates)
+        quality_ok = self._refresh_quality()
+        if quality_ok:
+            state = self._hass.states.get(self._price_entity)
+            if state and state.state not in ("unknown", "unavailable"):
+                self._hass.async_create_task(self._evaluate(state.state))
 
     # ── Core evaluation ────────────────────────────────────────────────────
 
     async def _evaluate(self, price_state: str) -> None:
         if not self._enabled:
+            return
+
+        # Validate quality before acting
+        quality, detail = self._compute_price_quality()
+        if quality != self._price_quality:
+            self._price_quality = quality
+            self._notify_listeners()
+        if quality != QUALITY_OK:
+            await self._handle_bad_quality(detail)
             return
 
         try:
@@ -321,6 +413,10 @@ class TariffChargingManager:
         return self._discharging_active
 
     @property
+    def price_quality(self) -> str:
+        return self._price_quality
+
+    @property
     def mode(self) -> str:
         """Return human-readable current mode."""
         if not self._enabled:
@@ -350,3 +446,7 @@ class TariffChargingManager:
     @property
     def end_hour(self) -> int | None:
         return self._end_hour
+
+    @property
+    def price_max_age_minutes(self) -> int | None:
+        return self._price_max_age_minutes

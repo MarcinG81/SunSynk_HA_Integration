@@ -47,7 +47,8 @@
           "normal_discharge_current": "Normal discharge current to restore (A)",
           "discharge_min_soc": "Stop discharging when SOC drops below (%)",
           "tariff_start_hour": "Active schedule — start hour (0–23)",
-          "tariff_end_hour": "Active schedule — end hour (0–23)"
+          "tariff_end_hour": "Active schedule — end hour (0–23)",
+          "price_max_age": "Price data max age (minutes)"
         },
         "data_description": {
           "latitude": "Optional — defaults to your HA home location",
@@ -64,7 +65,8 @@
           "normal_discharge_current": "Discharge current restored when expensive period ends.",
           "discharge_min_soc": "Discharging stops automatically when battery reaches this SOC. Default 10.",
           "tariff_start_hour": "Hour of day (0–23) when tariff management activates. Leave blank for always-on.",
-          "tariff_end_hour": "Hour of day (0–23) when tariff management deactivates. Can wrap midnight (e.g. start 22, end 6)."
+          "tariff_end_hour": "Hour of day (0–23) when tariff management deactivates. Can wrap midnight (e.g. start 22, end 6).",
+          "price_max_age": "If the price sensor has not updated within this many minutes, any active charge/discharge mode is stopped as a safety measure. Default 90. Set high to effectively disable the check."
         }
       }
     },
