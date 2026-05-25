@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.6.6-beta.1] - 2026-05-25
+## [1.6.6] - 2026-05-25
 
 ### Added
 - Dedicated **Tariff** dashboard view (tab 4) with three cards: Tariff Manager status & enable switch, Cheap-rate Charging config, Peak-rate Discharging config, and 24h history graph (mode + SOC). Tariff config removed from Settings view and Charts view.
