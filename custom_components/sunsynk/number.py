@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.number import (
     NumberDeviceClass,
@@ -16,7 +16,7 @@ from homeassistant.const import (
     UnitOfElectricCurrent,
     UnitOfPower,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -25,6 +25,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .helpers import build_device_info
+
+if TYPE_CHECKING:
+    from .tariff import TariffChargingManager
 
 
 @dataclass(frozen=True)
@@ -353,18 +356,139 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
 )
 
 
+@dataclass(frozen=True)
+class TariffNumberEntityDescription:
+    key: str
+    name: str
+    native_min_value: float
+    native_max_value: float
+    native_step: float
+    manager_attr: str
+    manager_setter: str
+    native_unit_of_measurement: str | None = None
+    suggested_display_precision: int = 3
+    icon: str | None = None
+
+
+TARIFF_NUMBERS: tuple[TariffNumberEntityDescription, ...] = (
+    TariffNumberEntityDescription(
+        key="cheap_threshold",
+        name="Tariff Cheap Threshold",
+        native_min_value=-1.0,
+        native_max_value=10.0,
+        native_step=0.001,
+        manager_attr="_cheap_threshold",
+        manager_setter="set_cheap_threshold",
+        icon="mdi:arrow-down-circle-outline",
+    ),
+    TariffNumberEntityDescription(
+        key="cheap_charge_current",
+        name="Tariff Cheap Charge Current",
+        native_min_value=0,
+        native_max_value=500,
+        native_step=1,
+        manager_attr="_cheap_current",
+        manager_setter="set_cheap_current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        suggested_display_precision=0,
+        icon="mdi:battery-charging-high",
+    ),
+    TariffNumberEntityDescription(
+        key="normal_charge_current",
+        name="Tariff Normal Charge Current",
+        native_min_value=0,
+        native_max_value=500,
+        native_step=1,
+        manager_attr="_normal_charge_current",
+        manager_setter="set_normal_charge_current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        suggested_display_precision=0,
+        icon="mdi:battery-charging",
+    ),
+    TariffNumberEntityDescription(
+        key="target_soc",
+        name="Tariff Charge Target SOC",
+        native_min_value=10,
+        native_max_value=100,
+        native_step=1,
+        manager_attr="_target_soc",
+        manager_setter="set_target_soc",
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        icon="mdi:battery-arrow-up",
+    ),
+    TariffNumberEntityDescription(
+        key="expensive_threshold",
+        name="Tariff Expensive Threshold",
+        native_min_value=-1.0,
+        native_max_value=10.0,
+        native_step=0.001,
+        manager_attr="_expensive_threshold",
+        manager_setter="set_expensive_threshold",
+        icon="mdi:arrow-up-circle-outline",
+    ),
+    TariffNumberEntityDescription(
+        key="peak_discharge_current",
+        name="Tariff Peak Discharge Current",
+        native_min_value=0,
+        native_max_value=500,
+        native_step=1,
+        manager_attr="_peak_discharge_current",
+        manager_setter="set_peak_discharge_current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        suggested_display_precision=0,
+        icon="mdi:battery-arrow-down",
+    ),
+    TariffNumberEntityDescription(
+        key="normal_discharge_current",
+        name="Tariff Normal Discharge Current",
+        native_min_value=0,
+        native_max_value=500,
+        native_step=1,
+        manager_attr="_normal_discharge_current",
+        manager_setter="set_normal_discharge_current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        suggested_display_precision=0,
+        icon="mdi:battery-charging-outline",
+    ),
+    TariffNumberEntityDescription(
+        key="discharge_min_soc",
+        name="Tariff Discharge Min SOC",
+        native_min_value=0,
+        native_max_value=90,
+        native_step=1,
+        manager_attr="_discharge_min_soc",
+        manager_setter="set_discharge_min_soc",
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        icon="mdi:battery-arrow-down-outline",
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SunsynkNumberEntity] = []
+    entities: list[SunsynkNumberEntity | TariffNumberEntity] = []
 
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
         for description in WRITABLE_NUMBERS:
             entities.append(SunsynkNumberEntity(coordinator, serial, description, device_info))
+
+    tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_tariff"
+    )
+    if tariff_manager is not None:
+        first_serial = coordinator.serials[0]
+        device_info = build_device_info(coordinator, first_serial)
+        for description in TARIFF_NUMBERS:
+            entities.append(
+                TariffNumberEntity(entry.entry_id, tariff_manager, description, device_info)
+            )
 
     async_add_entities(entities)
 
@@ -413,3 +537,57 @@ class SunsynkNumberEntity(CoordinatorEntity[SunsynkCoordinator], NumberEntity):
         }
         write_value: Any = int(value) if setting_key in int_fields else value
         await self.coordinator.async_write_setting(self._serial, setting_key, write_value)
+
+
+class TariffNumberEntity(NumberEntity):
+    """Writable runtime parameter for the Tariff Charging Manager."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_mode = NumberMode.BOX
+
+    def __init__(
+        self,
+        entry_id: str,
+        manager: TariffChargingManager,
+        description: TariffNumberEntityDescription,
+        device_info: DeviceInfo,
+    ) -> None:
+        self._manager = manager
+        self._description = description
+        self._unsub: Any = None
+        self._attr_unique_id = f"{entry_id}_tariff_{description.key}"
+        self._attr_name = description.name
+        self._attr_device_info = device_info
+        self._attr_native_min_value = description.native_min_value
+        self._attr_native_max_value = description.native_max_value
+        self._attr_native_step = description.native_step
+        self._attr_native_unit_of_measurement = description.native_unit_of_measurement
+        self._attr_suggested_display_precision = description.suggested_display_precision
+        self._attr_icon = description.icon
+
+    async def async_added_to_hass(self) -> None:
+        self._unsub = self._manager.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        value = getattr(self._manager, self._description.manager_attr)
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    async def async_set_native_value(self, value: float) -> None:
+        getattr(self._manager, self._description.manager_setter)(value)

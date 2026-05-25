@@ -398,6 +398,54 @@ class TariffChargingManager:
             )
         )
 
+    # ── Runtime setters (called by TariffNumberEntity) ────────────────────
+
+    def _re_evaluate(self) -> None:
+        """Trigger a fresh evaluation if the manager is active."""
+        if not self._enabled:
+            return
+        state = self._hass.states.get(self._price_entity)
+        if state and state.state not in ("unknown", "unavailable"):
+            self._hass.async_create_task(self._evaluate(state.state))
+
+    def set_cheap_threshold(self, value: float | None) -> None:
+        self._cheap_threshold = value
+        self._re_evaluate()
+        self._notify_listeners()
+
+    def set_cheap_current(self, value: int | None) -> None:
+        self._cheap_current = None if value is None else int(value)
+        self._re_evaluate()
+        self._notify_listeners()
+
+    def set_normal_charge_current(self, value: int | None) -> None:
+        self._normal_charge_current = None if value is None else int(value)
+        self._notify_listeners()
+
+    def set_target_soc(self, value: int) -> None:
+        self._target_soc = int(value)
+        self._re_evaluate()
+        self._notify_listeners()
+
+    def set_expensive_threshold(self, value: float | None) -> None:
+        self._expensive_threshold = value
+        self._re_evaluate()
+        self._notify_listeners()
+
+    def set_peak_discharge_current(self, value: int | None) -> None:
+        self._peak_discharge_current = None if value is None else int(value)
+        self._re_evaluate()
+        self._notify_listeners()
+
+    def set_normal_discharge_current(self, value: int | None) -> None:
+        self._normal_discharge_current = None if value is None else int(value)
+        self._notify_listeners()
+
+    def set_discharge_min_soc(self, value: int) -> None:
+        self._discharge_min_soc = int(value)
+        self._re_evaluate()
+        self._notify_listeners()
+
     # ── Properties ─────────────────────────────────────────────────────────
 
     @property
