@@ -256,6 +256,46 @@ These appear under **Settings** entities on the device page.
 
 ---
 
+## HA Energy Dashboard
+
+This integration works out of the box with the built-in Home Assistant **Energy Dashboard** (Settings → Energy). Use the following sensors:
+
+| Energy Dashboard slot | Sensor to select |
+|---|---|
+| **Solar production** | `PV Generation Total` |
+| **Grid consumption** | `Grid Import Total` |
+| **Return to grid** | `Grid Export Total` |
+| **Battery going in** | `Battery Charge Total` |
+| **Battery coming out** | `Battery Discharge Total` |
+| **Home consumption** | `Load Total Energy Used` |
+
+> Use the **Total** sensors (lifetime counters), not the **Today** sensors — they give more accurate historical data in the Energy Dashboard.
+
+---
+
+## HA Services / Actions
+
+Three services are available for use in automations and scripts (**Developer Tools → Actions → sunsynk**):
+
+| Service | Description |
+|---|---|
+| `sunsynk.force_charge` | Set battery charge current to any value (A). Call again with your normal value to restore. |
+| `sunsynk.force_discharge` | Set battery discharge current to any value (A). |
+| `sunsynk.set_work_mode` | Set inverter work mode: 0 = Sell First, 1 = Zero Export, 2 = Time-of-Use, 3 = Self-Use, 4 = Peak-Shaving. |
+
+All services require a `serial` parameter (your inverter serial number) and the value to set.
+
+Example automation:
+```yaml
+action:
+  - action: sunsynk.force_charge
+    data:
+      serial: "SN123456"
+      current: 100
+```
+
+---
+
 ## Tariff Manager Setup
 
 The Tariff Manager automatically charges the battery when electricity is cheap and discharges (sells to grid) when it's expensive. It works with any HA sensor that provides a numeric price.
