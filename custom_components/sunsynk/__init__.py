@@ -282,7 +282,7 @@ async def _async_setup_dashboard(
     }
     tariff_eid_fn = (lambda key: tariff_uid_map.get(key)) if tariff_uid_map else None
 
-    dashboard_config = build_dashboard(prefix, eid, forecast_eid_fn, tariff_eid_fn)
+    dashboard_config = build_dashboard(prefix, eid, forecast_eid_fn, tariff_eid_fn, entry.entry_id)
 
     lovelace = hass.data.get("lovelace")
     dashboards = getattr(lovelace, "dashboards", None)

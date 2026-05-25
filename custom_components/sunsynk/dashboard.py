@@ -9,6 +9,7 @@ def build_dashboard(
     eid: Callable[[str], str | None] | None = None,
     forecast_eid: Callable[[str], str | None] | None = None,
     tariff_eid: Callable[[str], str | None] | None = None,
+    entry_id: str = "",
 ) -> dict[str, Any]:
     """Return a full Lovelace dashboard config dict with correct entity IDs.
 
@@ -412,50 +413,61 @@ def build_dashboard(
             },
 
             # ── VIEW 4: TARIFF ───────────────────────────────────────────
-            *([{
+            {
                 "title": "Tariff",
                 "icon": "mdi:cash-clock",
                 "cards": [
-                    {
-                        "type": "entities",
-                        "title": "Tariff Manager",
-                        "entities": [
-                            *([{"entity": tariff_sw, "name": "Enable"}] if tariff_sw else []),
-                            *([{"entity": tariff_mode, "name": "Mode"}] if tariff_mode else []),
-                            *([{"entity": t("price_quality"), "name": "Price Quality"}] if t("price_quality") else []),
-                        ],
-                    },
-                    {
-                        "type": "entities",
-                        "title": "Cheap-rate Charging",
-                        "entities": [
-                            *([{"entity": tariff_cheap_thr, "name": "Cheap threshold (price ≤)"}] if tariff_cheap_thr else []),
-                            *([{"entity": tariff_cheap_cur, "name": "Charge current (A)"}] if tariff_cheap_cur else []),
-                            *([{"entity": tariff_normal_chg_cur, "name": "Normal charge current (A)"}] if tariff_normal_chg_cur else []),
-                            *([{"entity": tariff_target_soc, "name": "Target SOC (%)"}] if tariff_target_soc else []),
-                        ],
-                    },
-                    {
-                        "type": "entities",
-                        "title": "Peak-rate Discharging",
-                        "entities": [
-                            *([{"entity": tariff_exp_thr, "name": "Expensive threshold (price ≥)"}] if tariff_exp_thr else []),
-                            *([{"entity": tariff_peak_dis_cur, "name": "Discharge current (A)"}] if tariff_peak_dis_cur else []),
-                            *([{"entity": tariff_normal_dis_cur, "name": "Normal discharge current (A)"}] if tariff_normal_dis_cur else []),
-                            *([{"entity": tariff_min_soc, "name": "Min SOC (%)"}] if tariff_min_soc else []),
-                        ],
-                    },
-                    {
-                        "type": "history-graph",
-                        "title": "Tariff Mode & Battery SOC — last 24 hours",
-                        "hours_to_show": 24,
-                        "entities": [
-                            *([{"entity": tariff_mode, "name": "Mode"}] if tariff_mode else []),
-                            {"entity": bat_soc, "name": "SOC"},
-                        ],
-                    },
+                    *([] if has_tariff else [{
+                        "type": "markdown",
+                        "content": (
+                            "## Tariff Manager not configured\n\n"
+                            "Set an **Electricity Price Sensor** to enable automatic cheap-rate "
+                            "charging and peak-rate discharging.\n\n"
+                            "[Open Integration Settings](/config/integrations/integration/sunsynk)"
+                        ),
+                    }]),
+                    *([
+                        {
+                            "type": "entities",
+                            "title": "Tariff Manager",
+                            "entities": [
+                                *([{"entity": tariff_sw, "name": "Enable"}] if tariff_sw else []),
+                                *([{"entity": tariff_mode, "name": "Mode"}] if tariff_mode else []),
+                                *([{"entity": t("price_quality"), "name": "Price Quality"}] if t("price_quality") else []),
+                            ],
+                        },
+                        {
+                            "type": "entities",
+                            "title": "Cheap-rate Charging",
+                            "entities": [
+                                *([{"entity": tariff_cheap_thr, "name": "Cheap threshold (price ≤)"}] if tariff_cheap_thr else []),
+                                *([{"entity": tariff_cheap_cur, "name": "Charge current (A)"}] if tariff_cheap_cur else []),
+                                *([{"entity": tariff_normal_chg_cur, "name": "Normal charge current (A)"}] if tariff_normal_chg_cur else []),
+                                *([{"entity": tariff_target_soc, "name": "Target SOC (%)"}] if tariff_target_soc else []),
+                            ],
+                        },
+                        {
+                            "type": "entities",
+                            "title": "Peak-rate Discharging",
+                            "entities": [
+                                *([{"entity": tariff_exp_thr, "name": "Expensive threshold (price ≥)"}] if tariff_exp_thr else []),
+                                *([{"entity": tariff_peak_dis_cur, "name": "Discharge current (A)"}] if tariff_peak_dis_cur else []),
+                                *([{"entity": tariff_normal_dis_cur, "name": "Normal discharge current (A)"}] if tariff_normal_dis_cur else []),
+                                *([{"entity": tariff_min_soc, "name": "Min SOC (%)"}] if tariff_min_soc else []),
+                            ],
+                        },
+                        {
+                            "type": "history-graph",
+                            "title": "Tariff Mode & Battery SOC — last 24 hours",
+                            "hours_to_show": 24,
+                            "entities": [
+                                *([{"entity": tariff_mode, "name": "Mode"}] if tariff_mode else []),
+                                {"entity": bat_soc, "name": "SOC"},
+                            ],
+                        },
+                    ] if has_tariff else []),
                 ],
-            }] if has_tariff else []),
+            },
 
             # ── VIEW 5: DIAGNOSTICS ──────────────────────────────────────
             {
