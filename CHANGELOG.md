@@ -3,6 +3,24 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.0] - 2026-05-25
+
+### Added
+- **Tariff-aware charging & discharging** — works with any HA electricity price sensor (Octopus Agile, NordPool, Tibber, G12, `input_number`, etc.):
+  - **Cheap-rate charging**: when price ≤ threshold and SOC < target → raises `chargeCurrent`; stops when SOC reaches target or price rises
+  - **Expensive-rate discharging**: when price ≥ threshold and SOC > min → raises `dischargeCurrent` (sell to grid); stops when SOC hits minimum or price drops
+  - Both modes are independent and optional
+- **Tariff Manager switch** entity — starts **OFF**, must be enabled manually; disabling immediately restores normal currents
+- **Tariff Mode sensor** entity — reports `disabled` / `idle` / `charging` / `discharging` in real time
+- **Tariff Price Quality diagnostic sensor** — reports `ok` / `stale` / `unavailable` / `invalid` / `not_found`; icon changes to alert when data is bad
+- **Price quality check**: if the price sensor stops updating beyond the configured max age (default 90 min), any active mode is stopped and normal currents are restored as a safety measure
+- **Active schedule**: optional start/end hour to limit tariff activity to specific hours of the day (supports midnight wrap, e.g. 22–06)
+- **HA persistent notifications** on every mode change (charging on/off, discharging on/off, manager enabled/disabled, quality issues)
+- Tariff Manager card added to the auto-generated Overview dashboard; history graph (mode + SOC) added to Charts view
+- Issue templates (bug report, feature request) with redirect to Discussions and Wiki
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
+- `info.md` — integration description card for HACS UI
+
 ## [1.5.0] - 2026-05-23
 
 ### Added
@@ -44,5 +62,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Auto-generated Lovelace dashboard (Power Flow Card bundled — no separate HACS install needed)
 - Sunsynk Power Flow Card v7.3.3 served as a bundled frontend resource
 
+[1.6.0]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.0.0...v1.5.0
 [1.0.0]: https://github.com/MarcinG81/SunSynk_HA_Integration/releases/tag/v1.0.0
