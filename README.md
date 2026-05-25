@@ -1,5 +1,6 @@
 # SunSynk / Deye Solar Inverter — Home Assistant Integration
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow?logo=buy-me-a-coffee)](https://buymeacoffee.com/marcingaszewski)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](custom_components/sunsynk/LICENSE)
 ![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue)
