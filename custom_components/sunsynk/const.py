@@ -46,6 +46,21 @@ CONF_PERFORMANCE_RATIO: Final = "performance_ratio"
 DEFAULT_PERFORMANCE_RATIO: Final = 0.80
 SOLAR_FORECAST_UPDATE_INTERVAL: Final = 30  # minutes
 
+# Tariff-aware charging / discharging
+CONF_PRICE_ENTITY: Final = "price_entity"
+CONF_CHEAP_THRESHOLD: Final = "cheap_threshold"
+CONF_CHEAP_CHARGE_CURRENT: Final = "cheap_charge_current"
+CONF_NORMAL_CHARGE_CURRENT: Final = "normal_charge_current"
+CONF_CHEAP_TARGET_SOC: Final = "cheap_target_soc"
+DEFAULT_CHEAP_TARGET_SOC: Final = 100
+CONF_EXPENSIVE_THRESHOLD: Final = "expensive_threshold"
+CONF_PEAK_DISCHARGE_CURRENT: Final = "peak_discharge_current"
+CONF_NORMAL_DISCHARGE_CURRENT: Final = "normal_discharge_current"
+CONF_DISCHARGE_MIN_SOC: Final = "discharge_min_soc"
+DEFAULT_DISCHARGE_MIN_SOC: Final = 10
+CONF_TARIFF_START_HOUR: Final = "tariff_start_hour"
+CONF_TARIFF_END_HOUR: Final = "tariff_end_hour"
+
 
 @dataclass(frozen=True)
 class SunsynkSensorEntityDescription(SensorEntityDescription):

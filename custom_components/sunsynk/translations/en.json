@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Sunsynk / Deye Inverter Setup",
-        "description": "Connect to the Sunsynk cloud API. Separate multiple inverter serial numbers with semicolons (e.g. SN123456;SN789012). MFA is not supported on Sunsynk accounts.",
+        "description": "Connect to the Sunsynk cloud API. Separate multiple inverter serial numbers with semicolons.",
         "data": {
           "api_server": "API Server",
           "username": "Sunsynk Account Email",
@@ -12,15 +12,15 @@
           "refresh_interval": "Refresh Interval (seconds)"
         },
         "data_description": {
-          "serials": "For multiple inverters separate with semicolons: SN123456;SN789012",
-          "refresh_interval": "Minimum 60 seconds, default 300 (5 minutes)"
+          "serials": "For multiple inverters: SN123456;SN789012",
+          "refresh_interval": "How often to poll the Sunsynk API (minimum 60 seconds)"
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password. Note: MFA accounts are not supported.",
-      "cannot_connect": "Cannot connect to the Sunsynk API. Check the API server selection and your internet connection.",
-      "invalid_serials": "No valid serial numbers provided. Enter at least one inverter serial."
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
+      "invalid_serials": "Invalid serial number(s). Enter at least one serial."
     },
     "abort": {
       "already_configured": "This Sunsynk account is already configured."
@@ -30,28 +30,48 @@
     "step": {
       "init": {
         "title": "Sunsynk Options",
-        "description": "Update inverter serials, refresh interval, or solar forecast settings.",
         "data": {
           "serials": "Inverter Serial Number(s)",
           "refresh_interval": "Refresh Interval (seconds)",
           "latitude": "Latitude (Solar Forecast)",
           "longitude": "Longitude (Solar Forecast)",
           "panel_kwp": "Panel Peak Power (kWp)",
-          "performance_ratio": "Performance Ratio (0–1)"
+          "performance_ratio": "Performance Ratio (0–1)",
+          "price_entity": "Electricity Price Sensor",
+          "cheap_threshold": "Charge below price (cheap rate threshold)",
+          "cheap_charge_current": "Charge current at cheap rate (A)",
+          "normal_charge_current": "Normal charge current to restore (A)",
+          "cheap_target_soc": "Stop charging when SOC reaches (%)",
+          "expensive_threshold": "Discharge above price (expensive rate threshold)",
+          "peak_discharge_current": "Discharge current at expensive rate (A)",
+          "normal_discharge_current": "Normal discharge current to restore (A)",
+          "discharge_min_soc": "Stop discharging when SOC drops below (%)",
+          "tariff_start_hour": "Active schedule — start hour (0–23)",
+          "tariff_end_hour": "Active schedule — end hour (0–23)"
         },
         "data_description": {
-          "serials": "Separate multiple serials with semicolons",
-          "refresh_interval": "Minimum 60 seconds",
           "latitude": "Optional — defaults to your HA home location",
           "longitude": "Optional — defaults to your HA home location",
-          "panel_kwp": "Total installed panel capacity in kilowatt-peak (e.g. 10.5). Leave blank to disable solar forecast.",
-          "performance_ratio": "System efficiency factor accounting for wiring/inverter losses, default 0.80"
+          "panel_kwp": "Total installed panel capacity in kilowatt-peak. Leave blank to disable solar forecast.",
+          "performance_ratio": "System efficiency factor, default 0.80",
+          "price_entity": "Any sensor reporting electricity price (e.g. Octopus Agile, NordPool, Tibber). Leave blank to disable tariff management.",
+          "cheap_threshold": "When price ≤ this value, charge the battery. Leave blank to disable cheap-rate charging.",
+          "cheap_charge_current": "Battery charge current during cheap period (e.g. 100 A).",
+          "normal_charge_current": "Charge current restored when cheap period ends.",
+          "cheap_target_soc": "Charging stops automatically once battery reaches this SOC. Default 100.",
+          "expensive_threshold": "When price ≥ this value, discharge the battery (sell to grid). Leave blank to disable.",
+          "peak_discharge_current": "Battery discharge current during expensive period (e.g. 100 A).",
+          "normal_discharge_current": "Discharge current restored when expensive period ends.",
+          "discharge_min_soc": "Discharging stops automatically when battery reaches this SOC. Default 10.",
+          "tariff_start_hour": "Hour of day (0–23) when tariff management activates. Leave blank for always-on.",
+          "tariff_end_hour": "Hour of day (0–23) when tariff management deactivates. Can wrap midnight (e.g. start 22, end 6)."
         }
       }
     },
     "error": {
-      "invalid_serials": "No valid serial numbers provided.",
-      "invalid_forecast_config": "Solar forecast requires valid latitude, longitude and panel kWp (all numeric, kWp > 0). Leave all three blank to disable."
+      "invalid_serials": "Invalid serial number(s). Enter at least one serial.",
+      "invalid_forecast_config": "Solar forecast requires valid latitude, longitude and panel kWp (all numeric, kWp > 0).",
+      "invalid_tariff_config": "Tariff configuration error. Cheap charging needs threshold + charge current + normal current (all three). Discharge needs threshold + peak current + normal current (all three)."
     }
   }
 }

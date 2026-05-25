@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 import homeassistant.helpers.config_validation as cv
 from homeassistant.config_entries import ConfigEntry
@@ -13,18 +14,32 @@ from homeassistant.core import HomeAssistant
 from .api.auth import SunsynkAuth
 from .const import (
     CONF_API_SERVER,
+    CONF_CHEAP_CHARGE_CURRENT,
+    CONF_CHEAP_TARGET_SOC,
+    CONF_CHEAP_THRESHOLD,
+    CONF_DISCHARGE_MIN_SOC,
+    CONF_EXPENSIVE_THRESHOLD,
     CONF_LATITUDE,
     CONF_LONGITUDE,
+    CONF_NORMAL_CHARGE_CURRENT,
+    CONF_NORMAL_DISCHARGE_CURRENT,
     CONF_PANEL_KWP,
+    CONF_PEAK_DISCHARGE_CURRENT,
     CONF_PERFORMANCE_RATIO,
+    CONF_PRICE_ENTITY,
     CONF_REFRESH_INTERVAL,
     CONF_SERIALS,
+    CONF_TARIFF_END_HOUR,
+    CONF_TARIFF_START_HOUR,
+    DEFAULT_CHEAP_TARGET_SOC,
+    DEFAULT_DISCHARGE_MIN_SOC,
     DEFAULT_PERFORMANCE_RATIO,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .dashboard import build_dashboard
+from .tariff import TariffChargingManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -116,6 +131,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Tariff charging/discharging manager (optional)
+    price_entity = entry.options.get(CONF_PRICE_ENTITY, entry.data.get(CONF_PRICE_ENTITY))
+    if price_entity:
+        def _opt(key: str, default: Any = None) -> Any:
+            return entry.options.get(key, entry.data.get(key, default))
+
+        tariff_manager = TariffChargingManager(
+            hass=hass,
+            coordinator=coordinator,
+            price_entity=price_entity,
+            cheap_threshold=_opt(CONF_CHEAP_THRESHOLD),
+            cheap_current=_opt(CONF_CHEAP_CHARGE_CURRENT),
+            normal_charge_current=_opt(CONF_NORMAL_CHARGE_CURRENT),
+            target_soc=_opt(CONF_CHEAP_TARGET_SOC, DEFAULT_CHEAP_TARGET_SOC),
+            expensive_threshold=_opt(CONF_EXPENSIVE_THRESHOLD),
+            peak_discharge_current=_opt(CONF_PEAK_DISCHARGE_CURRENT),
+            normal_discharge_current=_opt(CONF_NORMAL_DISCHARGE_CURRENT),
+            discharge_min_soc=_opt(CONF_DISCHARGE_MIN_SOC, DEFAULT_DISCHARGE_MIN_SOC),
+            start_hour=_opt(CONF_TARIFF_START_HOUR),
+            end_hour=_opt(CONF_TARIFF_END_HOUR),
+        )
+        tariff_manager.start()
+        hass.data[DOMAIN][f"{entry.entry_id}_tariff"] = tariff_manager
+
     hass.async_create_task(_async_setup_dashboard(hass, entry, coordinator))
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -133,6 +172,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         if forecast_coordinator is not None:
             await forecast_coordinator.async_close()
+        tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].pop(
+            f"{entry.entry_id}_tariff", None
+        )
+        if tariff_manager is not None:
+            tariff_manager.stop()
 
     return unload_ok
 
@@ -168,7 +212,15 @@ async def _async_setup_dashboard(
     }
     forecast_eid_fn = (lambda key: forecast_uid_map.get(key)) if forecast_uid_map else None
 
-    dashboard_config = build_dashboard(prefix, eid, forecast_eid_fn)
+    tariff_prefix = f"{entry.entry_id}_tariff_"
+    tariff_uid_map: dict[str, str] = {
+        e.unique_id[len(tariff_prefix):]: e.entity_id
+        for e in reg.entities.values()
+        if e.platform == DOMAIN and e.unique_id.startswith(tariff_prefix)
+    }
+    tariff_eid_fn = (lambda key: tariff_uid_map.get(key)) if tariff_uid_map else None
+
+    dashboard_config = build_dashboard(prefix, eid, forecast_eid_fn, tariff_eid_fn)
 
     lovelace = hass.data.get("lovelace")
     dashboards = getattr(lovelace, "dashboards", None)

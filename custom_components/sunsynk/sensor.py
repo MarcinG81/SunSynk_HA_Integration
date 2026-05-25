@@ -32,6 +32,7 @@ from .const import (
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .helpers import build_device_info
+from .tariff import TariffChargingManager
 
 
 @dataclass(frozen=True)
@@ -145,6 +146,14 @@ async def async_setup_entry(
             SolarForecastSensor(forecast_coordinator, entry.entry_id, desc, forecast_device)
             for desc in FORECAST_SENSOR_DESCRIPTIONS
         ])
+
+    tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_tariff"
+    )
+    if tariff_manager is not None:
+        first_serial = coordinator.serials[0]
+        device_info = build_device_info(coordinator, first_serial)
+        async_add_entities([TariffStateSensor(entry.entry_id, tariff_manager, device_info)])
 
 
 
@@ -298,3 +307,50 @@ class SolarForecastSensor(CoordinatorEntity[SolarForecastCoordinator], SensorEnt
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get(self.entity_description.forecast_key)
+
+
+class TariffStateSensor(SensorEntity):
+    """Sensor reporting the current operating mode of the tariff manager."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Tariff Mode"
+    _attr_icon = "mdi:lightning-bolt"
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry_id: str,
+        manager: TariffChargingManager,
+        device_info: DeviceInfo,
+    ) -> None:
+        self._manager = manager
+        self._attr_unique_id = f"{entry_id}_tariff_mode"
+        self._attr_device_info = device_info
+        self._unsub: Any = None
+
+    async def async_added_to_hass(self) -> None:
+        self._unsub = self._manager.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> str:
+        return self._manager.mode
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs: dict[str, Any] = {"price_entity": self._manager.price_entity}
+        if self._manager.cheap_threshold is not None:
+            attrs["cheap_threshold"] = self._manager.cheap_threshold
+        if self._manager.expensive_threshold is not None:
+            attrs["expensive_threshold"] = self._manager.expensive_threshold
+        if self._manager.start_hour is not None:
+            attrs["active_hours"] = f"{self._manager.start_hour:02d}:00–{self._manager.end_hour:02d}:00"
+        return attrs

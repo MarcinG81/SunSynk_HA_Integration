@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -14,6 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .helpers import build_device_info
+from .tariff import TariffChargingManager
 
 
 @dataclass(frozen=True)
@@ -187,12 +189,22 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SunsynkSwitchEntity] = []
+    entities: list[SunsynkSwitchEntity | TariffManagerSwitch] = []
 
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
         for description in WRITABLE_SWITCHES:
             entities.append(SunsynkSwitchEntity(coordinator, serial, description, device_info))
+
+    tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_tariff"
+    )
+    if tariff_manager is not None:
+        first_serial = coordinator.serials[0]
+        device_info = build_device_info(coordinator, first_serial)
+        entities.append(
+            TariffManagerSwitch(entry.entry_id, tariff_manager, device_info)
+        )
 
     async_add_entities(entities)
 
@@ -237,3 +249,46 @@ class SunsynkSwitchEntity(CoordinatorEntity[SunsynkCoordinator], SwitchEntity):
         await self.coordinator.async_write_setting(
             self._serial, self.entity_description.setting_key, 0
         )
+
+
+class TariffManagerSwitch(SwitchEntity):
+    """Enable / disable the tariff charging+discharging manager without losing config."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Tariff Manager"
+    _attr_icon = "mdi:currency-sign"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry_id: str,
+        manager: TariffChargingManager,
+        device_info: DeviceInfo,
+    ) -> None:
+        self._manager = manager
+        self._unsub: Any = None
+        self._attr_unique_id = f"{entry_id}_tariff_enabled"
+        self._attr_device_info = device_info
+
+    async def async_added_to_hass(self) -> None:
+        self._unsub = self._manager.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def is_on(self) -> bool:
+        return self._manager.is_enabled
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self._manager.set_enabled(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self._manager.set_enabled(False)
