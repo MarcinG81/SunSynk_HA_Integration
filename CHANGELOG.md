@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.6-beta.1] - 2026-05-25
+
+### Added
+- Dedicated **Tariff** dashboard view (tab 4) with three cards: Tariff Manager status & enable switch, Cheap-rate Charging config, Peak-rate Discharging config, and 24h history graph (mode + SOC). Tariff config removed from Settings view and Charts view.
+
+### Fixed
+- Diagnostics download returning HTTP 500 — `last_update_success_time` accessed via safe `getattr`; coordinator data now recursively converted to JSON-safe types before serialisation.
+- Auto-created GitHub release workflow — tags pushed as `vX.Y.Z-beta.N` or `vX.Y.Z-rc.N` create pre-releases; plain `vX.Y.Z` tags create stable releases. Release body extracted automatically from CHANGELOG.
+
 ## [1.6.5] - 2026-05-25
 
 ### Fixed

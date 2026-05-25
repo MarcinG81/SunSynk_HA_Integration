@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract changelog entry
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          # Extract the block between this version header and the next
+          BODY=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          # Write to file to preserve newlines
+          echo "$BODY" > /tmp/release_body.md
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Determine pre-release
+        id: prerelease
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *"-beta"* ]] || [[ "${GITHUB_REF_NAME}" == *"-rc"* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: /tmp/release_body.md
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          make_latest: ${{ steps.prerelease.outputs.is_prerelease == 'false' }}
