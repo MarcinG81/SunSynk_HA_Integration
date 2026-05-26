@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configuración del inversor Sunsynk / Deye",
+        "description": "Conectar a la API en la nube de Sunsynk. Separe varios números de serie con puntos y comas.",
+        "data": {
+          "api_server": "Servidor API",
+          "username": "Correo electrónico de la cuenta Sunsynk",
+          "password": "Contraseña de la cuenta Sunsynk",
+          "serials": "Número(s) de serie del inversor",
+          "refresh_interval": "Intervalo de actualización (segundos)"
+        },
+        "data_description": {
+          "serials": "Para varios inversores: SN123456;SN789012",
+          "refresh_interval": "Frecuencia de consulta a la API Sunsynk (mínimo 60 segundos)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Credenciales inválidas. Compruebe su correo electrónico y contraseña de Sunsynk.",
+      "cannot_connect": "No se puede conectar a la API de Sunsynk. Compruebe el servidor API y la conexión a Internet.",
+      "invalid_serials": "Número(s) de serie inválido(s). Introduzca al menos un número de serie."
+    },
+    "abort": {
+      "already_configured": "Esta cuenta de Sunsynk ya está configurada."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de Sunsynk",
+        "data": {
+          "serials": "Número(s) de serie del inversor",
+          "refresh_interval": "Intervalo de actualización (segundos)",
+          "latitude": "Latitud (previsión solar)",
+          "longitude": "Longitud (previsión solar)",
+          "panel_kwp": "Potencia pico de los paneles (kWp)",
+          "performance_ratio": "Ratio de rendimiento (0–1)",
+          "price_entity": "Sensor de precio de la electricidad",
+          "cheap_threshold": "Cargar por debajo del precio (umbral tarifa barata)",
+          "cheap_charge_current": "Corriente de carga con tarifa barata (A)",
+          "normal_charge_current": "Corriente de carga normal a restaurar (A)",
+          "cheap_target_soc": "Detener carga al alcanzar SOC (%)",
+          "expensive_threshold": "Descargar por encima del precio (umbral tarifa cara)",
+          "peak_discharge_current": "Corriente de descarga con tarifa cara (A)",
+          "normal_discharge_current": "Corriente de descarga normal a restaurar (A)",
+          "discharge_min_soc": "Detener descarga al bajar SOC (%)",
+          "tariff_start_hour": "Horario activo — hora de inicio (0–23)",
+          "tariff_end_hour": "Horario activo — hora de fin (0–23)",
+          "price_max_age": "Antigüedad máxima de los datos de precio (minutos)"
+        },
+        "data_description": {
+          "latitude": "Opcional — por defecto la ubicación del hogar en HA",
+          "longitude": "Opcional — por defecto la ubicación del hogar en HA",
+          "panel_kwp": "Capacidad total instalada de paneles en kilovatios pico. Dejar en blanco para desactivar la previsión solar.",
+          "performance_ratio": "Factor de eficiencia del sistema, por defecto 0,80",
+          "price_entity": "Cualquier sensor que informe el precio de la electricidad (p. ej. Octopus Agile, NordPool, Tibber). Dejar en blanco para desactivar la gestión de tarifas.",
+          "cheap_threshold": "Cuando el precio ≤ este valor, cargar la batería. Dejar en blanco para desactivar la carga con tarifa barata.",
+          "cheap_charge_current": "Corriente de carga de la batería durante el período barato (p. ej. 100 A).",
+          "normal_charge_current": "Corriente de carga restaurada al finalizar el período barato.",
+          "cheap_target_soc": "La carga se detiene automáticamente cuando la batería alcanza este SOC. Por defecto 100.",
+          "expensive_threshold": "Cuando el precio ≥ este valor, descargar la batería (vender a la red). Dejar en blanco para desactivar.",
+          "peak_discharge_current": "Corriente de descarga de la batería durante el período caro (p. ej. 100 A).",
+          "normal_discharge_current": "Corriente de descarga restaurada al finalizar el período caro.",
+          "discharge_min_soc": "La descarga se detiene automáticamente cuando la batería alcanza este SOC. Por defecto 10.",
+          "tariff_start_hour": "Hora del día (0–23) en que se activa la gestión de tarifas. Dejar en blanco para modo siempre activo.",
+          "tariff_end_hour": "Hora del día (0–23) en que se desactiva la gestión de tarifas. Puede cruzar la medianoche (p. ej. inicio 22, fin 6).",
+          "price_max_age": "Si el sensor de precio no se ha actualizado en este número de minutos, el modo activo se detiene como medida de seguridad. Por defecto 90."
+        }
+      }
+    },
+    "error": {
+      "invalid_serials": "Número(s) de serie inválido(s). Introduzca al menos un número de serie.",
+      "invalid_forecast_config": "La previsión solar requiere latitud, longitud y kWp de paneles válidos.",
+      "invalid_tariff_config": "Error de configuración de tarifa. La carga barata necesita umbral + corriente de carga + corriente normal (los tres). La descarga necesita umbral + corriente pico + corriente normal (los tres)."
+    }
+  },
+  "issues": {
+    "auth_failed": {
+      "title": "Autenticación de Sunsynk fallida",
+      "description": "La API en la nube de Sunsynk rechazó las credenciales. Vaya a **Configuración → Dispositivos y servicios → Sunsynk** y reconfigure la integración."
+    },
+    "inverter_offline": {
+      "title": "El inversor {serial} está desconectado",
+      "description": "No se pudieron obtener los datos del inversor **{serial}**. Compruebe que el dongle está conectado y que la aplicación Sunsynk muestra datos en tiempo real."
+    }
+  }
+}

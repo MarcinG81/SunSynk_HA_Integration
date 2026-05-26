@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfiguracja falownika Sunsynk / Deye",
+        "description": "Połącz z chmurowym API Sunsynk. Oddziel numery seryjne kilku falowników średnikami.",
+        "data": {
+          "api_server": "Serwer API",
+          "username": "Adres e-mail konta Sunsynk",
+          "password": "Hasło konta Sunsynk",
+          "serials": "Numer(y) seryjny falownika",
+          "refresh_interval": "Interwał odświeżania (sekundy)"
+        },
+        "data_description": {
+          "serials": "Dla kilku falowników: SN123456;SN789012",
+          "refresh_interval": "Jak często odpytywać API Sunsynk (minimum 60 sekund)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Nieprawidłowe dane logowania. Sprawdź adres e-mail i hasło konta Sunsynk.",
+      "cannot_connect": "Nie można połączyć z API Sunsynk. Sprawdź serwer API i połączenie z internetem.",
+      "invalid_serials": "Nieprawidłowy numer(y) seryjny. Podaj co najmniej jeden numer."
+    },
+    "abort": {
+      "already_configured": "To konto Sunsynk jest już skonfigurowane."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje Sunsynk",
+        "data": {
+          "serials": "Numer(y) seryjny falownika",
+          "refresh_interval": "Interwał odświeżania (sekundy)",
+          "latitude": "Szerokość geograficzna (prognoza słoneczna)",
+          "longitude": "Długość geograficzna (prognoza słoneczna)",
+          "panel_kwp": "Szczytowa moc paneli (kWp)",
+          "performance_ratio": "Współczynnik sprawności (0–1)",
+          "price_entity": "Czujnik ceny energii",
+          "cheap_threshold": "Ładuj poniżej ceny (próg taniej taryfy)",
+          "cheap_charge_current": "Prąd ładowania przy taniej taryfie (A)",
+          "normal_charge_current": "Normalny prąd ładowania do przywrócenia (A)",
+          "cheap_target_soc": "Zatrzymaj ładowanie przy SOC (%)",
+          "expensive_threshold": "Rozładowuj powyżej ceny (próg drogiej taryfy)",
+          "peak_discharge_current": "Prąd rozładowania przy drogiej taryfie (A)",
+          "normal_discharge_current": "Normalny prąd rozładowania do przywrócenia (A)",
+          "discharge_min_soc": "Zatrzymaj rozładowanie przy SOC (%)",
+          "tariff_start_hour": "Harmonogram — godzina rozpoczęcia (0–23)",
+          "tariff_end_hour": "Harmonogram — godzina zakończenia (0–23)",
+          "price_max_age": "Maksymalny wiek danych cenowych (minuty)"
+        },
+        "data_description": {
+          "latitude": "Opcjonalne — domyślnie lokalizacja HA",
+          "longitude": "Opcjonalne — domyślnie lokalizacja HA",
+          "panel_kwp": "Łączna moc zainstalowanych paneli w kWp. Pozostaw puste, aby wyłączyć prognozę słoneczną.",
+          "performance_ratio": "Współczynnik sprawności systemu, domyślnie 0,80",
+          "price_entity": "Dowolny czujnik podający cenę energii (np. Octopus Agile, NordPool, Tibber). Pozostaw puste, aby wyłączyć zarządzanie taryfą.",
+          "cheap_threshold": "Gdy cena ≤ tej wartości, ładuj baterię. Pozostaw puste, aby wyłączyć ładowanie przy taniej taryfie.",
+          "cheap_charge_current": "Prąd ładowania baterii w czasie taniej taryfy (np. 100 A).",
+          "normal_charge_current": "Prąd ładowania przywracany po zakończeniu taniej taryfy.",
+          "cheap_target_soc": "Ładowanie zatrzymuje się automatycznie gdy bateria osiągnie ten SOC. Domyślnie 100.",
+          "expensive_threshold": "Gdy cena ≥ tej wartości, rozładowuj baterię (sprzedaj do sieci). Pozostaw puste, aby wyłączyć.",
+          "peak_discharge_current": "Prąd rozładowania baterii w czasie drogiej taryfy (np. 100 A).",
+          "normal_discharge_current": "Prąd rozładowania przywracany po zakończeniu drogiej taryfy.",
+          "discharge_min_soc": "Rozładowanie zatrzymuje się automatycznie gdy bateria osiągnie ten SOC. Domyślnie 10.",
+          "tariff_start_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się aktywuje. Pozostaw puste dla trybu zawsze aktywnego.",
+          "tariff_end_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się dezaktywuje. Może przekraczać północ (np. start 22, koniec 6).",
+          "price_max_age": "Jeśli czujnik ceny nie zaktualizował się w ciągu podanej liczby minut, aktywny tryb ładowania/rozładowania zostanie zatrzymany. Domyślnie 90."
+        }
+      }
+    },
+    "error": {
+      "invalid_serials": "Nieprawidłowy numer(y) seryjny. Podaj co najmniej jeden numer.",
+      "invalid_forecast_config": "Prognoza słoneczna wymaga prawidłowej szerokości, długości geograficznej i mocy paneli kWp.",
+      "invalid_tariff_config": "Błąd konfiguracji taryfy. Ładowanie wymaga progu + prądu ładowania + normalnego prądu (wszystkich trzech). Rozładowanie wymaga progu + szczytowego prądu + normalnego prądu."
+    }
+  },
+  "issues": {
+    "auth_failed": {
+      "title": "Uwierzytelnianie Sunsynk nie powiodło się",
+      "description": "Chmurowe API Sunsynk odrzuciło dane logowania. Przejdź do **Ustawienia → Urządzenia i usługi → Sunsynk** i ponownie skonfiguruj integrację."
+    },
+    "inverter_offline": {
+      "title": "Falownik {serial} jest offline",
+      "description": "Nie można pobrać danych dla falownika **{serial}**. Sprawdź czy klucz sprzętowy jest podłączony i aplikacja Sunsynk wyświetla dane na żywo."
+    }
+  }
+}

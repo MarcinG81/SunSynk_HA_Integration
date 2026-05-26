@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sunsynk / Deye Omvormer Opstelling",
+        "description": "Koppel aan die Sunsynk wolkdiens-API. Skei verskeie reeksnommers met kommapunte.",
+        "data": {
+          "api_server": "API-bediener",
+          "username": "Sunsynk-rekening e-posadres",
+          "password": "Sunsynk-rekening wagwoord",
+          "serials": "Omvormer reeksnommer(s)",
+          "refresh_interval": "Verfrissinginterval (sekondes)"
+        },
+        "data_description": {
+          "serials": "Vir verskeie omvormers: SN123456;SN789012",
+          "refresh_interval": "Hoe gereeld die Sunsynk-API gepoleer word (minimum 60 sekondes)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ongeldige aanmeldbesonderhede. Kontroleer u Sunsynk e-posadres en wagwoord.",
+      "cannot_connect": "Kan nie aan die Sunsynk-API koppel nie. Kontroleer die API-bediener en internetverbinding.",
+      "invalid_serials": "Ongeldige reeksnommer(s). Voer ten minste een reeksnommer in."
+    },
+    "abort": {
+      "already_configured": "Hierdie Sunsynk-rekening is reeds opgestel."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sunsynk Opsies",
+        "data": {
+          "serials": "Omvormer reeksnommer(s)",
+          "refresh_interval": "Verfrissinginterval (sekondes)",
+          "latitude": "Breedtegraad (Sonsenergie-voorspelling)",
+          "longitude": "Lengtegraad (Sonsenergie-voorspelling)",
+          "panel_kwp": "Paneel piekdrywing (kWp)",
+          "performance_ratio": "Prestasie-verhouding (0–1)",
+          "price_entity": "Elektrisite-pryssensor",
+          "cheap_threshold": "Laai onder prys (goedkoop-tarief drempel)",
+          "cheap_charge_current": "Laaistroomsterkte by goedkoop tarief (A)",
+          "normal_charge_current": "Normale laaistroomsterkte om te herstel (A)",
+          "cheap_target_soc": "Stop laai by SOC (%)",
+          "expensive_threshold": "Ontlaai bo prys (duur-tarief drempel)",
+          "peak_discharge_current": "Ontlaaistroomsterkte by duur tarief (A)",
+          "normal_discharge_current": "Normale ontlaaistroomsterkte om te herstel (A)",
+          "discharge_min_soc": "Stop ontlaai by SOC (%)",
+          "tariff_start_hour": "Aktiewe skedule — beginuur (0–23)",
+          "tariff_end_hour": "Aktiewe skedule — einduur (0–23)",
+          "price_max_age": "Maksimum ouderdom van prysdata (minute)"
+        },
+        "data_description": {
+          "latitude": "Opsioneel — verstekwaarde is HA-tuisligging",
+          "longitude": "Opsioneel — verstekwaarde is HA-tuisligging",
+          "panel_kwp": "Totale geïnstalleerde paneelkapasiteit in kilowatt-piek. Los leeg om sonsenergie-voorspelling te deaktiveer.",
+          "performance_ratio": "Stelsel-doeltreffendheidsfaktor, verstek 0.80",
+          "price_entity": "Enige sensor wat die elektrisite-prys rapporteer (bv. Octopus Agile, NordPool, Tibber). Los leeg om tariefbestuur te deaktiveer.",
+          "cheap_threshold": "Wanneer prys ≤ hierdie waarde, laai die battery. Los leeg om goedkoop-tarieflaaing te deaktiveer.",
+          "cheap_charge_current": "Battery laaistroomsterkte tydens goedkoop periode (bv. 100 A).",
+          "normal_charge_current": "Laaistroomsterkte herstel wanneer goedkoop periode eindig.",
+          "cheap_target_soc": "Laaing stop outomaties sodra battery hierdie SOC bereik. Verstek 100.",
+          "expensive_threshold": "Wanneer prys ≥ hierdie waarde, ontlaai die battery (verkoop aan net). Los leeg om te deaktiveer.",
+          "peak_discharge_current": "Battery ontlaaistroomsterkte tydens duur periode (bv. 100 A).",
+          "normal_discharge_current": "Ontlaaistroomsterkte herstel wanneer duur periode eindig.",
+          "discharge_min_soc": "Ontlaaing stop outomaties wanneer battery hierdie SOC bereik. Verstek 10.",
+          "tariff_start_hour": "Uur van dag (0–23) wanneer tariefbestuur aktiveer. Los leeg vir altyd-aan.",
+          "tariff_end_hour": "Uur van dag (0–23) wanneer tariefbestuur deaktiveer. Kan middernag oorskry (bv. begin 22, einde 6).",
+          "price_max_age": "As die pryssensor nie binne hierdie aantal minute opgedateer het nie, word die aktiewe modus as veiligheidsmaatreel gestop. Verstek 90."
+        }
+      }
+    },
+    "error": {
+      "invalid_serials": "Ongeldige reeksnommer(s). Voer ten minste een reeksnommer in.",
+      "invalid_forecast_config": "Sonsenergie-voorspelling vereis geldige breedtegraad, lengtegraad en paneel-kWp.",
+      "invalid_tariff_config": "Tariefkonfigurasie-fout. Goedkoop laaing benodig drempel + laaistroomsterkte + normale stroomsterkte (al drie). Ontlaaing benodig drempel + piekstroomsterkte + normale stroomsterkte (al drie)."
+    }
+  },
+  "issues": {
+    "auth_failed": {
+      "title": "Sunsynk-stawing het misluk",
+      "description": "Die Sunsynk wolkdiens-API het die aanmeldbesonderhede geweier. Gaan na **Instellings → Toestelle en dienste → Sunsynk** en herstel die integrasie."
+    },
+    "inverter_offline": {
+      "title": "Omvormer {serial} is vanlyn",
+      "description": "Data vir omvormer **{serial}** kon nie opgeslaan word nie. Kontroleer of die dongle gekoppel is en die Sunsynk-program lewende data wys."
+    }
+  }
+}

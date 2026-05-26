@@ -50,5 +50,6 @@ jobs:
         with:
           name: ${{ github.ref_name }}
           body_path: /tmp/release_body.md
+          draft: false
           prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           make_latest: ${{ steps.prerelease.outputs.is_prerelease == 'false' }}

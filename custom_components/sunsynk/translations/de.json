@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sunsynk / Deye Wechselrichter einrichten",
+        "description": "Verbindung mit der Sunsynk Cloud-API herstellen. Mehrere Seriennummern mit Semikolon trennen.",
+        "data": {
+          "api_server": "API-Server",
+          "username": "Sunsynk-Konto E-Mail",
+          "password": "Sunsynk-Konto Passwort",
+          "serials": "Seriennummer(n) des Wechselrichters",
+          "refresh_interval": "Aktualisierungsintervall (Sekunden)"
+        },
+        "data_description": {
+          "serials": "Für mehrere Wechselrichter: SN123456;SN789012",
+          "refresh_interval": "Wie oft die Sunsynk-API abgefragt wird (mindestens 60 Sekunden)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ungültige Anmeldedaten. Bitte E-Mail und Passwort des Sunsynk-Kontos prüfen.",
+      "cannot_connect": "Verbindung zur Sunsynk-API nicht möglich. API-Server und Internetverbindung prüfen.",
+      "invalid_serials": "Ungültige Seriennummer(n). Mindestens eine Seriennummer eingeben."
+    },
+    "abort": {
+      "already_configured": "Dieses Sunsynk-Konto ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sunsynk Optionen",
+        "data": {
+          "serials": "Seriennummer(n) des Wechselrichters",
+          "refresh_interval": "Aktualisierungsintervall (Sekunden)",
+          "latitude": "Breitengrad (Solarprognose)",
+          "longitude": "Längengrad (Solarprognose)",
+          "panel_kwp": "Spitzenleistung der Panels (kWp)",
+          "performance_ratio": "Leistungsverhältnis (0–1)",
+          "price_entity": "Strompreissensor",
+          "cheap_threshold": "Laden bei Preis unter (Günstiger-Tarif-Schwelle)",
+          "cheap_charge_current": "Ladestrom beim günstigen Tarif (A)",
+          "normal_charge_current": "Normaler Ladestrom nach Tarif-Ende (A)",
+          "cheap_target_soc": "Laden stoppen bei SOC (%)",
+          "expensive_threshold": "Entladen bei Preis über (Teurer-Tarif-Schwelle)",
+          "peak_discharge_current": "Entladestrom beim teuren Tarif (A)",
+          "normal_discharge_current": "Normaler Entladestrom nach Tarif-Ende (A)",
+          "discharge_min_soc": "Entladen stoppen bei SOC (%)",
+          "tariff_start_hour": "Zeitplan — Startstunde (0–23)",
+          "tariff_end_hour": "Zeitplan — Endstunde (0–23)",
+          "price_max_age": "Maximales Alter der Preisdaten (Minuten)"
+        },
+        "data_description": {
+          "latitude": "Optional — Standard: HA-Heimatstandort",
+          "longitude": "Optional — Standard: HA-Heimatstandort",
+          "panel_kwp": "Gesamte installierte Panelleistung in Kilowatt-Peak. Leer lassen, um die Solarprognose zu deaktivieren.",
+          "performance_ratio": "Systemeffizienzfaktor, Standard 0,80",
+          "price_entity": "Beliebiger Sensor, der den Strompreis meldet (z. B. Octopus Agile, NordPool, Tibber). Leer lassen, um die Tarifverwaltung zu deaktivieren.",
+          "cheap_threshold": "Wenn Preis ≤ diesem Wert, Akku laden. Leer lassen, um günstiges Laden zu deaktivieren.",
+          "cheap_charge_current": "Akku-Ladestrom während des günstigen Tarifs (z. B. 100 A).",
+          "normal_charge_current": "Ladestrom, der nach Ende des günstigen Tarifs wiederhergestellt wird.",
+          "cheap_target_soc": "Laden stoppt automatisch, wenn der Akku diesen SOC erreicht. Standard 100.",
+          "expensive_threshold": "Wenn Preis ≥ diesem Wert, Akku entladen (ins Netz einspeisen). Leer lassen, um zu deaktivieren.",
+          "peak_discharge_current": "Akku-Entladestrom während des teuren Tarifs (z. B. 100 A).",
+          "normal_discharge_current": "Entladestrom, der nach Ende des teuren Tarifs wiederhergestellt wird.",
+          "discharge_min_soc": "Entladen stoppt automatisch, wenn der Akku diesen SOC erreicht. Standard 10.",
+          "tariff_start_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung aktiviert wird. Leer lassen für Dauerbetrieb.",
+          "tariff_end_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung deaktiviert wird. Kann Mitternacht überschreiten (z. B. Start 22, Ende 6).",
+          "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90."
+        }
+      }
+    },
+    "error": {
+      "invalid_serials": "Ungültige Seriennummer(n). Mindestens eine Seriennummer eingeben.",
+      "invalid_forecast_config": "Solarprognose erfordert gültigen Breiten- und Längengrad sowie Panel-kWp.",
+      "invalid_tariff_config": "Tarifkonfigurationsfehler. Günstiges Laden benötigt Schwelle + Ladestrom + Normalstrom (alle drei). Entladen benötigt Schwelle + Spitzenstrom + Normalstrom (alle drei)."
+    }
+  },
+  "issues": {
+    "auth_failed": {
+      "title": "Sunsynk-Authentifizierung fehlgeschlagen",
+      "description": "Die Sunsynk Cloud-API hat die Anmeldedaten abgelehnt. Gehe zu **Einstellungen → Geräte & Dienste → Sunsynk** und konfiguriere die Integration neu."
+    },
+    "inverter_offline": {
+      "title": "Wechselrichter {serial} ist offline",
+      "description": "Daten für Wechselrichter **{serial}** konnten nicht abgerufen werden. Prüfe, ob der Dongle angeschlossen ist und die Sunsynk-App Live-Daten anzeigt."
+    }
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nastavení měniče Sunsynk / Deye",
+        "description": "Připojte se ke cloudovému API Sunsynk. Více sériových čísel oddělte středníky.",
+        "data": {
+          "api_server": "API server",
+          "username": "E-mail účtu Sunsynk",
+          "password": "Heslo účtu Sunsynk",
+          "serials": "Sériové číslo/čísla měniče",
+          "refresh_interval": "Interval aktualizace (sekundy)"
+        },
+        "data_description": {
+          "serials": "Pro více měničů: SN123456;SN789012",
+          "refresh_interval": "Jak často dotazovat API Sunsynk (minimum 60 sekund)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Neplatné přihlašovací údaje. Zkontrolujte e-mail a heslo účtu Sunsynk.",
+      "cannot_connect": "Nelze se připojit k API Sunsynk. Zkontrolujte API server a připojení k internetu.",
+      "invalid_serials": "Neplatné sériové číslo/čísla. Zadejte alespoň jedno sériové číslo."
+    },
+    "abort": {
+      "already_configured": "Tento účet Sunsynk je již nakonfigurován."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Možnosti Sunsynk",
+        "data": {
+          "serials": "Sériové číslo/čísla měniče",
+          "refresh_interval": "Interval aktualizace (sekundy)",
+          "latitude": "Zeměpisná šířka (solární předpověď)",
+          "longitude": "Zeměpisná délka (solární předpověď)",
+          "panel_kwp": "Špičkový výkon panelů (kWp)",
+          "performance_ratio": "Výkonnostní koeficient (0–1)",
+          "price_entity": "Senzor ceny elektřiny",
+          "cheap_threshold": "Nabíjet pod cenou (práh levného tarifu)",
+          "cheap_charge_current": "Nabíjecí proud při levném tarifu (A)",
+          "normal_charge_current": "Normální nabíjecí proud k obnovení (A)",
+          "cheap_target_soc": "Zastavit nabíjení při SOC (%)",
+          "expensive_threshold": "Vybíjet nad cenou (práh drahého tarifu)",
+          "peak_discharge_current": "Vybíjecí proud při drahém tarifu (A)",
+          "normal_discharge_current": "Normální vybíjecí proud k obnovení (A)",
+          "discharge_min_soc": "Zastavit vybíjení při SOC (%)",
+          "tariff_start_hour": "Aktivní plán — hodina začátku (0–23)",
+          "tariff_end_hour": "Aktivní plán — hodina konce (0–23)",
+          "price_max_age": "Maximální stáří dat o ceně (minuty)"
+        },
+        "data_description": {
+          "latitude": "Volitelné — výchozí je poloha domova v HA",
+          "longitude": "Volitelné — výchozí je poloha domova v HA",
+          "panel_kwp": "Celkový instalovaný výkon panelů v kilowattech špičkových. Ponechte prázdné pro deaktivaci solární předpovědi.",
+          "performance_ratio": "Koeficient účinnosti systému, výchozí 0,80",
+          "price_entity": "Libovolný senzor hlásící cenu elektřiny (např. Octopus Agile, NordPool, Tibber). Ponechte prázdné pro deaktivaci správy tarifů.",
+          "cheap_threshold": "Pokud cena ≤ této hodnotě, nabíjet baterii. Ponechte prázdné pro deaktivaci levného nabíjení.",
+          "cheap_charge_current": "Nabíjecí proud baterie v levném období (např. 100 A).",
+          "normal_charge_current": "Nabíjecí proud obnovený po skončení levného období.",
+          "cheap_target_soc": "Nabíjení se automaticky zastaví, jakmile baterie dosáhne tohoto SOC. Výchozí 100.",
+          "expensive_threshold": "Pokud cena ≥ této hodnotě, vybíjet baterii (prodávat do sítě). Ponechte prázdné pro deaktivaci.",
+          "peak_discharge_current": "Vybíjecí proud baterie v drahém období (např. 100 A).",
+          "normal_discharge_current": "Vybíjecí proud obnovený po skončení drahého období.",
+          "discharge_min_soc": "Vybíjení se automaticky zastaví, jakmile baterie dosáhne tohoto SOC. Výchozí 10.",
+          "tariff_start_hour": "Hodina dne (0–23), kdy se správa tarifů aktivuje. Ponechte prázdné pro vždy zapnutý režim.",
+          "tariff_end_hour": "Hodina dne (0–23), kdy se správa tarifů deaktivuje. Může přesahovat půlnoc (např. začátek 22, konec 6).",
+          "price_max_age": "Pokud se senzor ceny neaktualizoval v průběhu tohoto počtu minut, aktivní režim se jako bezpečnostní opatření zastaví. Výchozí 90."
+        }
+      }
+    },
+    "error": {
+      "invalid_serials": "Neplatné sériové číslo/čísla. Zadejte alespoň jedno sériové číslo.",
+      "invalid_forecast_config": "Solární předpověď vyžaduje platnou zeměpisnou šířku, délku a výkon panelů v kWp.",
+      "invalid_tariff_config": "Chyba konfigurace tarifu. Levné nabíjení vyžaduje práh + nabíjecí proud + normální proud (všechny tři). Vybíjení vyžaduje práh + špičkový proud + normální proud (všechny tři)."
+    }
+  },
+  "issues": {
+    "auth_failed": {
+      "title": "Ověření Sunsynk selhalo",
+      "description": "Cloudové API Sunsynk odmítlo přihlašovací údaje. Přejděte do **Nastavení → Zařízení a služby → Sunsynk** a znovu nakonfigurujte integraci."
+    },
+    "inverter_offline": {
+      "title": "Měnič {serial} je offline",
+      "description": "Data pro měnič **{serial}** se nepodařilo načíst. Zkontrolujte, zda je dongle připojen a aplikace Sunsynk zobrazuje živá data."
+    }
+  }
+}

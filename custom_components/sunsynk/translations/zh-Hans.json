@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sunsynk / Deye 逆变器设置",
+        "description": "连接到 Sunsynk 云端 API。多个逆变器序列号请用分号分隔。",
+        "data": {
+          "api_server": "API 服务器",
+          "username": "Sunsynk 账号邮箱",
+          "password": "Sunsynk 账号密码",
+          "serials": "逆变器序列号",
+          "refresh_interval": "刷新间隔（秒）"
+        },
+        "data_description": {
+          "serials": "多个逆变器示例：SN123456;SN789012",
+          "refresh_interval": "轮询 Sunsynk API 的频率（最少 60 秒）"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "凭据无效，请检查 Sunsynk 邮箱和密码。",
+      "cannot_connect": "无法连接到 Sunsynk API，请检查 API 服务器和网络连接。",
+      "invalid_serials": "序列号无效，请至少输入一个序列号。"
+    },
+    "abort": {
+      "already_configured": "此 Sunsynk 账号已配置。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sunsynk 选项",
+        "data": {
+          "serials": "逆变器序列号",
+          "refresh_interval": "刷新间隔（秒）",
+          "latitude": "纬度（光伏发电预测）",
+          "longitude": "经度（光伏发电预测）",
+          "panel_kwp": "组件峰值功率（kWp）",
+          "performance_ratio": "性能比（0–1）",
+          "price_entity": "电价传感器",
+          "cheap_threshold": "低于此价格时充电（谷电阈值）",
+          "cheap_charge_current": "谷电充电电流（A）",
+          "normal_charge_current": "恢复正常充电电流（A）",
+          "cheap_target_soc": "充至目标 SOC（%）后停止充电",
+          "expensive_threshold": "高于此价格时放电（峰电阈值）",
+          "peak_discharge_current": "峰电放电电流（A）",
+          "normal_discharge_current": "恢复正常放电电流（A）",
+          "discharge_min_soc": "放至最低 SOC（%）后停止放电",
+          "tariff_start_hour": "计划开始时间（0–23 时）",
+          "tariff_end_hour": "计划结束时间（0–23 时）",
+          "price_max_age": "电价数据最大有效时长（分钟）"
+        },
+        "data_description": {
+          "latitude": "可选，默认使用 HA 家庭位置",
+          "longitude": "可选，默认使用 HA 家庭位置",
+          "panel_kwp": "已安装组件的总峰值功率（kWp）。留空则禁用光伏发电预测。",
+          "performance_ratio": "系统效率系数，默认 0.80",
+          "price_entity": "任意报告电价的传感器（如 Octopus Agile、NordPool、Tibber）。留空则禁用电价管理。",
+          "cheap_threshold": "当电价 ≤ 此值时为电池充电。留空则禁用谷电充电。",
+          "cheap_charge_current": "谷电时段的电池充电电流（如 100 A）。",
+          "normal_charge_current": "谷电时段结束后恢复的充电电流。",
+          "cheap_target_soc": "电池达到此 SOC 后自动停止充电，默认 100。",
+          "expensive_threshold": "当电价 ≥ 此值时放电（向电网售电）。留空则禁用。",
+          "peak_discharge_current": "峰电时段的电池放电电流（如 100 A）。",
+          "normal_discharge_current": "峰电时段结束后恢复的放电电流。",
+          "discharge_min_soc": "电池达到此 SOC 后自动停止放电，默认 10。",
+          "tariff_start_hour": "电价管理激活的时刻（0–23 时）。留空则全天激活。",
+          "tariff_end_hour": "电价管理停止的时刻（0–23 时），可跨越午夜（如开始 22 时，结束 6 时）。",
+          "price_max_age": "若电价传感器在此分钟数内未更新，将停止当前充/放电模式以确保安全，默认 90。"
+        }
+      }
+    },
+    "error": {
+      "invalid_serials": "序列号无效，请至少输入一个序列号。",
+      "invalid_forecast_config": "光伏发电预测需要有效的纬度、经度和组件峰值功率（kWp）。",
+      "invalid_tariff_config": "电价配置错误。谷电充电需要阈值 + 充电电流 + 正常电流（三者缺一不可）。放电需要阈值 + 峰值电流 + 正常电流（三者缺一不可）。"
+    }
+  },
+  "issues": {
+    "auth_failed": {
+      "title": "Sunsynk 认证失败",
+      "description": "Sunsynk 云端 API 拒绝了凭据。请前往 **设置 → 设备与服务 → Sunsynk** 重新配置集成以更新密码。"
+    },
+    "inverter_offline": {
+      "title": "逆变器 {serial} 离线",
+      "description": "无法获取逆变器 **{serial}** 的数据。请检查数据采集器是否已连接，并确认 Sunsynk 应用可显示实时数据。"
+    }
+  }
+}

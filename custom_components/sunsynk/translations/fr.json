@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configuration de l'onduleur Sunsynk / Deye",
+        "description": "Connexion à l'API cloud Sunsynk. Séparez plusieurs numéros de série par des points-virgules.",
+        "data": {
+          "api_server": "Serveur API",
+          "username": "Adresse e-mail du compte Sunsynk",
+          "password": "Mot de passe du compte Sunsynk",
+          "serials": "Numéro(s) de série de l'onduleur",
+          "refresh_interval": "Intervalle de rafraîchissement (secondes)"
+        },
+        "data_description": {
+          "serials": "Pour plusieurs onduleurs : SN123456;SN789012",
+          "refresh_interval": "Fréquence d'interrogation de l'API Sunsynk (minimum 60 secondes)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Identifiants invalides. Vérifiez l'adresse e-mail et le mot de passe Sunsynk.",
+      "cannot_connect": "Impossible de se connecter à l'API Sunsynk. Vérifiez le serveur API et la connexion Internet.",
+      "invalid_serials": "Numéro(s) de série invalide(s). Entrez au moins un numéro de série."
+    },
+    "abort": {
+      "already_configured": "Ce compte Sunsynk est déjà configuré."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options Sunsynk",
+        "data": {
+          "serials": "Numéro(s) de série de l'onduleur",
+          "refresh_interval": "Intervalle de rafraîchissement (secondes)",
+          "latitude": "Latitude (prévision solaire)",
+          "longitude": "Longitude (prévision solaire)",
+          "panel_kwp": "Puissance crête des panneaux (kWc)",
+          "performance_ratio": "Coefficient de performance (0–1)",
+          "price_entity": "Capteur de prix de l'électricité",
+          "cheap_threshold": "Charger en dessous du prix (seuil tarif bas)",
+          "cheap_charge_current": "Courant de charge au tarif bas (A)",
+          "normal_charge_current": "Courant de charge normal à restaurer (A)",
+          "cheap_target_soc": "Arrêter la charge à l'état de charge (%)",
+          "expensive_threshold": "Décharger au-dessus du prix (seuil tarif haut)",
+          "peak_discharge_current": "Courant de décharge au tarif haut (A)",
+          "normal_discharge_current": "Courant de décharge normal à restaurer (A)",
+          "discharge_min_soc": "Arrêter la décharge à l'état de charge (%)",
+          "tariff_start_hour": "Plage horaire — heure de début (0–23)",
+          "tariff_end_hour": "Plage horaire — heure de fin (0–23)",
+          "price_max_age": "Âge maximal des données de prix (minutes)"
+        },
+        "data_description": {
+          "latitude": "Optionnel — par défaut : localisation HA",
+          "longitude": "Optionnel — par défaut : localisation HA",
+          "panel_kwp": "Puissance totale installée en kilowatt-crête. Laisser vide pour désactiver la prévision solaire.",
+          "performance_ratio": "Facteur d'efficacité du système, défaut 0,80",
+          "price_entity": "Tout capteur indiquant le prix de l'électricité (ex. Octopus Agile, NordPool, Tibber). Laisser vide pour désactiver la gestion tarifaire.",
+          "cheap_threshold": "Quand le prix ≤ cette valeur, charger la batterie. Laisser vide pour désactiver la charge au tarif bas.",
+          "cheap_charge_current": "Courant de charge pendant la période creuse (ex. 100 A).",
+          "normal_charge_current": "Courant de charge restauré à la fin de la période creuse.",
+          "cheap_target_soc": "La charge s'arrête automatiquement quand la batterie atteint cet état de charge. Défaut 100.",
+          "expensive_threshold": "Quand le prix ≥ cette valeur, décharger la batterie (vendre au réseau). Laisser vide pour désactiver.",
+          "peak_discharge_current": "Courant de décharge pendant la période de pointe (ex. 100 A).",
+          "normal_discharge_current": "Courant de décharge restauré à la fin de la période de pointe.",
+          "discharge_min_soc": "La décharge s'arrête automatiquement quand la batterie atteint cet état de charge. Défaut 10.",
+          "tariff_start_hour": "Heure de la journée (0–23) à laquelle la gestion tarifaire s'active. Laisser vide pour une activation permanente.",
+          "tariff_end_hour": "Heure de la journée (0–23) à laquelle la gestion tarifaire se désactive. Peut chevaucher minuit (ex. début 22, fin 6).",
+          "price_max_age": "Si le capteur de prix ne s'est pas mis à jour dans ce délai (minutes), le mode actif est arrêté par mesure de sécurité. Défaut 90."
+        }
+      }
+    },
+    "error": {
+      "invalid_serials": "Numéro(s) de série invalide(s). Entrez au moins un numéro de série.",
+      "invalid_forecast_config": "La prévision solaire nécessite une latitude, une longitude et une puissance kWc valides.",
+      "invalid_tariff_config": "Erreur de configuration tarifaire. La charge creuse nécessite seuil + courant de charge + courant normal (les trois). La décharge nécessite seuil + courant de pointe + courant normal (les trois)."
+    }
+  },
+  "issues": {
+    "auth_failed": {
+      "title": "Échec de l'authentification Sunsynk",
+      "description": "L'API cloud Sunsynk a rejeté les identifiants. Allez dans **Paramètres → Appareils et services → Sunsynk** et reconfigurez l'intégration."
+    },
+    "inverter_offline": {
+      "title": "L'onduleur {serial} est hors ligne",
+      "description": "Impossible de récupérer les données de l'onduleur **{serial}**. Vérifiez que la clé USB est connectée et que l'application Sunsynk affiche des données en direct."
+    }
+  }
+}
