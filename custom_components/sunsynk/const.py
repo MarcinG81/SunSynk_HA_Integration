@@ -172,8 +172,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         key="inverter_model",
         name="Model",
         endpoint="inverter",
-        data_key="model",
-        fallback_data_key="equipType",  # model is often empty; equipType has the human-readable name
+        data_key="equipType",  # API 'model' field is a numeric type code; equipType has the human-readable name
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SunsynkSensorEntityDescription(
