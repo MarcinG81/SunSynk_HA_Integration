@@ -24,6 +24,7 @@ A native Home Assistant **integration** (not an add-on) for monitoring and contr
 - **Tariff Manager** — Automatic cheap-rate charging and peak-rate discharging based on any HA electricity price sensor (Octopus Agile, NordPool, Tibber, G12, `input_number`, etc.)
 - **Multiple inverters** — One integration entry supports multiple serial numbers
 - **Config Flow** — Fully configured through the Home Assistant UI (no YAML needed)
+- **Multi-language UI** — Config flow and options translated into Polish, German, French, Afrikaans, Russian, Spanish, Czech and Chinese Simplified
 - **HACS compatible** — Install and update through HACS
 
 ---
@@ -74,7 +75,15 @@ Any inverter accessible through the Sunsynk cloud API, including:
            ├── switch.py
            ├── strings.json
            ├── translations/
-           │   └── en.json
+           │   ├── en.json
+           │   ├── pl.json
+           │   ├── de.json
+           │   ├── fr.json
+           │   ├── af.json
+           │   ├── ru.json
+           │   ├── es.json
+           │   ├── cs.json
+           │   └── zh-Hans.json
            └── api/
                ├── __init__.py
                ├── auth.py

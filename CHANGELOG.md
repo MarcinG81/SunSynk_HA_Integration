@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.9] - 2026-05-26
+
+### Added
+- **Translations** — UI strings (config flow, options, error messages, repair issues) are now translated into 8 languages: Polish (`pl`), German (`de`), French (`fr`), Afrikaans (`af`), Russian (`ru`), Spanish (`es`), Czech (`cs`), Chinese Simplified (`zh-Hans`).
+
+### Fixed
+- GitHub release workflow: added `draft: false` to ensure releases are published immediately rather than saved as drafts.
+
 ## [1.6.8] - 2026-05-25
 
 ### Changed
@@ -119,6 +127,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Auto-generated Lovelace dashboard (Power Flow Card bundled — no separate HACS install needed)
 - Sunsynk Power Flow Card v7.3.3 served as a bundled frontend resource
 
+[1.6.9]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.8...v1.6.9
+[1.6.8]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.7...v1.6.8
+[1.6.7]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.6...v1.6.7
+[1.6.6]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.5...v1.6.6
+[1.6.5]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.4...v1.6.5
+[1.6.4]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.3...v1.6.4
+[1.6.3]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.5.0...v1.6.0
