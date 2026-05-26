@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Callable, Final
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -69,6 +69,25 @@ class SunsynkSensorEntityDescription(SensorEntityDescription):
     endpoint: str = ""
     data_key: str = ""
     fallback_data_key: str = ""  # tried when data_key resolves to None or ""
+    value_fn: Callable[[dict[str, Any]], Any] | None = None  # overrides data_key lookup when set
+
+
+def _model_value(d: dict[str, Any]) -> str | None:
+    """Construct a human-readable model string from inverter data."""
+    for key in ("model", "equipType"):
+        v = d.get(key)
+        if isinstance(v, str) and v:
+            return v
+    brand = d.get("brand")
+    brand = brand if isinstance(brand, str) and brand else None
+    rate = d.get("ratePower")
+    if rate:
+        try:
+            kw = int(rate) // 1000
+            return f"{brand} {kw}kW" if brand else f"{kw}kW"
+        except (TypeError, ValueError):
+            pass
+    return brand
 
 
 INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
@@ -172,7 +191,8 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         key="inverter_model",
         name="Model",
         endpoint="inverter",
-        data_key="equipType",  # API 'model' field is a numeric type code; equipType has the human-readable name
+        data_key="",
+        value_fn=_model_value,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SunsynkSensorEntityDescription(

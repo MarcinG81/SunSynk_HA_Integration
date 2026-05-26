@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.12] - 2026-05-26
+
+### Fixed
+- **Inverter Model sensor** now constructs a human-readable value from available API fields: tries `model` string, then `equipType` string, then falls back to `{brand} {kW}kW` (e.g. `Deye 8kW`). The Sunsynk/Deye API returns `model` as an empty string and `equipType` as an integer type code — neither is a readable name.
+- **Device card** in HA also shows the constructed model name correctly.
+- Added `value_fn` support to `SunsynkSensorEntityDescription` for sensors that need computed values rather than a simple field lookup.
+
 ## [1.6.11] - 2026-05-26
 
 ### Fixed
@@ -140,6 +147,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Auto-generated Lovelace dashboard (Power Flow Card bundled — no separate HACS install needed)
 - Sunsynk Power Flow Card v7.3.3 served as a bundled frontend resource
 
+[1.6.12]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.11...v1.6.12
 [1.6.11]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.10...v1.6.11
 [1.6.10]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.9...v1.6.10
 [1.6.9]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.8...v1.6.9

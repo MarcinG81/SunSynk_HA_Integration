@@ -280,6 +280,9 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
         if not endpoint_data:
             return None
 
+        if self.entity_description.value_fn is not None:
+            return self.entity_description.value_fn(endpoint_data)
+
         value = _resolve_value(endpoint_data, self.entity_description.data_key)
         if (value is None or value == "") and self.entity_description.fallback_data_key:
             value = _resolve_value(endpoint_data, self.entity_description.fallback_data_key)

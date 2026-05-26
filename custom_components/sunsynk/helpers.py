@@ -9,9 +9,11 @@ from .coordinator import SunsynkCoordinator
 
 def build_device_info(coordinator: SunsynkCoordinator, serial: str) -> DeviceInfo:
     """Build a full DeviceInfo for a given inverter serial."""
+    from .const import _model_value
     inverter_data = (coordinator.data or {}).get(serial, {}).get("inverter", {})
-    model = inverter_data.get("model") or inverter_data.get("equipType") or "Sunsynk Inverter"
-    brand = inverter_data.get("brand") or "Sunsynk"
+    brand_raw = inverter_data.get("brand")
+    brand = brand_raw if isinstance(brand_raw, str) and brand_raw else "Sunsynk"
+    model = _model_value(inverter_data) or "Sunsynk Inverter"
     sw_version = (inverter_data.get("version") or {}).get("masterVer")
 
     return DeviceInfo(
