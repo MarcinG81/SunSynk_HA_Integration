@@ -68,6 +68,7 @@ DEFAULT_PRICE_MAX_AGE: Final = 90  # minutes
 class SunsynkSensorEntityDescription(SensorEntityDescription):
     endpoint: str = ""
     data_key: str = ""
+    fallback_data_key: str = ""  # tried when data_key resolves to None or ""
 
 
 INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
@@ -172,6 +173,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         name="Model",
         endpoint="inverter",
         data_key="model",
+        fallback_data_key="equipType",  # model is often empty; equipType has the human-readable name
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SunsynkSensorEntityDescription(
@@ -540,7 +542,8 @@ BATTERY_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         key="battery_number_of_batteries",
         name="Number of Batteries",
         endpoint="battery",
-        data_key="numberOfBatteries",
+        data_key="batteryNum",
+        fallback_data_key="numberOfBatteries",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )

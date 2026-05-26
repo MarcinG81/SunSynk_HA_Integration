@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.10] - 2026-05-26
+
+### Fixed
+- **Inverter Model sensor** was always unavailable — the Sunsynk API `model` field is often an empty string; added fallback to `equipType` (human-readable model name e.g. `SUN-8K-SG01HP3-EU-AM2`).
+- **Number of Batteries sensor** was always unavailable — primary field changed to `batteryNum` (Sunsynk API naming convention) with `numberOfBatteries` as fallback.
+- Added `fallback_data_key` support to `SunsynkSensorEntityDescription` for sensors where the API may use different field names.
+- Added DEBUG-level logging of `inverter` and `battery` field names on each fetch to aid future diagnostics.
+
 ## [1.6.9] - 2026-05-26
 
 ### Added
@@ -127,6 +135,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Auto-generated Lovelace dashboard (Power Flow Card bundled — no separate HACS install needed)
 - Sunsynk Power Flow Card v7.3.3 served as a bundled frontend resource
 
+[1.6.10]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.9...v1.6.10
 [1.6.9]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.8...v1.6.9
 [1.6.8]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.7...v1.6.8
 [1.6.7]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.6...v1.6.7

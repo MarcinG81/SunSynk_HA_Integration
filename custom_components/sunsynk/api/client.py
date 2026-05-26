@@ -170,4 +170,11 @@ class SunsynkClient:
             else:
                 data[key] = result
 
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            for key in ("inverter", "battery"):
+                _LOGGER.debug(
+                    "Sunsynk %s %s fields: %s",
+                    serial, key, sorted(data.get(key, {}).keys()),
+                )
+
         return data
