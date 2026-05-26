@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.11] - 2026-05-26
+
+### Fixed
+- **Inverter Model sensor** now reads `equipType` (e.g. `SUN-8K-SG01HP3-EU-AM2`) — the API `model` field is a numeric type code, not a human-readable name.
+
 ## [1.6.10] - 2026-05-26
 
 ### Fixed
@@ -135,6 +140,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Auto-generated Lovelace dashboard (Power Flow Card bundled — no separate HACS install needed)
 - Sunsynk Power Flow Card v7.3.3 served as a bundled frontend resource
 
+[1.6.11]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.10...v1.6.11
 [1.6.10]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.9...v1.6.10
 [1.6.9]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.8...v1.6.9
 [1.6.8]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.7...v1.6.8
