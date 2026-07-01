@@ -292,6 +292,12 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
         try:
             return float(value)
         except (TypeError, ValueError):
+            # Numeric sensors (state_class set) must report None rather than a raw
+            # string like "--" — the API returns that placeholder for fields that
+            # don't apply to a given inverter, and HA rejects non-numeric values
+            # for measurement/total sensors.
+            if self.entity_description.state_class is not None:
+                return None
             return str(value) if value != "" else None
 
 
