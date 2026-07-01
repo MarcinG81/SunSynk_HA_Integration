@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.13] - 2026-07-01
+
+### Fixed
+- Sensors with a numeric `state_class` (e.g. `PV Grid Tip Power`) now report `unknown` instead of the raw API placeholder `"--"` when the field doesn't apply to a given inverter. Home Assistant rejected the non-numeric string and logged an error on every coordinator refresh, which could appear unrelated to any automation targeting a different entity around the same time. (#6)
+
 ## [1.6.12] - 2026-05-26
 
 ### Fixed
