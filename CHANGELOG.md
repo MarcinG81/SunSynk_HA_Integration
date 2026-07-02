@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.14] - 2026-07-02
+
+### Fixed
+- Auto-generated dashboards now load the bundled `sunsynk-power-flow-card` reliably by registering `/sunsynk/sunsynk-power-flow-card.js` as a Lovelace `module` resource during integration setup.
+- The bundled card URL is versioned from the integration manifest to reduce stale frontend cache issues after updates.
+- Frontend, HTTP and Lovelace are now declared as integration dependencies so card resource registration runs after the required Home Assistant subsystems are loaded.
+
+### Changed
+- Updated the bundled dashboard YAML instructions to clarify that the Power Flow Card is included with the integration and does not need a separate HACS frontend install.
+
 ## [1.6.13] - 2026-07-01
 
 ### Fixed
@@ -152,6 +162,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Auto-generated Lovelace dashboard (Power Flow Card bundled — no separate HACS install needed)
 - Sunsynk Power Flow Card v7.3.3 served as a bundled frontend resource
 
+[1.6.14]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.13...v1.6.14
+[1.6.13]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.12...v1.6.13
 [1.6.12]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.11...v1.6.12
 [1.6.11]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.10...v1.6.11
 [1.6.10]: https://github.com/MarcinG81/SunSynk_HA_Integration/compare/v1.6.9...v1.6.10
