@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.16] - 2026-07-02
+
+### Fixed
+- Auto-generated dashboards no longer throw a "Configuration error: Please include the attribute and entity ID e.g: pv1_power_186: sensor.example" on the Overview tab. The bundled `sunsynk-power-flow-card` expects specific numbered entity keys (e.g. `pv1_power_186`, `battery_soc_184`, `grid_power_169`) rather than the plain names (`pv1_power`, `battery_soc`, `grid_power`) the dashboard generator was previously producing — those keys were silently ignored by the card, so most of the power flow visualization (and the 1.6.15 solar-block fix) never actually reached the screen. Entity keys are now aligned with the card's real schema, `pv1_power_186` always resolves to a sensor (falling back to total solar power if no per-MPPT sensor exists), and `show_daily` flags are now nested under `solar`/`battery`/`grid`/`load` as the card expects instead of ignored top-level flags.
+- Updated `dashboards/sunsynk-dashboard.yaml` with the corrected entity keys for anyone who copy-pasted the manual dashboard example.
+
 ## [1.6.15] - 2026-07-02
 
 ### Fixed

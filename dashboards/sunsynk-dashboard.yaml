@@ -51,6 +51,9 @@ views:
         cards:
 
           # ── POWER FLOW CARD ──────────────────────────────
+          # NOTE: the bundled sunsynk-power-flow-card expects these exact,
+          # numbered entity keys (they come from the card's own schema, not
+          # from this integration) — renaming them will break validation.
           - type: custom:sunsynk-power-flow-card
             cardstyle: lite
             panel_mode: false
@@ -58,33 +61,40 @@ views:
             show_battery: true
             show_grid: true
             large_font: false
-            show_daily_solar: true
-            show_daily_grid: true
-            show_daily_battery: true
             entities:
-              solar_power: sensor.INVERTER_pv_total_power
-              pv1_power: sensor.INVERTER_pv_mppt_1_power          # optional – remove if no MPPT data
-              pv2_power: sensor.INVERTER_pv_mppt_2_power          # optional – remove if no MPPT data
-              pv1_voltage: sensor.INVERTER_pv_mppt_1_voltage      # optional
-              pv2_voltage: sensor.INVERTER_pv_mppt_2_voltage      # optional
-              battery_power: sensor.INVERTER_battery_power
-              battery_soc: sensor.INVERTER_battery_soc
-              battery_voltage: sensor.INVERTER_battery_voltage
-              battery_current: sensor.INVERTER_battery_current
-              battery_temp: sensor.INVERTER_battery_temperature
-              grid_power: sensor.INVERTER_grid_power
-              grid_frequency: sensor.INVERTER_grid_frequency
-              load_power: sensor.INVERTER_load_total_power
-              day_solar_energy: sensor.INVERTER_pv_generation_today
-              day_battery_charge: sensor.INVERTER_battery_charge_today
-              day_battery_discharge: sensor.INVERTER_battery_discharge_today
-              day_grid_import: sensor.INVERTER_grid_import_today
-              day_grid_export: sensor.INVERTER_grid_export_today
-              day_load_energy: sensor.INVERTER_load_energy_used_today
+              pv1_power_186: sensor.INVERTER_pv_mppt_1_power      # required whenever show_solar is true
+              pv2_power_187: sensor.INVERTER_pv_mppt_2_power      # optional – remove if no 2nd MPPT
+              pv1_voltage_109: sensor.INVERTER_pv_mppt_1_voltage  # optional
+              pv2_voltage_111: sensor.INVERTER_pv_mppt_2_voltage  # optional
+              pv_total: sensor.INVERTER_pv_total_power
+              day_pv_energy_108: sensor.INVERTER_pv_generation_today
+              battery_power_190: sensor.INVERTER_battery_power
+              battery_soc_184: sensor.INVERTER_battery_soc
+              battery_voltage_183: sensor.INVERTER_battery_voltage
+              battery_current_191: sensor.INVERTER_battery_current
+              battery_temp_182: sensor.INVERTER_battery_temperature
+              day_battery_charge_70: sensor.INVERTER_battery_charge_today
+              day_battery_discharge_71: sensor.INVERTER_battery_discharge_today
+              grid_power_169: sensor.INVERTER_grid_power
+              day_grid_import_76: sensor.INVERTER_grid_import_today
+              day_grid_export_77: sensor.INVERTER_grid_export_today
+              day_load_energy_84: sensor.INVERTER_load_energy_used_today
+              inverter_power_175: sensor.INVERTER_ac_power
+              load_frequency_192: sensor.INVERTER_grid_frequency
+              essential_power: none          # "none" tells the card to derive this from inverter_power_175
+              nonessential_power: none       # "none" tells the card to derive this from grid_power_169
+            solar:
+              mppts: 2                       # set to 1 if you only have one MPPT string
+              show_daily: true
             battery:
               shutdown_soc: 10                 # adjust to your battery_shutdown_cap setting
+              show_daily: true
             grid:
               show_nonessential: false
+              show_daily_buy: true
+              show_daily_sell: true
+            load:
+              show_daily: true
 
           # ── QUICK STATS ──────────────────────────────────
           - type: horizontal-stack
