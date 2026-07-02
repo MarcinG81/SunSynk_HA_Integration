@@ -23,10 +23,11 @@
 # Option B – add as extra views inside an existing dashboard:
 #   Edit your dashboard → Raw Configuration Editor → copy the views below.
 #
-# REQUIRED CUSTOM CARD (install via HACS → Frontend):
-# ─────────────────────────────────────────────────────
-#   • sunsynk-power-flow-card  (by slipx06)
-#     https://github.com/slipx06/sunsynk-power-flow-card
+# REQUIRED CUSTOM CARD:
+# ─────────────────────
+#   • sunsynk-power-flow-card is bundled with this integration.
+#     It is served from /sunsynk/sunsynk-power-flow-card.js and registered
+#     as a Lovelace module resource automatically after HA restarts.
 #
 # OPTIONAL custom cards for nicer charts:
 #   • apexcharts-card           (by RomRider)
