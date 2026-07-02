@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.15] - 2026-07-02
+
+### Fixed
+- Auto-generated dashboards no longer show a "No solar attributes defined" card error — the bundled `sunsynk-power-flow-card` config now includes the required `solar` block, with `mppts` set based on whether a second MPPT sensor is present.
+- The Electricity Price Sensor field in the integration options can now be left blank. It was already optional in the schema, but Home Assistant's entity selector couldn't be cleared once defaulted, forcing users without tariff management to pick an unrelated sensor just to save settings.
+
 ## [1.6.14] - 2026-07-02
 
 ### Fixed

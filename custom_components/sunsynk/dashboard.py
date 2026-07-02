@@ -163,6 +163,7 @@ def build_dashboard(
                                         "day_load_energy": load_today,
                                     }.items() if v is not None
                                 },
+                                "solar": {"mppts": 2 if pv2_power is not None else 1},
                                 "battery": {"shutdown_soc": 10},
                                 "grid": {"show_nonessential": False},
                             },
