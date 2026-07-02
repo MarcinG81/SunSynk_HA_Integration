@@ -216,7 +216,8 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                 ): str,
                 # Tariff — shared price sensor
                 vol.Optional(
-                    CONF_PRICE_ENTITY, default=_opt(CONF_PRICE_ENTITY)
+                    CONF_PRICE_ENTITY,
+                    description={"suggested_value": _opt(CONF_PRICE_ENTITY) or None},
                 ): EntitySelector(EntitySelectorConfig(domain=["sensor", "input_number"])),
                 # Cheap-rate charging
                 vol.Optional(
