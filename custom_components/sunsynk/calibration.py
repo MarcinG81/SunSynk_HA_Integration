@@ -10,7 +10,6 @@ into an exponential moving average per calendar month.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
