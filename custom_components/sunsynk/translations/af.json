@@ -31,6 +31,9 @@
       "init": {
         "title": "Sunsynk Opsies",
         "data": {
+          "api_server": "API Server",
+          "username": "Sunsynk Account Email",
+          "password": "New Sunsynk Account Password",
           "serials": "Omvormer reeksnommer(s)",
           "refresh_interval": "Verfrissinginterval (sekondes)",
           "latitude": "Breedtegraad (Sonsenergie-voorspelling)",
@@ -51,6 +54,7 @@
           "price_max_age": "Maksimum ouderdom van prysdata (minute)"
         },
         "data_description": {
+          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "latitude": "Opsioneel — verstekwaarde is HA-tuisligging",
           "longitude": "Opsioneel — verstekwaarde is HA-tuisligging",
           "panel_kwp": "Totale geïnstalleerde paneelkapasiteit in kilowatt-piek. Los leeg om sonsenergie-voorspelling te deaktiveer.",
@@ -71,6 +75,9 @@
       }
     },
     "error": {
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
+      "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Ongeldige reeksnommer(s). Voer ten minste een reeksnommer in.",
       "invalid_forecast_config": "Sonsenergie-voorspelling vereis geldige breedtegraad, lengtegraad en paneel-kWp.",
       "invalid_tariff_config": "Tariefkonfigurasie-fout. Goedkoop laaing benodig drempel + laaistroomsterkte + normale stroomsterkte (al drie). Ontlaaing benodig drempel + piekstroomsterkte + normale stroomsterkte (al drie)."
@@ -79,7 +86,7 @@
   "issues": {
     "auth_failed": {
       "title": "Sunsynk-stawing het misluk",
-      "description": "Die Sunsynk wolkdiens-API het die aanmeldbesonderhede geweier. Gaan na **Instellings → Toestelle en dienste → Sunsynk** en herstel die integrasie."
+      "description": "Die Sunsynk wolkdiens-API het die aanmeldbesonderhede geweier. Gaan na **Instellings → Toestelle en dienste → Sunsynk → Configure** en voer die nuwe wagwoord in."
     },
     "inverter_offline": {
       "title": "Omvormer {serial} is vanlyn",

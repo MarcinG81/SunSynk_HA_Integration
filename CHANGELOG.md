@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.17] - 2026-07-07
+
+### Added
+- Sunsynk/Deye login credentials (API server, account email, password) can now be updated from **Settings → Devices & Services → Sunsynk → Configure** — no need to delete and re-add the integration after changing your portal password. The password field can be left blank to keep the currently saved one. Changed credentials are re-validated against the API before saving, and switching to an account already configured elsewhere is rejected. (Discussion #8)
+
 ## [1.6.16] - 2026-07-02
 
 ### Fixed

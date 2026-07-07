@@ -31,6 +31,9 @@
       "init": {
         "title": "Možnosti Sunsynk",
         "data": {
+          "api_server": "API Server",
+          "username": "Sunsynk Account Email",
+          "password": "New Sunsynk Account Password",
           "serials": "Sériové číslo/čísla měniče",
           "refresh_interval": "Interval aktualizace (sekundy)",
           "latitude": "Zeměpisná šířka (solární předpověď)",
@@ -51,6 +54,7 @@
           "price_max_age": "Maximální stáří dat o ceně (minuty)"
         },
         "data_description": {
+          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "latitude": "Volitelné — výchozí je poloha domova v HA",
           "longitude": "Volitelné — výchozí je poloha domova v HA",
           "panel_kwp": "Celkový instalovaný výkon panelů v kilowattech špičkových. Ponechte prázdné pro deaktivaci solární předpovědi.",
@@ -71,6 +75,9 @@
       }
     },
     "error": {
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
+      "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Neplatné sériové číslo/čísla. Zadejte alespoň jedno sériové číslo.",
       "invalid_forecast_config": "Solární předpověď vyžaduje platnou zeměpisnou šířku, délku a výkon panelů v kWp.",
       "invalid_tariff_config": "Chyba konfigurace tarifu. Levné nabíjení vyžaduje práh + nabíjecí proud + normální proud (všechny tři). Vybíjení vyžaduje práh + špičkový proud + normální proud (všechny tři)."
@@ -79,7 +86,7 @@
   "issues": {
     "auth_failed": {
       "title": "Ověření Sunsynk selhalo",
-      "description": "Cloudové API Sunsynk odmítlo přihlašovací údaje. Přejděte do **Nastavení → Zařízení a služby → Sunsynk** a znovu nakonfigurujte integraci."
+      "description": "Cloudové API Sunsynk odmítlo přihlašovací údaje. Přejděte do **Nastavení → Zařízení a služby → Sunsynk → Configure** a zadejte nové heslo."
     },
     "inverter_offline": {
       "title": "Měnič {serial} je offline",

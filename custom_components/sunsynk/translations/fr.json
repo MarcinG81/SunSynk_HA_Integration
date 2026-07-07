@@ -31,6 +31,9 @@
       "init": {
         "title": "Options Sunsynk",
         "data": {
+          "api_server": "API Server",
+          "username": "Sunsynk Account Email",
+          "password": "New Sunsynk Account Password",
           "serials": "Numéro(s) de série de l'onduleur",
           "refresh_interval": "Intervalle de rafraîchissement (secondes)",
           "latitude": "Latitude (prévision solaire)",
@@ -51,6 +54,7 @@
           "price_max_age": "Âge maximal des données de prix (minutes)"
         },
         "data_description": {
+          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "latitude": "Optionnel — par défaut : localisation HA",
           "longitude": "Optionnel — par défaut : localisation HA",
           "panel_kwp": "Puissance totale installée en kilowatt-crête. Laisser vide pour désactiver la prévision solaire.",
@@ -71,6 +75,9 @@
       }
     },
     "error": {
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
+      "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Numéro(s) de série invalide(s). Entrez au moins un numéro de série.",
       "invalid_forecast_config": "La prévision solaire nécessite une latitude, une longitude et une puissance kWc valides.",
       "invalid_tariff_config": "Erreur de configuration tarifaire. La charge creuse nécessite seuil + courant de charge + courant normal (les trois). La décharge nécessite seuil + courant de pointe + courant normal (les trois)."
@@ -79,7 +86,7 @@
   "issues": {
     "auth_failed": {
       "title": "Échec de l'authentification Sunsynk",
-      "description": "L'API cloud Sunsynk a rejeté les identifiants. Allez dans **Paramètres → Appareils et services → Sunsynk** et reconfigurez l'intégration."
+      "description": "L'API cloud Sunsynk a rejeté les identifiants. Allez dans **Paramètres → Appareils et services → Sunsynk → Configurer** et saisissez le nouveau mot de passe."
     },
     "inverter_offline": {
       "title": "L'onduleur {serial} est hors ligne",

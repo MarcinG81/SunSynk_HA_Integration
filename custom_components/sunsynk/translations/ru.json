@@ -31,6 +31,9 @@
       "init": {
         "title": "Параметры Sunsynk",
         "data": {
+          "api_server": "API Server",
+          "username": "Sunsynk Account Email",
+          "password": "New Sunsynk Account Password",
           "serials": "Серийный номер(а) инвертора",
           "refresh_interval": "Интервал обновления (секунды)",
           "latitude": "Широта (прогноз солнечной генерации)",
@@ -51,6 +54,7 @@
           "price_max_age": "Максимальный возраст данных о цене (минуты)"
         },
         "data_description": {
+          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "latitude": "Необязательно — по умолчанию используется местоположение HA",
           "longitude": "Необязательно — по умолчанию используется местоположение HA",
           "panel_kwp": "Общая установленная мощность панелей в кВп. Оставьте пустым, чтобы отключить прогноз солнечной генерации.",
@@ -71,6 +75,9 @@
       }
     },
     "error": {
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
+      "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Неверный серийный номер(а). Введите хотя бы один серийный номер.",
       "invalid_forecast_config": "Прогноз солнечной генерации требует корректных широты, долготы и мощности панелей в кВп.",
       "invalid_tariff_config": "Ошибка конфигурации тарифа. Дешёвая зарядка требует порог + ток заряда + нормальный ток (все три). Разряд требует порог + пиковый ток + нормальный ток (все три)."
@@ -79,7 +86,7 @@
   "issues": {
     "auth_failed": {
       "title": "Ошибка аутентификации Sunsynk",
-      "description": "Облачный API Sunsynk отклонил учётные данные. Перейдите в **Настройки → Устройства и сервисы → Sunsynk** и перенастройте интеграцию."
+      "description": "Облачный API Sunsynk отклонил учётные данные. Перейдите в **Настройки → Устройства и сервисы → Sunsynk → Настроить** и введите новый пароль."
     },
     "inverter_offline": {
       "title": "Инвертор {serial} не в сети",

@@ -62,6 +62,21 @@ STEP_USER_SCHEMA = vol.Schema(
 )
 
 
+async def _async_validate_credentials(
+    api_server: str,
+    username: str,
+    password: str,
+) -> None:
+    """Validate Sunsynk credentials by requesting a token."""
+    auth = SunsynkAuth(
+        api_server=api_server,
+        username=username,
+        password=password,
+    )
+    async with aiohttp.ClientSession() as session:
+        await auth.async_get_token(session)
+
+
 class SunsynkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle config flow for Sunsynk."""
 
@@ -78,13 +93,11 @@ class SunsynkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_SERIALS] = "invalid_serials"
             else:
                 try:
-                    auth = SunsynkAuth(
-                        api_server=user_input[CONF_API_SERVER],
-                        username=user_input[CONF_USERNAME],
-                        password=user_input[CONF_PASSWORD],
+                    await _async_validate_credentials(
+                        user_input[CONF_API_SERVER],
+                        user_input[CONF_USERNAME],
+                        user_input[CONF_PASSWORD],
                     )
-                    async with aiohttp.ClientSession() as session:
-                        await auth.async_get_token(session)
                 except SunsynkAuthError:
                     errors["base"] = "invalid_auth"
                 except Exception:  # noqa: BLE001
@@ -133,12 +146,25 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         errors: dict[str, str] = {}
+        opts = self._config_entry.options
+        data = self._config_entry.data
 
         if user_input is not None:
             serials_raw = user_input.get(CONF_SERIALS, "")
             serials = [s.strip() for s in serials_raw.split(";") if s.strip()]
+            api_server = user_input.get(
+                CONF_API_SERVER,
+                data.get(CONF_API_SERVER, API_SERVER_SUNSYNK),
+            )
+            username = str(
+                user_input.get(CONF_USERNAME, data.get(CONF_USERNAME, ""))
+            ).strip()
+            new_password = user_input.get(CONF_PASSWORD) or ""
+            password = new_password or data.get(CONF_PASSWORD, "")
             if not serials:
                 errors[CONF_SERIALS] = "invalid_serials"
+            if not username or not password:
+                errors["base"] = "invalid_auth"
             else:
                 kwp_raw = str(user_input.get(CONF_PANEL_KWP, "")).strip()
 
@@ -170,6 +196,52 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                         errors["base"] = "invalid_tariff_config"
 
                 if not errors:
+                    credentials_changed = (
+                        api_server != data.get(CONF_API_SERVER)
+                        or username != data.get(CONF_USERNAME)
+                        or bool(new_password)
+                    )
+                    if credentials_changed:
+                        unique_id = f"{api_server}_{username}"
+                        for entry in self.hass.config_entries.async_entries(DOMAIN):
+                            if (
+                                entry.entry_id != self._config_entry.entry_id
+                                and entry.unique_id == unique_id
+                            ):
+                                errors["base"] = "already_configured"
+                                break
+
+                    if credentials_changed and not errors:
+                        try:
+                            await _async_validate_credentials(
+                                api_server,
+                                username,
+                                password,
+                            )
+                        except SunsynkAuthError:
+                            errors["base"] = "invalid_auth"
+                        except Exception:  # noqa: BLE001
+                            _LOGGER.exception(
+                                "Unexpected error while updating Sunsynk credentials"
+                            )
+                            errors["base"] = "cannot_connect"
+
+                if not errors:
+                    if credentials_changed:
+                        new_data = dict(data)
+                        new_data.update(
+                            {
+                                CONF_API_SERVER: api_server,
+                                CONF_USERNAME: username,
+                                CONF_PASSWORD: password,
+                            }
+                        )
+                        self.hass.config_entries.async_update_entry(
+                            self._config_entry,
+                            data=new_data,
+                            unique_id=f"{api_server}_{username}",
+                        )
+
                     return self.async_create_entry(
                         title="",
                         data={
@@ -180,8 +252,6 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                         },
                     )
 
-        opts = self._config_entry.options
-        data = self._config_entry.data
         current_serials = opts.get(CONF_SERIALS, data.get(CONF_SERIALS, []))
         current_refresh = opts.get(
             CONF_REFRESH_INTERVAL,
@@ -197,6 +267,15 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
+                vol.Required(
+                    CONF_API_SERVER,
+                    default=data.get(CONF_API_SERVER, API_SERVER_SUNSYNK),
+                ): vol.In(list(API_SERVERS.values())),
+                vol.Required(
+                    CONF_USERNAME,
+                    default=data.get(CONF_USERNAME, ""),
+                ): str,
+                vol.Optional(CONF_PASSWORD, default=""): str,
                 vol.Required(
                     CONF_SERIALS, default=";".join(current_serials)
                 ): str,

@@ -31,6 +31,9 @@
       "init": {
         "title": "Sunsynk Optionen",
         "data": {
+          "api_server": "API Server",
+          "username": "Sunsynk Account Email",
+          "password": "New Sunsynk Account Password",
           "serials": "Seriennummer(n) des Wechselrichters",
           "refresh_interval": "Aktualisierungsintervall (Sekunden)",
           "latitude": "Breitengrad (Solarprognose)",
@@ -51,6 +54,7 @@
           "price_max_age": "Maximales Alter der Preisdaten (Minuten)"
         },
         "data_description": {
+          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "latitude": "Optional — Standard: HA-Heimatstandort",
           "longitude": "Optional — Standard: HA-Heimatstandort",
           "panel_kwp": "Gesamte installierte Panelleistung in Kilowatt-Peak. Leer lassen, um die Solarprognose zu deaktivieren.",
@@ -71,6 +75,9 @@
       }
     },
     "error": {
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
+      "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Ungültige Seriennummer(n). Mindestens eine Seriennummer eingeben.",
       "invalid_forecast_config": "Solarprognose erfordert gültigen Breiten- und Längengrad sowie Panel-kWp.",
       "invalid_tariff_config": "Tarifkonfigurationsfehler. Günstiges Laden benötigt Schwelle + Ladestrom + Normalstrom (alle drei). Entladen benötigt Schwelle + Spitzenstrom + Normalstrom (alle drei)."
@@ -79,7 +86,7 @@
   "issues": {
     "auth_failed": {
       "title": "Sunsynk-Authentifizierung fehlgeschlagen",
-      "description": "Die Sunsynk Cloud-API hat die Anmeldedaten abgelehnt. Gehe zu **Einstellungen → Geräte & Dienste → Sunsynk** und konfiguriere die Integration neu."
+      "description": "Die Sunsynk Cloud-API hat die Anmeldedaten abgelehnt. Gehe zu **Einstellungen → Geräte & Dienste → Sunsynk → Konfigurieren** und gib das neue Passwort ein."
     },
     "inverter_offline": {
       "title": "Wechselrichter {serial} ist offline",

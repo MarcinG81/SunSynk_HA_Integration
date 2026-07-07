@@ -31,6 +31,9 @@
       "init": {
         "title": "Opciones de Sunsynk",
         "data": {
+          "api_server": "API Server",
+          "username": "Sunsynk Account Email",
+          "password": "New Sunsynk Account Password",
           "serials": "Número(s) de serie del inversor",
           "refresh_interval": "Intervalo de actualización (segundos)",
           "latitude": "Latitud (previsión solar)",
@@ -51,6 +54,7 @@
           "price_max_age": "Antigüedad máxima de los datos de precio (minutos)"
         },
         "data_description": {
+          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "latitude": "Opcional — por defecto la ubicación del hogar en HA",
           "longitude": "Opcional — por defecto la ubicación del hogar en HA",
           "panel_kwp": "Capacidad total instalada de paneles en kilovatios pico. Dejar en blanco para desactivar la previsión solar.",
@@ -71,6 +75,9 @@
       }
     },
     "error": {
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
+      "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Número(s) de serie inválido(s). Introduzca al menos un número de serie.",
       "invalid_forecast_config": "La previsión solar requiere latitud, longitud y kWp de paneles válidos.",
       "invalid_tariff_config": "Error de configuración de tarifa. La carga barata necesita umbral + corriente de carga + corriente normal (los tres). La descarga necesita umbral + corriente pico + corriente normal (los tres)."
@@ -79,7 +86,7 @@
   "issues": {
     "auth_failed": {
       "title": "Autenticación de Sunsynk fallida",
-      "description": "La API en la nube de Sunsynk rechazó las credenciales. Vaya a **Configuración → Dispositivos y servicios → Sunsynk** y reconfigure la integración."
+      "description": "La API en la nube de Sunsynk rechazó las credenciales. Vaya a **Configuración → Dispositivos y servicios → Sunsynk → Configurar** e introduzca la nueva contraseña."
     },
     "inverter_offline": {
       "title": "El inversor {serial} está desconectado",

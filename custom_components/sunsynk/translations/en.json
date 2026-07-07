@@ -31,6 +31,9 @@
       "init": {
         "title": "Sunsynk Options",
         "data": {
+          "api_server": "API Server",
+          "username": "Sunsynk Account Email",
+          "password": "New Sunsynk Account Password",
           "serials": "Inverter Serial Number(s)",
           "refresh_interval": "Refresh Interval (seconds)",
           "latitude": "Latitude (Solar Forecast)",
@@ -51,6 +54,7 @@
           "price_max_age": "Price data max age (minutes)"
         },
         "data_description": {
+          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "latitude": "Optional — defaults to your HA home location",
           "longitude": "Optional — defaults to your HA home location",
           "panel_kwp": "Total installed panel capacity in kilowatt-peak. Leave blank to disable solar forecast.",
@@ -71,6 +75,9 @@
       }
     },
     "error": {
+      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
+      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
+      "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Invalid serial number(s). Enter at least one serial.",
       "invalid_forecast_config": "Solar forecast requires valid latitude, longitude and panel kWp (all numeric, kWp > 0).",
       "invalid_tariff_config": "Tariff configuration error. Cheap charging needs threshold + charge current + normal current (all three). Discharge needs threshold + peak current + normal current (all three)."
@@ -79,7 +86,7 @@
   "issues": {
     "auth_failed": {
       "title": "Sunsynk authentication failed",
-      "description": "The Sunsynk cloud API rejected the credentials. Go to **Settings → Devices & Services → Sunsynk** and reconfigure the integration to update your password."
+      "description": "The Sunsynk cloud API rejected the credentials. Go to **Settings → Devices & Services → Sunsynk → Configure** and enter the new password."
     },
     "inverter_offline": {
       "title": "Inverter {serial} is offline",

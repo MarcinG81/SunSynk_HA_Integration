@@ -31,6 +31,9 @@
       "init": {
         "title": "Opcje Sunsynk",
         "data": {
+          "api_server": "Serwer API",
+          "username": "Adres e-mail konta Sunsynk",
+          "password": "Nowe hasło konta Sunsynk",
           "serials": "Numer(y) seryjny falownika",
           "refresh_interval": "Interwał odświeżania (sekundy)",
           "latitude": "Szerokość geograficzna (prognoza słoneczna)",
@@ -51,6 +54,7 @@
           "price_max_age": "Maksymalny wiek danych cenowych (minuty)"
         },
         "data_description": {
+          "password": "Zostaw puste, aby zachować zapisane hasło. Wpisz nowe hasło po zmianie w portalu Sunsynk lub Deye.",
           "latitude": "Opcjonalne — domyślnie lokalizacja HA",
           "longitude": "Opcjonalne — domyślnie lokalizacja HA",
           "panel_kwp": "Łączna moc zainstalowanych paneli w kWp. Pozostaw puste, aby wyłączyć prognozę słoneczną.",
@@ -71,6 +75,9 @@
       }
     },
     "error": {
+      "invalid_auth": "Nieprawidłowe dane logowania. Sprawdź e-mail i hasło Sunsynk.",
+      "cannot_connect": "Nie można połączyć się z API Sunsynk. Sprawdź serwer API i połączenie internetowe.",
+      "already_configured": "To konto Sunsynk jest już skonfigurowane.",
       "invalid_serials": "Nieprawidłowy numer(y) seryjny. Podaj co najmniej jeden numer.",
       "invalid_forecast_config": "Prognoza słoneczna wymaga prawidłowej szerokości, długości geograficznej i mocy paneli kWp.",
       "invalid_tariff_config": "Błąd konfiguracji taryfy. Ładowanie wymaga progu + prądu ładowania + normalnego prądu (wszystkich trzech). Rozładowanie wymaga progu + szczytowego prądu + normalnego prądu."
@@ -79,7 +86,7 @@
   "issues": {
     "auth_failed": {
       "title": "Uwierzytelnianie Sunsynk nie powiodło się",
-      "description": "Chmurowe API Sunsynk odrzuciło dane logowania. Przejdź do **Ustawienia → Urządzenia i usługi → Sunsynk** i ponownie skonfiguruj integrację."
+      "description": "Chmurowe API Sunsynk odrzuciło dane logowania. Przejdź do **Ustawienia → Urządzenia i usługi → Sunsynk → Konfiguruj** i wpisz nowe hasło."
     },
     "inverter_offline": {
       "title": "Falownik {serial} jest offline",
