@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 
 import aiohttp
 from homeassistant.core import HomeAssistant
@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api.auth import SunsynkAuth, SunsynkAuthError
 from .api.client import SunsynkApiError, SunsynkClient
+from .calibration import PerformanceRatioCalibrator
 from .const import (
     BATTERY_SETTING_KEYS,
     DOMAIN,
@@ -149,6 +150,8 @@ class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         longitude: float,
         panel_kwp: float,
         performance_ratio: float,
+        calibrator: PerformanceRatioCalibrator | None = None,
+        actual_energy_fn: Callable[[], float | None] | None = None,
     ) -> None:
         super().__init__(
             hass,
@@ -160,6 +163,8 @@ class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._longitude = longitude
         self._panel_kwp = panel_kwp
         self._performance_ratio = performance_ratio
+        self._calibrator = calibrator
+        self._actual_energy_fn = actual_energy_fn
         self._session: aiohttp.ClientSession | None = None
 
     async def _async_get_session(self) -> aiohttp.ClientSession:
@@ -187,9 +192,9 @@ class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             raise UpdateFailed(f"Open-Meteo request failed: {err}") from err
 
-        return self._parse(raw)
+        return await self._parse(raw)
 
-    def _parse(self, raw: dict[str, Any]) -> dict[str, Any]:
+    async def _parse(self, raw: dict[str, Any]) -> dict[str, Any]:
         hourly = raw.get("hourly", {})
         times: list[str] = hourly.get("time", [])
         ghi: list[Any] = hourly.get("shortwave_radiation", [])
@@ -201,6 +206,13 @@ class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         today = now.date()
         tomorrow = today + timedelta(days=1)
 
+        performance_ratio = (
+            self._calibrator.get_ratio(now.month)
+            if self._calibrator is not None
+            else self._performance_ratio
+        )
+
+        today_raw_kwh = 0.0  # ratio=1 irradiance model, used to calibrate the ratio
         today_kwh = 0.0
         tomorrow_kwh = 0.0
         for i, ts in enumerate(times):
@@ -209,11 +221,17 @@ class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except ValueError:
                 continue
             g = float(ghi[i]) if i < len(ghi) and ghi[i] is not None else 0.0
-            contribution = g / 1000.0 * self._panel_kwp * self._performance_ratio
+            raw_contribution = g / 1000.0 * self._panel_kwp
             if dt.date() == today:
-                today_kwh += contribution
+                today_raw_kwh += raw_contribution
+                today_kwh += raw_contribution * performance_ratio
             elif dt.date() == tomorrow:
-                tomorrow_kwh += contribution
+                tomorrow_kwh += raw_contribution * performance_ratio
+
+        if self._calibrator is not None and self._actual_energy_fn is not None:
+            await self._calibrator.async_update(
+                today, today_raw_kwh, self._actual_energy_fn()
+            )
 
         current_hour_str = now.strftime("%Y-%m-%dT%H:00")
         idx: int | None = None
@@ -234,6 +252,7 @@ class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "precipitation": _val(precip, idx),
             "ghi": _val(ghi, idx),
             "dni": _val(dni, idx),
+            "performance_ratio": round(performance_ratio, 3),
         }
 
     async def async_close(self) -> None:

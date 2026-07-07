@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.18] - 2026-07-07
+
+### Added
+- **Self-calibrating solar forecast.** The solar forecast (`today_kwh`/`tomorrow_kwh`) previously scaled Open-Meteo irradiance by a single fixed `performance_ratio` from the config. It now learns a separate ratio for each calendar month by comparing actual daily PV generation (`pv.etoday`, summed across inverters) against what the irradiance model predicted, and blends new observations in with an exponential moving average. This should make the forecast track real-world panel/inverter losses (soiling, temperature, seasonal sun angle) more accurately over time, without any user action. The configured Performance Ratio is now just the seed value used until enough daily samples accumulate for a given month.
+- New diagnostic sensor **Performance Ratio (Calibrated)** showing the currently learned ratio for the active month.
+
 ## [1.6.17] - 2026-07-07
 
 ### Added

@@ -96,6 +96,14 @@ FORECAST_SENSOR_DESCRIPTIONS: tuple[ForecastSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
     ),
+    ForecastSensorDescription(
+        key="forecast_performance_ratio",
+        name="Performance Ratio (Calibrated)",
+        forecast_key="performance_ratio",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 

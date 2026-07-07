@@ -15,6 +15,7 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 
 from .api.auth import SunsynkAuth
+from .calibration import PerformanceRatioCalibrator
 from .const import (
     CONF_API_SERVER,
     CONF_CHEAP_CHARGE_CURRENT,
@@ -249,12 +250,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             CONF_PERFORMANCE_RATIO,
             entry.data.get(CONF_PERFORMANCE_RATIO, DEFAULT_PERFORMANCE_RATIO),
         )
+
+        def _actual_pv_energy_today() -> float | None:
+            """Sum today's actual PV generation (kWh) across inverters on this entry."""
+            data = coordinator.data
+            if not data:
+                return None
+            total = 0.0
+            found = False
+            for serial_data in data.values():
+                value = serial_data.get("pv", {}).get("etoday")
+                try:
+                    total += float(value)
+                    found = True
+                except (TypeError, ValueError):
+                    continue
+            return total if found else None
+
+        calibrator = PerformanceRatioCalibrator(hass, entry.entry_id, float(pr))
+        await calibrator.async_load()
+
         forecast_coordinator = SolarForecastCoordinator(
             hass,
             latitude=float(lat),
             longitude=float(lon),
             panel_kwp=float(kwp),
             performance_ratio=float(pr),
+            calibrator=calibrator,
+            actual_energy_fn=_actual_pv_energy_today,
         )
         try:
             await forecast_coordinator.async_config_entry_first_refresh()
