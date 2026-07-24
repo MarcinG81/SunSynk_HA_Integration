@@ -36,6 +36,7 @@ from .helpers import build_device_info
 
 if TYPE_CHECKING:
     from .tariff import TariffChargingManager
+    from .virtual_slots import VirtualSlotScheduler
 
 
 @dataclass(frozen=True)
@@ -167,6 +168,16 @@ async def async_setup_entry(
         async_add_entities([
             TariffStateSensor(entry.entry_id, tariff_manager, device_info),
             TariffPriceQualitySensor(entry.entry_id, tariff_manager, device_info),
+        ])
+
+    vslot_scheduler: VirtualSlotScheduler | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_vslots"
+    )
+    if vslot_scheduler is not None:
+        first_serial = coordinator.serials[0]
+        device_info = build_device_info(coordinator, first_serial)
+        async_add_entities([
+            VirtualSlotStateSensor(entry.entry_id, vslot_scheduler, device_info),
         ])
 
 
@@ -433,3 +444,54 @@ class TariffPriceQualitySensor(SensorEntity):
             attrs["last_updated"] = state.last_updated.isoformat()
             attrs["current_state"] = state.state
         return attrs
+
+
+class VirtualSlotStateSensor(SensorEntity):
+    """Reports what the virtual slot scheduler is currently doing and why.
+
+    State is the resolution source: none | price_override | virtual_slot:<id>.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Virtual Slot Scheduler"
+    _attr_icon = "mdi:calendar-clock"
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        entry_id: str,
+        scheduler: "VirtualSlotScheduler",
+        device_info: DeviceInfo,
+    ) -> None:
+        self._scheduler = scheduler
+        self._attr_unique_id = f"{entry_id}_vslots_state"
+        self._attr_device_info = device_info
+        self._unsub: Any = None
+
+    async def async_added_to_hass(self) -> None:
+        self._unsub = self._scheduler.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> str:
+        if not self._scheduler.is_enabled:
+            return "disabled"
+        return self._scheduler.active_source
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        next_boundary = self._scheduler.next_boundary
+        return {
+            "current_physical_slot": self._scheduler.current_physical_slot,
+            "next_boundary": next_boundary.isoformat() if next_boundary else None,
+            "virtual_slots": self._scheduler.list_slots(),
+        }

@@ -488,6 +488,14 @@ class TariffChargingManager:
         return self._expensive_threshold
 
     @property
+    def target_soc(self) -> int:
+        return self._target_soc
+
+    @property
+    def discharge_min_soc(self) -> int:
+        return self._discharge_min_soc
+
+    @property
     def start_hour(self) -> int | None:
         return self._start_hour
 

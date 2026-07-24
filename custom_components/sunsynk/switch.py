@@ -18,6 +18,7 @@ from .helpers import build_device_info
 
 if TYPE_CHECKING:
     from .tariff import TariffChargingManager
+    from .virtual_slots import VirtualSlotScheduler
 
 
 @dataclass(frozen=True)
@@ -191,7 +192,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SunsynkSwitchEntity | TariffManagerSwitch] = []
+    entities: list[SunsynkSwitchEntity | TariffManagerSwitch | VirtualSlotSchedulerSwitch] = []
 
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
@@ -206,6 +207,16 @@ async def async_setup_entry(
         device_info = build_device_info(coordinator, first_serial)
         entities.append(
             TariffManagerSwitch(entry.entry_id, tariff_manager, device_info)
+        )
+
+    vslot_scheduler: VirtualSlotScheduler | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_vslots"
+    )
+    if vslot_scheduler is not None:
+        first_serial = coordinator.serials[0]
+        device_info = build_device_info(coordinator, first_serial)
+        entities.append(
+            VirtualSlotSchedulerSwitch(entry.entry_id, vslot_scheduler, device_info)
         )
 
     async_add_entities(entities)
@@ -294,3 +305,46 @@ class TariffManagerSwitch(SwitchEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         self._manager.set_enabled(False)
+
+
+class VirtualSlotSchedulerSwitch(SwitchEntity):
+    """Enable / disable the virtual slot scheduler (owns physical slots 1 & 2)."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Virtual Slot Scheduler"
+    _attr_icon = "mdi:calendar-clock"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry_id: str,
+        scheduler: "VirtualSlotScheduler",
+        device_info: DeviceInfo,
+    ) -> None:
+        self._scheduler = scheduler
+        self._unsub: Any = None
+        self._attr_unique_id = f"{entry_id}_vslots_enabled"
+        self._attr_device_info = device_info
+
+    async def async_added_to_hass(self) -> None:
+        self._unsub = self._scheduler.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def is_on(self) -> bool:
+        return self._scheduler.is_enabled
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self._scheduler.set_enabled(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self._scheduler.set_enabled(False)
