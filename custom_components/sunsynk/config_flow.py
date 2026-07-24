@@ -29,11 +29,11 @@ from .const import (
     CONF_PEAK_DISCHARGE_CURRENT,
     CONF_PERFORMANCE_RATIO,
     CONF_PRICE_ENTITY,
+    CONF_PRICE_MAX_AGE,
     CONF_REFRESH_INTERVAL,
     CONF_SERIALS,
     CONF_TARIFF_END_HOUR,
     CONF_TARIFF_START_HOUR,
-    CONF_PRICE_MAX_AGE,
     DEFAULT_CHEAP_TARGET_SOC,
     DEFAULT_DISCHARGE_MIN_SOC,
     DEFAULT_PERFORMANCE_RATIO,
@@ -100,7 +100,7 @@ class SunsynkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 except SunsynkAuthError:
                     errors["base"] = "invalid_auth"
-                except Exception:  # noqa: BLE001
+                except Exception:
                     _LOGGER.exception("Unexpected error during config flow")
                     errors["base"] = "cannot_connect"
                 else:
@@ -220,7 +220,7 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                             )
                         except SunsynkAuthError:
                             errors["base"] = "invalid_auth"
-                        except Exception:  # noqa: BLE001
+                        except Exception:
                             _LOGGER.exception(
                                 "Unexpected error while updating Sunsynk credentials"
                             )

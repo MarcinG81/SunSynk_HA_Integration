@@ -1,7 +1,8 @@
 """Auto-generated Lovelace dashboard for the Sunsynk integration."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def build_dashboard(
@@ -86,9 +87,9 @@ def build_dashboard(
     inv_ac_temp      = e("inverter_ac_temp",      "inverter_ac_igbt_temperature")
 
     # Switch / Number / Text entity IDs
-    sw = lambda k: e(k, k, "switch")   # noqa: E731
-    nm = lambda k: e(k, k, "number")   # noqa: E731
-    tx = lambda k: e(k, k, "text")     # noqa: E731
+    sw = lambda k: e(k, k, "switch")
+    nm = lambda k: e(k, k, "number")
+    tx = lambda k: e(k, k, "text")
 
     # Forecast entity IDs — only populated when forecast is configured
     def fc(key: str, fallback: str) -> str | None:

@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api.auth import SunsynkAuth, SunsynkAuthError
 from .api.client import SunsynkApiError, SunsynkClient
@@ -202,7 +204,7 @@ class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cloud: list[Any] = hourly.get("cloud_cover", [])
         precip: list[Any] = hourly.get("precipitation", [])
 
-        now = datetime.now()
+        now = dt_util.now()
         today = now.date()
         tomorrow = today + timedelta(days=1)
 

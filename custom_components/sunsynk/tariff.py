@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
@@ -237,7 +237,7 @@ class TariffChargingManager:
         """Return True if current hour is within the configured active window."""
         if self._start_hour is None or self._end_hour is None:
             return True
-        hour = datetime.now().hour
+        hour = dt_util.now().hour
         if self._start_hour <= self._end_hour:
             return self._start_hour <= hour < self._end_hour
         # wraps midnight (e.g. 22–06)

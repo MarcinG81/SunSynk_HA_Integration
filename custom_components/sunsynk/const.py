@@ -1,8 +1,9 @@
 """Constants for the Sunsynk integration."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Final
+from typing import Any, Final
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
