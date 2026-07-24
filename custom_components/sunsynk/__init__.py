@@ -99,8 +99,8 @@ try:
         encoding="utf-8"
     ) as manifest_file:
         _MANIFEST_VERSION = json.load(manifest_file).get("version", _MANIFEST_VERSION)
-except Exception:  # noqa: BLE001
-    pass
+except Exception as err:  # noqa: BLE001
+    _LOGGER.debug("Could not read manifest.json version: %s", err)
 _CARD_RESOURCE_URL = f"{_CARD_URL}?v={_MANIFEST_VERSION}"
 
 
@@ -208,8 +208,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     try:
         from homeassistant.components.frontend import add_extra_js_url
         add_extra_js_url(hass, _CARD_RESOURCE_URL)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("Could not register extra frontend JS module: %s", err)
 
     await _async_register_lovelace_resource(hass)
 
