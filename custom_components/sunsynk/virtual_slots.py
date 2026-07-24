@@ -29,9 +29,10 @@ without touching its start time.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
@@ -150,7 +151,7 @@ class VirtualSlot:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "VirtualSlot":
+    def from_dict(cls, data: dict[str, Any]) -> VirtualSlot:
         return cls(
             slot_id=int(data["slot_id"]),
             start=data["start"],
@@ -189,7 +190,7 @@ class VirtualSlotScheduler:
         hass: HomeAssistant,
         coordinator: SunsynkCoordinator,
         entry_id: str,
-        tariff_manager: "TariffChargingManager | None" = None,
+        tariff_manager: TariffChargingManager | None = None,
         normal_charge_current: int | None = None,
         normal_discharge_current: int | None = None,
     ) -> None:

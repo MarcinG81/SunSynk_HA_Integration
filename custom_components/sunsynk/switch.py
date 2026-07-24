@@ -319,7 +319,7 @@ class VirtualSlotSchedulerSwitch(SwitchEntity):
     def __init__(
         self,
         entry_id: str,
-        scheduler: "VirtualSlotScheduler",
+        scheduler: VirtualSlotScheduler,
         device_info: DeviceInfo,
     ) -> None:
         self._scheduler = scheduler

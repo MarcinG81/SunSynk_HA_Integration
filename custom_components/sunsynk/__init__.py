@@ -8,8 +8,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -31,22 +31,27 @@ from .const import (
     CONF_PEAK_DISCHARGE_CURRENT,
     CONF_PERFORMANCE_RATIO,
     CONF_PRICE_ENTITY,
+    CONF_PRICE_MAX_AGE,
     CONF_REFRESH_INTERVAL,
     CONF_SERIALS,
     CONF_TARIFF_END_HOUR,
     CONF_TARIFF_START_HOUR,
-    CONF_PRICE_MAX_AGE,
     DEFAULT_CHEAP_TARGET_SOC,
-    DEFAULT_PRICE_MAX_AGE,
     DEFAULT_DISCHARGE_MIN_SOC,
     DEFAULT_PERFORMANCE_RATIO,
+    DEFAULT_PRICE_MAX_AGE,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .dashboard import build_dashboard
 from .tariff import TariffChargingManager
-from .virtual_slots import MAX_VIRTUAL_SLOTS, WEEKDAY_NAMES, VirtualSlot, VirtualSlotScheduler
+from .virtual_slots import (
+    MAX_VIRTUAL_SLOTS,
+    WEEKDAY_NAMES,
+    VirtualSlot,
+    VirtualSlotScheduler,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -526,6 +531,7 @@ async def _async_setup_dashboard(
             _LOGGER.error("Sunsynk: dashboard content store failed: %s", err)
         try:
             import uuid
+
             from homeassistant.helpers.storage import Store
             ds = Store(hass, 1, "lovelace_dashboards")
             data = await ds.async_load() or {}
