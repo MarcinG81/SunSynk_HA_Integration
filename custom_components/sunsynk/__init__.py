@@ -478,7 +478,17 @@ async def _async_setup_dashboard(
     }
     tariff_eid_fn = (lambda key: tariff_uid_map.get(key)) if tariff_uid_map else None
 
-    dashboard_config = build_dashboard(prefix, eid, forecast_eid_fn, tariff_eid_fn, entry.entry_id)
+    vslot_prefix = f"{entry.entry_id}_vslots_"
+    vslot_uid_map: dict[str, str] = {
+        e.unique_id[len(vslot_prefix):]: e.entity_id
+        for e in reg.entities.values()
+        if e.platform == DOMAIN and e.unique_id.startswith(vslot_prefix)
+    }
+    vslot_eid_fn = (lambda key: vslot_uid_map.get(key)) if vslot_uid_map else None
+
+    dashboard_config = build_dashboard(
+        prefix, eid, forecast_eid_fn, tariff_eid_fn, entry.entry_id, vslot_eid_fn
+    )
 
     lovelace = hass.data.get("lovelace")
     dashboards = getattr(lovelace, "dashboards", None)
