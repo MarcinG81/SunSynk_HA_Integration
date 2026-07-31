@@ -385,7 +385,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         hass.data[DOMAIN][f"{entry.entry_id}_tariff"] = tariff_manager
 
-    # Virtual slot scheduler: owns physical slots 1 & 2, resolves the
+    # Virtual slot scheduler: owns physical slots 1 & 6, resolves the
     # HA-side virtual schedule (+ live tariff override) onto them. Created
     # regardless of tariff config — it works standalone for pure
     # time-based scheduling too. Starts disabled; user enables via switch.

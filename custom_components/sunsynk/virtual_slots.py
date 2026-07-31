@@ -1,30 +1,29 @@
 """Up-to-10 HA-side virtual charge/discharge slots, resolved onto 2 owned
-physical Sunsynk time slots (1 and 2).
+physical Sunsynk time slots (1 and 6).
 
 Background
 ----------
-Sunsynk/Deye ToU slots do not have an independent end time — a slot runs
-from its own start time until whichever *other* slot has the next start
-time (slot 6 wraps to slot 1 the following day). That makes it impossible
-to freely toggle a single physical slot on/off at an arbitrary moment
-without disturbing the whole day's ordering if other slots are also user
-managed.
+Per Sunsynk's own documentation ("Avoiding Conflicts in the System Mode
+Timer"), the 6 System Mode Timer slots MUST be set chronologically —
+each slot's start time must be later than the previous one — and *only*
+Timer 6 is allowed to roll across midnight into Timer 1. No other pair of
+slots can wrap, and setting a lower-numbered slot to a later time-of-day
+than a higher-numbered slot is exactly the "conflict" that article warns
+about: the inverter will not reliably act on the out-of-order slot.
 
-This module sidesteps that by taking exclusive ownership of physical
-slots 1 and 2 (3-6 are turned off and left untouched) and treating them as
-a rolling pair:
+This module takes exclusive ownership of physical slots **1 and 6** (2-5
+are turned off and left untouched) — the only pair the firmware actually
+supports wrapping past midnight — and enforces the invariant that slot 1
+always holds the earlier time-of-day boundary and slot 6 the later one,
+recomputed fresh on every tick. Which one is "currently active" flips
+between them as the day progresses (e.g. slot 1 governs the daytime arc,
+slot 6 governs the overnight arc that wraps into the next day), but their
+relative ordering by time-of-day never does.
 
-- One physical slot is always "current" — its start time is <= now and it
-  holds whatever should be in force right now.
-- The other is "next" — pre-armed with the next known time-based
-  transition from the virtual schedule.
-- When "now" reaches the armed slot's start time, the roles swap and a
-  fresh transition is armed into the newly-inactive slot.
-
-Price-driven decisions from TariffChargingManager do not need a breakpoint
-of their own — they always take priority and are applied by live-patching
-whichever physical slot is currently "current" (cap / sell power / on),
-without touching its start time.
+Price-driven decisions from TariffChargingManager do not need a
+breakpoint of their own — they always take priority and are applied by
+live-patching whichever of slot 1 / slot 6 is currently active (cap /
+sell power / on), without touching its start time or the other slot.
 """
 from __future__ import annotations
 
@@ -49,7 +48,9 @@ _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 
 MAX_VIRTUAL_SLOTS = 10
-PHYSICAL_SLOTS = (1, 2)
+# The only pair of physical Sunsynk timer slots that can wrap past
+# midnight (Timer 6 -> Timer 1) — see module docstring.
+PHYSICAL_SLOTS = (1, 6)
 MODE_CHARGE = "charge"
 MODE_DISCHARGE = "discharge"
 MODE_IDLE = "idle"
@@ -60,11 +61,11 @@ ALL_WEEKDAYS: frozenset[int] = frozenset(range(7))
 # setting_key names for each owned physical slot
 _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
     1: {"on": "time1on", "cap": "cap1", "pac": "sellTime1Pac", "start": "sellTime1"},
-    2: {"on": "time2on", "cap": "cap2", "pac": "sellTime2Pac", "start": "sellTime2"},
+    6: {"on": "time6on", "cap": "cap6", "pac": "sellTime6Pac", "start": "sellTime6"},
 }
-# Slots 3-6 are turned off once when the scheduler takes ownership, and
+# Slots 2-5 are turned off once when the scheduler takes ownership, and
 # otherwise left alone.
-_UNUSED_SLOT_ON_KEYS = ("time3on", "time4on", "time5on", "time6on")
+_UNUSED_SLOT_ON_KEYS = ("time2on", "time3on", "time4on", "time5on")
 
 
 def _parse_hhmm(value: str) -> tuple[int, int]:
@@ -168,7 +169,7 @@ class VirtualSlot:
 
 @dataclass
 class Resolution:
-    """What should be in force right now (or at a projected future instant)."""
+    """What should be in force at a given physical slot."""
 
     mode: str
     current: int | None
@@ -180,8 +181,19 @@ class Resolution:
 _IDLE = Resolution(mode=MODE_IDLE, current=None, target_soc=None, sell_power=0, source="none")
 
 
+@dataclass
+class _TickPlan:
+    slot1: Resolution
+    slot1_start: str
+    slot6: Resolution
+    slot6_start: str
+    active_resolution: Resolution
+    active_physical: int
+    next_boundary: datetime | None
+
+
 class VirtualSlotScheduler:
-    """Owns physical slots 1 & 2; resolves up to 10 virtual slots plus a
+    """Owns physical slots 1 & 6; resolves up to 10 virtual slots plus a
     live price-driven override from TariffChargingManager onto them.
     """
 
@@ -205,11 +217,11 @@ class VirtualSlotScheduler:
         self._slots: dict[int, VirtualSlot] = {}
 
         self._enabled = False
-        self._current_index = 1
-        self._armed_next_start: datetime | None = None
+        self._current_physical_slot = 1
+        self._current_source = "none"
+        self._next_boundary: datetime | None = None
         self._last_written: dict[int, tuple] = {}
         self._last_current_key: tuple | None = None
-        self._current_source = "none"
 
         self._listeners: list[Callable[[], None]] = []
         self._unsub_coordinator: Any = None
@@ -272,21 +284,18 @@ class VirtualSlotScheduler:
         self._notify_listeners()
 
     async def _async_bootstrap(self) -> None:
-        """Take ownership: disable slots 3-6, then arm 1 & 2 from scratch."""
+        """Take ownership: disable slots 2-5, then compute 1 & 6 from scratch."""
         for serial in self._coordinator.serials:
             for key in _UNUSED_SLOT_ON_KEYS:
                 await self._coordinator.async_write_setting(serial, key, 0)
-        self._current_index = 1
-        self._armed_next_start = None
         self._last_written = {}
         self._last_current_key = None
-        await self._async_tick(force=True)
+        await self._async_tick()
 
     async def _async_shutdown(self) -> None:
         for serial in self._coordinator.serials:
             await self._coordinator.async_write_setting(serial, _PHYSICAL_KEYS[1]["on"], 0)
-            await self._coordinator.async_write_setting(serial, _PHYSICAL_KEYS[2]["on"], 0)
-        self._armed_next_start = None
+            await self._coordinator.async_write_setting(serial, _PHYSICAL_KEYS[6]["on"], 0)
         self._last_written = {}
         self._last_current_key = None
 
@@ -299,25 +308,29 @@ class VirtualSlotScheduler:
         await self._async_persist()
         self._notify_listeners()
         if self._enabled:
-            await self._async_tick(force=True)
+            await self._async_tick()
 
     async def async_clear_slot(self, slot_id: int) -> None:
         self._slots.pop(slot_id, None)
         await self._async_persist()
         self._notify_listeners()
         if self._enabled:
-            await self._async_tick(force=True)
+            await self._async_tick()
 
     def list_slots(self) -> list[dict[str, Any]]:
         return [s.to_dict() for s in sorted(self._slots.values(), key=lambda s: s.slot_id)]
 
     # ── Resolution ───────────────────────────────────────────────────────
 
-    def _resolve_virtual(self, at: datetime) -> tuple[Resolution, datetime | None]:
+    def _resolve_virtual(
+        self, at: datetime
+    ) -> tuple[Resolution, datetime | None, datetime | None]:
         """Resolve the virtual (time-based) schedule at `at`. Ignores price override.
 
-        Returns (resolution, next_boundary) where next_boundary is the
-        earliest datetime > `at` at which the resolution could change.
+        Returns (resolution, window_start, next_boundary):
+        - window_start: start of the currently active window, None if idle.
+        - next_boundary: earliest datetime > `at` at which the resolution
+          could change, or None if nothing is scheduled at all.
         """
         candidates: list[tuple[VirtualSlot, datetime, datetime]] = []
         for slot in self._slots.values():
@@ -344,7 +357,7 @@ class VirtualSlotScheduler:
         next_boundary = min(boundaries) if boundaries else None
 
         if chosen is None:
-            return _IDLE, next_boundary
+            return _IDLE, None, next_boundary
 
         slot = chosen[0]
         resolution = Resolution(
@@ -354,101 +367,105 @@ class VirtualSlotScheduler:
             sell_power=slot.sell_power,
             source=f"virtual_slot:{slot.slot_id}",
         )
-        return resolution, next_boundary
+        return resolution, chosen[1], next_boundary
 
-    def _resolve_now(self, now: datetime) -> tuple[Resolution, datetime | None]:
-        """Resolve the effective state right now, honouring the live price
-        override. The override never gets a boundary of its own — it only
-        ever applies to "now", never to a projected future instant, so
-        this must not be used for anything but the current tick's `now`.
-        """
+    def _resolve_override(self) -> Resolution | None:
+        """Live price-driven decision from the Tariff Manager, if any."""
         tm = self._tariff_manager
-        if tm is not None:
-            if tm.is_charging_active:
-                return (
-                    Resolution(
-                        mode=MODE_CHARGE,
-                        current=None,  # tariff manager owns chargeCurrent
-                        target_soc=tm.target_soc,
-                        sell_power=0,
-                        source="price_override",
-                    ),
-                    None,
-                )
-            if tm.is_discharging_active:
-                return (
-                    Resolution(
-                        mode=MODE_DISCHARGE,
-                        current=None,  # tariff manager owns dischargeCurrent
-                        target_soc=tm.discharge_min_soc,
-                        sell_power=0,
-                        source="price_override",
-                    ),
-                    None,
-                )
-        return self._resolve_virtual(now)
+        if tm is None:
+            return None
+        if tm.is_charging_active:
+            return Resolution(
+                mode=MODE_CHARGE,
+                current=None,  # tariff manager owns chargeCurrent
+                target_soc=tm.target_soc,
+                sell_power=0,
+                source="price_override",
+            )
+        if tm.is_discharging_active:
+            return Resolution(
+                mode=MODE_DISCHARGE,
+                current=None,  # tariff manager owns dischargeCurrent
+                target_soc=tm.discharge_min_soc,
+                sell_power=0,
+                source="price_override",
+            )
+        return None
+
+    def _plan(self, now: datetime) -> _TickPlan:
+        """Decide what belongs on physical slot 1 vs slot 6.
+
+        Sunsynk requires slot 1's start time-of-day to be <= slot 6's, and
+        only slot 6 may wrap past midnight into slot 1 — so whichever of
+        (currently-active, next-scheduled) has the earlier time-of-day
+        always goes on slot 1, regardless of which one is active right now.
+        """
+        virt_resolution, window_start, next_boundary = self._resolve_virtual(now)
+        override = self._resolve_override()
+
+        active_resolution = override if override is not None else virt_resolution
+        active_hhmm = window_start.strftime("%H:%M") if window_start is not None else "00:00"
+
+        if next_boundary is not None:
+            upcoming_resolution, _, _ = self._resolve_virtual(next_boundary)
+            upcoming_hhmm = next_boundary.strftime("%H:%M")
+        else:
+            upcoming_resolution = _IDLE
+            upcoming_hhmm = "00:00"
+
+        if active_hhmm <= upcoming_hhmm:
+            slot1, slot1_start = active_resolution, active_hhmm
+            slot6, slot6_start = upcoming_resolution, upcoming_hhmm
+            active_physical = 1
+        else:
+            slot1, slot1_start = upcoming_resolution, upcoming_hhmm
+            slot6, slot6_start = active_resolution, active_hhmm
+            active_physical = 6
+
+        return _TickPlan(
+            slot1=slot1,
+            slot1_start=slot1_start,
+            slot6=slot6,
+            slot6_start=slot6_start,
+            active_resolution=active_resolution,
+            active_physical=active_physical,
+            next_boundary=next_boundary,
+        )
 
     def _now(self) -> datetime:
         return dt_util.now()
 
     # ── Tick ─────────────────────────────────────────────────────────────
 
-    async def _async_tick(self, force: bool = False) -> None:
+    async def _async_tick(self) -> None:
         if not self._enabled:
             return
 
         now = self._now()
-        changed = False
-        need_arm = force or self._armed_next_start is None
+        plan = self._plan(now)
 
-        if self._armed_next_start is not None and now >= self._armed_next_start:
-            # The pre-armed slot's start time has arrived on the hardware's
-            # own timeline — swap roles so our bookkeeping matches reality.
-            other_index = 2 if self._current_index == 1 else 1
-            self._current_index = other_index
-            need_arm = True
+        wrote1 = await self._write_window_if_changed(1, plan.slot1, plan.slot1_start)
+        wrote6 = await self._write_window_if_changed(6, plan.slot6, plan.slot6_start)
+        wrote_current = await self._apply_current_if_changed(plan.active_resolution)
+
+        changed = wrote1 or wrote6 or wrote_current
+        if plan.active_resolution.source != self._current_source:
+            self._current_source = plan.active_resolution.source
             changed = True
-
-        resolution, _ = self._resolve_now(now)
-        wrote_window = await self._write_window_if_changed(
-            self._current_index, resolution, start=None
-        )
-        wrote_current = await self._apply_current_if_changed(resolution)
-        changed = changed or wrote_window or wrote_current
-        if resolution.source != self._current_source:
-            self._current_source = resolution.source
+        if plan.active_physical != self._current_physical_slot:
+            self._current_physical_slot = plan.active_physical
             changed = True
-
-        if need_arm:
-            other_index = 2 if self._current_index == 1 else 1
-            prev_boundary = self._armed_next_start
-            await self._arm_next(other_index, now)
-            if self._armed_next_start != prev_boundary:
-                changed = True
+        if plan.next_boundary != self._next_boundary:
+            self._next_boundary = plan.next_boundary
+            changed = True
 
         if changed:
             self._notify_listeners()
 
-    async def _arm_next(self, index: int, now: datetime) -> None:
-        _, next_boundary = self._resolve_virtual(now)
-        if next_boundary is None:
-            # Nothing scheduled — arm far in the future, idle.
-            next_boundary = now + timedelta(days=7)
-            projected = _IDLE
-        else:
-            projected, _ = self._resolve_virtual(next_boundary)
-        self._armed_next_start = next_boundary
-        # This slot isn't active yet — only the permission window is
-        # pre-armed. Its chargeCurrent/dischargeCurrent must never be
-        # applied now, since those registers are global/immediate-effect.
-        await self._write_window_if_changed(
-            index, projected, start=next_boundary.strftime("%H:%M")
-        )
-
     async def _write_window_if_changed(
-        self, index: int, resolution: Resolution, *, start: str | None
+        self, index: int, resolution: Resolution, start: str
     ) -> bool:
-        """Write time{n}on / cap{n} / sellTime{n}Pac (+ start time if given)."""
+        """Write time{n}on / cap{n} / sellTime{n}Pac / sellTime{n} (start)."""
         on = resolution.mode != MODE_IDLE
         cap = resolution.target_soc if resolution.target_soc is not None else 0
         pac = resolution.sell_power if resolution.mode == MODE_DISCHARGE else 0
@@ -461,8 +478,7 @@ class VirtualSlotScheduler:
             await self._coordinator.async_write_setting(serial, keys["on"], 1 if on else 0)
             await self._coordinator.async_write_setting(serial, keys["cap"], cap)
             await self._coordinator.async_write_setting(serial, keys["pac"], pac)
-            if start is not None:
-                await self._coordinator.async_write_setting(serial, keys["start"], start)
+            await self._coordinator.async_write_setting(serial, keys["start"], start)
 
         self._last_written[index] = cache_key
         return True
@@ -521,8 +537,8 @@ class VirtualSlotScheduler:
 
     @property
     def current_physical_slot(self) -> int:
-        return self._current_index
+        return self._current_physical_slot
 
     @property
     def next_boundary(self) -> datetime | None:
-        return self._armed_next_start
+        return self._next_boundary
