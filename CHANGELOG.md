@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.7.1] - 2026-07-31
+
+### Fixed
+- **Virtual Slot Scheduler now owns physical time slots 1 and 6, not 1 and 2.** Sunsynk's own documentation ("Avoiding Conflicts in the System Mode Timer") requires the 6 System Mode Timer slots to be strictly chronological by index, and only Timer 6 is allowed to wrap past midnight into Timer 1 — no other pair can. The 1.7.0 scheduler owned slots 1 and 2 and could assign a *later* time-of-day to slot 1 than slot 2, which violates that ordering rule; a real Sunsynk Acure inverter silently ignored the out-of-order slot as a result (reported in discussion #10). Ownership now enforces the invariant that slot 1 always holds the earlier time-of-day boundary and slot 6 the later one (including anything that wraps past midnight), recomputed fresh on every tick instead of tracked as mutable state. If you configured virtual slots on 1.7.0 and slot 1 didn't seem to do anything, update — no changes to your `sunsynk.set_virtual_slot` calls are needed, the scheduler works out physical placement itself.
+
 ## [1.7.0] - 2026-07-31
 
 ### Added
