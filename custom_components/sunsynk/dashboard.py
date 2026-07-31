@@ -1,7 +1,8 @@
 """Auto-generated Lovelace dashboard for the Sunsynk integration."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def build_dashboard(
@@ -10,6 +11,7 @@ def build_dashboard(
     forecast_eid: Callable[[str], str | None] | None = None,
     tariff_eid: Callable[[str], str | None] | None = None,
     entry_id: str = "",
+    vslot_eid: Callable[[str], str | None] | None = None,
 ) -> dict[str, Any]:
     """Return a full Lovelace dashboard config dict with correct entity IDs.
 
@@ -86,9 +88,9 @@ def build_dashboard(
     inv_ac_temp      = e("inverter_ac_temp",      "inverter_ac_igbt_temperature")
 
     # Switch / Number / Text entity IDs
-    sw = lambda k: e(k, k, "switch")   # noqa: E731
-    nm = lambda k: e(k, k, "number")   # noqa: E731
-    tx = lambda k: e(k, k, "text")     # noqa: E731
+    sw = lambda k: e(k, k, "switch")
+    nm = lambda k: e(k, k, "number")
+    tx = lambda k: e(k, k, "text")
 
     # Forecast entity IDs — only populated when forecast is configured
     def fc(key: str, fallback: str) -> str | None:
@@ -119,6 +121,14 @@ def build_dashboard(
     tariff_normal_dis_cur  = t("normal_discharge_current")
     tariff_min_soc         = t("discharge_min_soc")
     has_tariff = tariff_mode is not None
+
+    # Virtual Slot Scheduler entity IDs — only populated when configured
+    def vs(key: str) -> str | None:
+        return vslot_eid(key) if vslot_eid else None
+
+    vslot_sw    = vs("enabled")
+    vslot_state = vs("state")
+    has_vslots = vslot_sw is not None
 
     return {
         "views": [
@@ -473,6 +483,77 @@ def build_dashboard(
                             ],
                         },
                     ] if has_tariff else []),
+                ],
+            },
+
+            # ── VIEW 4b: VIRTUAL SLOTS ────────────────────────────────────
+            {
+                "title": "Virtual Slots",
+                "icon": "mdi:calendar-clock",
+                "cards": [
+                    *([] if has_vslots else [{
+                        "type": "markdown",
+                        "content": (
+                            "## Virtual Slot Scheduler not available\n\n"
+                            "This experimental feature isn't in this build yet."
+                        ),
+                    }]),
+                    *([
+                        {
+                            "type": "entities",
+                            "title": "Virtual Slot Scheduler",
+                            "entities": [
+                                {"entity": vslot_sw, "name": "Enable"},
+                                {"entity": vslot_state, "name": "Active"},
+                                {
+                                    "type": "attribute",
+                                    "entity": vslot_state,
+                                    "attribute": "current_physical_slot",
+                                    "name": "Current physical slot",
+                                },
+                                {
+                                    "type": "attribute",
+                                    "entity": vslot_state,
+                                    "attribute": "next_boundary",
+                                    "name": "Next transition",
+                                },
+                            ],
+                        },
+                        {
+                            "type": "markdown",
+                            "title": "Configured Virtual Slots",
+                            "content": (
+                                "{% set slots = state_attr('" + vslot_state + "', 'virtual_slots') or [] %}"
+                                "{% if slots %}"
+                                "| # | Start | End | Mode | Current | SOC | Priority | On |\n"
+                                "|---|---|---|---|---|---|---|---|\n"
+                                "{% for s in slots %}"
+                                "| {{ s.slot_id }} | {{ s.start }} | {{ s.end }} | {{ s.mode }} | "
+                                "{{ (s.current ~ ' A') if s.current is not none else '-' }} | "
+                                "{{ (s.target_soc ~ '%') if s.target_soc is not none else '-' }} | "
+                                "{{ s.priority }} | {{ '✅' if s.enabled else '⬜' }} |\n"
+                                "{% endfor %}"
+                                "{% else %}"
+                                "_No virtual slots defined yet._\n"
+                                "{% endif %}"
+                            ),
+                        },
+                        {
+                            "type": "markdown",
+                            "title": "Add / remove a slot",
+                            "content": (
+                                "Virtual slots are managed via services — there's no fixed "
+                                "number of entities since you can define up to 10.\n\n"
+                                "[Open sunsynk.set_virtual_slot](/developer-tools/action?service=sunsynk.set_virtual_slot) "
+                                "— the form has a field for every option (start/end time, mode, "
+                                "current, target SOC, priority, weekdays).\n\n"
+                                "[Open sunsynk.clear_virtual_slot](/developer-tools/action?service=sunsynk.clear_virtual_slot) "
+                                "to remove one by its slot ID.\n\n"
+                                "See the [Virtual Slot Scheduler wiki page](https://github.com/MarcinG81/SunSynk_HA_Integration/wiki/Virtual-Slot-Scheduler) "
+                                "for the full field reference and examples."
+                            ),
+                        },
+                    ] if has_vslots else []),
                 ],
             },
 

@@ -113,7 +113,7 @@ class SunsynkClient:
     async def async_get_temp_data(
         self, session: aiohttp.ClientSession, serial: str
     ) -> dict[str, Any]:
-        today = date.today().strftime("%Y-%m-%d")
+        today = date.today().strftime("%Y-%m-%d")  # noqa: DTZ011 — intentionally local calendar date
         url = f"{self._base}/api/v1/inverter/{serial}/output/day"
         raw = await self._get(
             session, url, params={"lan": "en", "date": today, "column": "dc_temp,igbt_temp"}

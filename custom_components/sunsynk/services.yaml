@@ -42,6 +42,130 @@ force_discharge:
           max: 500
           unit_of_measurement: A
 
+set_virtual_slot:
+  name: Set Virtual Slot
+  description: >
+    Define or replace one of up to 10 HA-side virtual charge/discharge slots.
+    These are resolved onto the physical Sunsynk time slots 1 and 2, which
+    the Virtual Slot Scheduler takes exclusive ownership of (slots 3-6 are
+    turned off and left untouched). A live price override from the Tariff
+    Manager always takes precedence over the virtual schedule while active.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Serial number of the target inverter.
+      required: true
+      selector:
+        text:
+    slot_id:
+      name: Virtual Slot ID
+      description: 1-10. Calling again with the same ID replaces that slot.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+    start:
+      name: Start Time
+      description: "Window start, HH:MM (24h)."
+      required: true
+      selector:
+        text:
+    end:
+      name: End Time
+      description: "Window end, HH:MM (24h). May be before start to wrap past midnight."
+      required: true
+      selector:
+        text:
+    mode:
+      name: Mode
+      description: What the inverter should do during this window.
+      required: true
+      selector:
+        select:
+          options:
+            - charge
+            - discharge
+            - idle
+    weekdays:
+      name: Weekdays
+      description: Days this slot applies to. Omit for every day.
+      required: false
+      selector:
+        select:
+          multiple: true
+          options:
+            - mon
+            - tue
+            - wed
+            - thu
+            - fri
+            - sat
+            - sun
+    current:
+      name: Current
+      description: chargeCurrent (mode charge) or dischargeCurrent (mode discharge), in Amps.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 500
+          unit_of_measurement: A
+    target_soc:
+      name: Target / Minimum SOC
+      description: Stop charging at this SOC (mode charge) or stop discharging below it (mode discharge).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+    sell_power:
+      name: Sell Power
+      description: Max export power in Watts while discharging (mode discharge only).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 20000
+          unit_of_measurement: W
+    priority:
+      name: Priority
+      description: Higher wins when two virtual slots' time windows overlap.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+    enabled:
+      name: Enabled
+      description: Uncheck to keep the slot's definition without it being scheduled.
+      required: false
+      selector:
+        boolean:
+
+clear_virtual_slot:
+  name: Clear Virtual Slot
+  description: Remove a previously defined virtual slot.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Serial number of the target inverter.
+      required: true
+      selector:
+        text:
+    slot_id:
+      name: Virtual Slot ID
+      description: 1-10.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+
 set_work_mode:
   name: Set Work Mode
   description: >

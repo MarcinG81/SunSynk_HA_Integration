@@ -145,7 +145,7 @@ def test_is_in_schedule_no_restriction(mock_hass, mock_coordinator):
 @pytest.mark.parametrize("hour", [8, 12, 21])
 def test_is_in_schedule_normal_range(hour, mock_hass, mock_coordinator):
     mgr = _make_manager(mock_hass, mock_coordinator, start_hour=7, end_hour=22)
-    with patch("custom_components.sunsynk.tariff.datetime") as mock_dt:
+    with patch("custom_components.sunsynk.tariff.dt_util") as mock_dt:
         mock_dt.now.return_value = MagicMock(hour=hour)
         assert mgr._is_in_schedule() is True
 
@@ -153,7 +153,7 @@ def test_is_in_schedule_normal_range(hour, mock_hass, mock_coordinator):
 @pytest.mark.parametrize("hour", [5, 6])
 def test_is_outside_schedule_normal_range(hour, mock_hass, mock_coordinator):
     mgr = _make_manager(mock_hass, mock_coordinator, start_hour=7, end_hour=22)
-    with patch("custom_components.sunsynk.tariff.datetime") as mock_dt:
+    with patch("custom_components.sunsynk.tariff.dt_util") as mock_dt:
         mock_dt.now.return_value = MagicMock(hour=hour)
         assert mgr._is_in_schedule() is False
 
@@ -161,7 +161,7 @@ def test_is_outside_schedule_normal_range(hour, mock_hass, mock_coordinator):
 @pytest.mark.parametrize("hour", [22, 23, 0, 3, 5])
 def test_is_in_schedule_midnight_wrap(hour, mock_hass, mock_coordinator):
     mgr = _make_manager(mock_hass, mock_coordinator, start_hour=22, end_hour=6)
-    with patch("custom_components.sunsynk.tariff.datetime") as mock_dt:
+    with patch("custom_components.sunsynk.tariff.dt_util") as mock_dt:
         mock_dt.now.return_value = MagicMock(hour=hour)
         assert mgr._is_in_schedule() is True
 
@@ -169,7 +169,7 @@ def test_is_in_schedule_midnight_wrap(hour, mock_hass, mock_coordinator):
 @pytest.mark.parametrize("hour", [6, 10, 18, 21])
 def test_is_outside_schedule_midnight_wrap(hour, mock_hass, mock_coordinator):
     mgr = _make_manager(mock_hass, mock_coordinator, start_hour=22, end_hour=6)
-    with patch("custom_components.sunsynk.tariff.datetime") as mock_dt:
+    with patch("custom_components.sunsynk.tariff.dt_util") as mock_dt:
         mock_dt.now.return_value = MagicMock(hour=hour)
         assert mgr._is_in_schedule() is False
 
