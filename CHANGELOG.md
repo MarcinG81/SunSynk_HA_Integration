@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.7.0] - 2026-07-31
+
+### Added
+- **Virtual Slot Scheduler.** Define up to 10 HA-side virtual charge/discharge windows (start/end time, mode, current, target SOC, weekdays, priority) via the new `sunsynk.set_virtual_slot` / `sunsynk.clear_virtual_slot` services. They're resolved onto physical Sunsynk time slots 1 & 2, which the scheduler takes exclusive ownership of (slots 3-6 are disabled and left untouched, so any manual ToU config you already have elsewhere is unaffected). Sunsynk/Deye time slots have no independent end time — a slot runs until whichever slot has the next start time — so the scheduler rolls slots 1 & 2 as a "current / next" pair to give you more granular scheduling than the inverter's native 6 slots support directly. A live Tariff Manager price decision always takes priority over the virtual schedule and is applied instantly, without waiting for a slot boundary. New **Virtual Slot Scheduler** switch (starts OFF, same pattern as the Tariff Manager switch) and diagnostic sensor showing what's active and why. Closes #11 — the Tariff Manager previously only ever changed the global charge/discharge current limit, never the time slots that actually gate whether charging/discharging happens at all. See the [Virtual Slot Scheduler wiki page](https://github.com/MarcinG81/SunSynk_HA_Integration/wiki/Virtual-Slot-Scheduler) for the full field reference.
+- New **Virtual Slots** dashboard tab (shown once the scheduler is configured): enable switch, current mode/physical slot/next transition, a live table of configured slots, and deep links into Developer Tools → Actions for the two new services — those forms are already fully rendered thanks to the selectors defined in `services.yaml`, no custom frontend card needed.
+
+### Fixed
+- Options flow no longer throws `expected str` when opening or saving **Settings → Devices & Services → Sunsynk → Configure**, even without touching any tariff fields. Cheap/expensive thresholds, charge/discharge currents and the active-schedule hours are stored as numbers once saved, but the options form was redisplaying them through a schema that declared them as plain text — the redisplayed default disagreed with its own validator. Pre-existing since the original Tariff Manager release (1.6.x); the other numeric fields (latitude/longitude/panel size/performance ratio) were already unaffected.
+- Manifest-version and frontend-JS-module registration failures at startup are now logged instead of silently swallowed.
+
 ## [1.6.18] - 2026-07-07
 
 ### Added
