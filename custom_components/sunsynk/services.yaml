@@ -46,10 +46,11 @@ set_virtual_slot:
   name: Set Virtual Slot
   description: >
     Define or replace one of up to 10 HA-side virtual charge/discharge slots.
-    These are resolved onto the physical Sunsynk time slots 1 and 2, which
-    the Virtual Slot Scheduler takes exclusive ownership of (slots 3-6 are
-    turned off and left untouched). A live price override from the Tariff
-    Manager always takes precedence over the virtual schedule while active.
+    These are resolved onto the physical Sunsynk time slots 1 and 6 (the only
+    pair the inverter allows to wrap past midnight), which the Virtual Slot
+    Scheduler takes exclusive ownership of (slots 2-5 are turned off and left
+    untouched). A live price override from the Tariff Manager always takes
+    precedence over the virtual schedule while active.
   fields:
     serial:
       name: Inverter Serial
