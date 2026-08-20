@@ -118,6 +118,18 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
         mode=NumberMode.BOX,
     ),
     SunsynkNumberEntityDescription(
+        key="setting_grid_charge_current",
+        name="Grid Charge Current",
+        setting_key="sdBatteryCurrent",
+        native_min_value=0,
+        native_max_value=300,
+        native_step=1,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=NumberDeviceClass.CURRENT,
+        entity_category=EntityCategory.CONFIG,
+        mode=NumberMode.BOX,
+    ),
+    SunsynkNumberEntityDescription(
         key="setting_zero_export_power",
         name="Zero Export Power",
         setting_key="zeroExportPower",
@@ -528,7 +540,7 @@ class SunsynkNumberEntity(CoordinatorEntity[SunsynkCoordinator], NumberEntity):
         int_fields = {
             "batteryShutdownCap", "batteryRestartCap", "batteryLowCap",
             "batteryMaxCurrentCharge", "batteryMaxCurrentDischarge",
-            "chargeCurrent", "dischargeCurrent", "zeroExportPower",
+            "chargeCurrent", "dischargeCurrent", "sdBatteryCurrent", "zeroExportPower",
             "solarMaxSellPower", "pvMaxLimit", "generatorStartCap",
             "genOnCap", "genOffCap", "sellTime1Pac", "sellTime2Pac",
             "sellTime3Pac", "sellTime4Pac", "sellTime5Pac", "sellTime6Pac",
