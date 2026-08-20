@@ -187,7 +187,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time1_pac",
-        name="Sell Time 1 Power",
+        name="Slot 1 Power",
         setting_key="sellTime1Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -199,7 +199,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time2_pac",
-        name="Sell Time 2 Power",
+        name="Slot 2 Power",
         setting_key="sellTime2Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -211,7 +211,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time3_pac",
-        name="Sell Time 3 Power",
+        name="Slot 3 Power",
         setting_key="sellTime3Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -223,7 +223,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time4_pac",
-        name="Sell Time 4 Power",
+        name="Slot 4 Power",
         setting_key="sellTime4Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -235,7 +235,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time5_pac",
-        name="Sell Time 5 Power",
+        name="Slot 5 Power",
         setting_key="sellTime5Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -247,7 +247,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time6_pac",
-        name="Sell Time 6 Power",
+        name="Slot 6 Power",
         setting_key="sellTime6Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -259,7 +259,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap1",
-        name="Time Slot 1 Capacity",
+        name="Time Slot 1 Limit",
         setting_key="cap1",
         native_min_value=0,
         native_max_value=100,
@@ -270,7 +270,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap2",
-        name="Time Slot 2 Capacity",
+        name="Time Slot 2 Limit",
         setting_key="cap2",
         native_min_value=0,
         native_max_value=100,
@@ -281,7 +281,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap3",
-        name="Time Slot 3 Capacity",
+        name="Time Slot 3 Limit",
         setting_key="cap3",
         native_min_value=0,
         native_max_value=100,
@@ -292,7 +292,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap4",
-        name="Time Slot 4 Capacity",
+        name="Time Slot 4 Limit",
         setting_key="cap4",
         native_min_value=0,
         native_max_value=100,
@@ -303,7 +303,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap5",
-        name="Time Slot 5 Capacity",
+        name="Time Slot 5 Limit",
         setting_key="cap5",
         native_min_value=0,
         native_max_value=100,
@@ -314,7 +314,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap6",
-        name="Time Slot 6 Capacity",
+        name="Time Slot 6 Limit",
         setting_key="cap6",
         native_min_value=0,
         native_max_value=100,
