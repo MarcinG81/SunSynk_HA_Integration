@@ -144,6 +144,7 @@ def build_dashboard(
                             {
                                 "type": "custom:sunsynk-power-flow-card",
                                 "cardstyle": "lite",
+                                "card_width": "50%",
                                 "show_solar": True,
                                 "show_battery": True,
                                 "show_grid": True,
