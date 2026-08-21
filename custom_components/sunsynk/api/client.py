@@ -144,6 +144,19 @@ class SunsynkClient:
         await self._post(session, url, payload)
         _LOGGER.debug("Settings written to inverter %s", serial)
 
+    async def async_get_plant_info(
+        self, session: aiohttp.ClientSession, plant_id: str
+    ) -> dict[str, Any]:
+        url = f"{self._base}/api/v1/plant/{plant_id}"
+        return await self._get(session, url)
+
+    async def async_set_plant_income(
+        self, session: aiohttp.ClientSession, plant_id: str, payload: dict[str, Any]
+    ) -> None:
+        url = f"{self._base}/api/v1/plant/{plant_id}/income"
+        await self._post(session, url, payload)
+        _LOGGER.debug("Plant income settings written for plant %s", plant_id)
+
     async def async_fetch_all(
         self, session: aiohttp.ClientSession, serial: str
     ) -> dict[str, Any]:

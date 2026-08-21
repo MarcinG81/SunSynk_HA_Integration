@@ -484,12 +484,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SunsynkNumberEntity | TariffNumberEntity] = []
+    entities: list[NumberEntity] = []
 
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
         for description in WRITABLE_NUMBERS:
             entities.append(SunsynkNumberEntity(coordinator, serial, description, device_info))
+        entities.append(PlantEnergyPriceNumberEntity(coordinator, serial, device_info))
 
     tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
         f"{entry.entry_id}_tariff"
@@ -603,3 +604,43 @@ class TariffNumberEntity(NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         getattr(self._manager, self._description.manager_setter)(value)
+
+
+class PlantEnergyPriceNumberEntity(CoordinatorEntity[SunsynkCoordinator], NumberEntity):
+    """Manually set a constant electricity price for the inverter's plant.
+
+    Plant-level (not inverter-level) setting. Writing this REPLACES the
+    plant's entire pricing configuration on the Sunsynk portal with a
+    single Constant Price entry — any existing Time-of-Use or Live Price
+    setup for that plant is overwritten. See coordinator.async_write_plant_price.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Manual Energy Price"
+    _attr_native_min_value = 0
+    _attr_native_max_value = 10
+    _attr_native_step = 0.0001
+    _attr_mode = NumberMode.BOX
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self, coordinator: SunsynkCoordinator, serial: str, device_info: DeviceInfo
+    ) -> None:
+        super().__init__(coordinator)
+        self._serial = serial
+        self._attr_unique_id = f"{serial}_plant_manual_energy_price"
+        self._attr_device_info = device_info
+
+    @property
+    def native_value(self) -> float | None:
+        plant = (self.coordinator.data or {}).get(self._serial, {}).get("plant", {})
+        charges = plant.get("charges") or []
+        if len(charges) != 1:
+            return None
+        try:
+            return float(charges[0].get("price"))
+        except (TypeError, ValueError):
+            return None
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.coordinator.async_write_plant_price(self._serial, value)

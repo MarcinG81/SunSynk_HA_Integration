@@ -25,6 +25,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ALL_STATIC_SENSORS,
@@ -116,7 +117,7 @@ async def async_setup_entry(
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
 
     registered_uids: set[str] = set()
-    entities: list[SunsynkSensor] = []
+    entities: list[SensorEntity] = []
 
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
@@ -124,6 +125,8 @@ async def async_setup_entry(
             uid = f"{serial}_{description.key}"
             registered_uids.add(uid)
             entities.append(SunsynkSensor(coordinator, serial, description, device_info))
+        entities.append(InverterInternalPowerSensor(coordinator, serial, device_info))
+        entities.append(PlantEnergyPriceSensor(coordinator, serial, device_info))
 
     async_add_entities(entities)
 
@@ -318,6 +321,122 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
             if self.entity_description.state_class is not None:
                 return None
             return str(value) if value != "" else None
+
+
+class InverterInternalPowerSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
+    """Computed: PV + grid + battery power minus load power.
+
+    Approximates conversion/internal loss inside the inverter — the
+    portion of power that isn't accounted for by any of the four
+    measured flows. Not a value the API reports directly.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Internal Power"
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, coordinator: SunsynkCoordinator, serial: str, device_info: DeviceInfo
+    ) -> None:
+        super().__init__(coordinator)
+        self._serial = serial
+        self._attr_unique_id = f"{serial}_inverter_internal_power"
+        self._attr_device_info = device_info
+
+    @property
+    def native_value(self) -> float | None:
+        serial_data = (self.coordinator.data or {}).get(self._serial, {})
+        try:
+            pv = float(serial_data.get("pv", {}).get("pac"))
+            grid = float(serial_data.get("grid", {}).get("pac"))
+            battery = float(serial_data.get("battery", {}).get("power"))
+            load = float(serial_data.get("load", {}).get("totalPower"))
+        except (TypeError, ValueError):
+            return None
+        return round(pv + grid + battery - load, 3)
+
+
+_CHARGE_TYPE_LABELS = {1: "constant", 2: "time_of_use", 3: "live_price"}
+
+
+def _active_plant_charge(charges: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Pick the currently-active pricing charge from a plant's charges list.
+
+    Constant Price (type 1) plants have a single entry that's always
+    active. Time of Use (type 2) plants have up to 6 slots matched by
+    time-of-day, HH:MM strings compared lexically (safe for zero-padded
+    24h format). Live Price (type 3) has no fixed price to report here.
+    """
+    candidates = [c for c in (charges or []) if c.get("type") != 3]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    now_hhmm = dt_util.now().strftime("%H:%M")
+    for charge in candidates:
+        start = charge.get("startRange") or "00:00"
+        end = charge.get("endRange") or "24:00"
+        if start <= now_hhmm < end:
+            return charge
+    return candidates[0]
+
+
+class PlantEnergyPriceSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
+    """Currently-active electricity price from the plant's pricing config.
+
+    Plant-level data (fetched via a different API endpoint than the rest
+    of this integration) — unavailable if the inverter's plant ID
+    couldn't be determined or the plant has no pricing configured.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Current Energy Price"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_suggested_display_precision = 4
+
+    def __init__(
+        self, coordinator: SunsynkCoordinator, serial: str, device_info: DeviceInfo
+    ) -> None:
+        super().__init__(coordinator)
+        self._serial = serial
+        self._attr_unique_id = f"{serial}_plant_energy_price"
+        self._attr_device_info = device_info
+
+    def _charge(self) -> dict[str, Any] | None:
+        plant = (self.coordinator.data or {}).get(self._serial, {}).get("plant", {})
+        return _active_plant_charge(plant.get("charges") or [])
+
+    @property
+    def native_value(self) -> float | None:
+        charge = self._charge()
+        if charge is None:
+            return None
+        try:
+            return float(charge.get("price"))
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        plant = (self.coordinator.data or {}).get(self._serial, {}).get("plant", {})
+        currency = (plant.get("currency") or {}).get("code")
+        return f"{currency}/kWh" if currency else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        plant = (self.coordinator.data or {}).get(self._serial, {}).get("plant", {})
+        charge = self._charge()
+        attrs: dict[str, Any] = {"plant_id": plant.get("id")}
+        if charge is not None:
+            attrs["type"] = _CHARGE_TYPE_LABELS.get(charge.get("type"), charge.get("type"))
+            attrs["start_range"] = charge.get("startRange")
+            attrs["end_range"] = charge.get("endRange")
+        return attrs
 
 
 class SolarForecastSensor(CoordinatorEntity[SolarForecastCoordinator], SensorEntity):
