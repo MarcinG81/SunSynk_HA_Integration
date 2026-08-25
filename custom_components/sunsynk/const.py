@@ -91,6 +91,30 @@ def _model_value(d: dict[str, Any]) -> str | None:
     return brand
 
 
+def _battery_soh_value(d: dict[str, Any]) -> float | None:
+    """Battery State of Health: BMS-corrected capacity vs rated capacity.
+
+    UNVERIFIED — derived from correctCap/capacity, not confirmed against a
+    real degraded battery (only tested against a dump where both fields
+    were equal, giving a trivial 100%). A chattersley/sunsynk-home-assistant
+    formula based on lifetime etotalChg/etotalDischg was tried first and
+    rejected: on real data (#14, #15) it produced 139%, since those
+    counters can apparently drift out of sync (e.g. independent resets)
+    and don't reliably bound each other. This ratio at least can't do
+    that — correctCap and capacity are both point-in-time capacity
+    readings, not accumulators — but treat the output with caution until
+    someone with a genuinely degraded battery confirms it tracks reality.
+    """
+    try:
+        correct_cap = float(d.get("correctCap"))
+        capacity = float(d.get("capacity"))
+    except (TypeError, ValueError):
+        return None
+    if not capacity:
+        return None
+    return round(correct_cap / capacity * 100, 1)
+
+
 INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
     SunsynkSensorEntityDescription(
         key="inverter_etotal",
@@ -489,6 +513,16 @@ BATTERY_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         data_key="capacity",
         native_unit_of_measurement="Ah",
         state_class=SensorStateClass.MEASUREMENT,
+    ),
+    SunsynkSensorEntityDescription(
+        key="battery_soh",
+        name="Battery SOH",
+        endpoint="battery",
+        data_key="",
+        value_fn=_battery_soh_value,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SunsynkSensorEntityDescription(
         key="battery_type",

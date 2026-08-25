@@ -91,6 +91,24 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                     translation_key="inverter_offline",
                     translation_placeholders={"serial": serial},
                 )
+                continue
+
+            plant_id = result[serial].get("inverter", {}).get("plant", {}).get("id")
+            if plant_id:
+                try:
+                    result[serial]["plant"] = await client.async_get_plant_info(
+                        session, str(plant_id)
+                    )
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug(
+                        "Could not fetch plant info for %s (plant %s): %s",
+                        serial, plant_id, err,
+                    )
+                    result[serial]["plant"] = (
+                        (self.data or {}).get(serial, {}).get("plant", {})
+                    )
+            else:
+                result[serial]["plant"] = {}
 
         return result
 
@@ -131,6 +149,51 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             await client.async_write_settings(session, serial, payload)
         except SunsynkApiError as err:
             raise UpdateFailed(f"Failed to write setting {setting_key}: {err}") from err
+
+        await self.async_request_refresh()
+
+    async def async_write_plant_price(self, serial: str, price: float) -> None:
+        """Set a manual constant electricity price for the inverter's plant.
+
+        This is a plant-level (not inverter-level) setting, reached via a
+        different API endpoint than async_write_setting. It replaces the
+        plant's *entire* pricing configuration with a single Constant
+        Price (type 1) entry covering the full day — any existing
+        Time-of-Use or Live Price configuration on the Sunsynk portal for
+        this plant is overwritten. Currency and investment figures are
+        read fresh and passed straight through unchanged.
+        """
+        session = await self._async_get_session()
+
+        try:
+            token = await self._auth.async_get_token(session)
+        except SunsynkAuthError as err:
+            raise UpdateFailed(f"Authentication failed: {err}") from err
+
+        client = SunsynkClient(self._auth._api_server, token)
+
+        plant_id = (self.data or {}).get(serial, {}).get("plant", {}).get("id")
+        if not plant_id:
+            raise UpdateFailed(f"No plant found for inverter {serial}")
+
+        try:
+            plant = await client.async_get_plant_info(session, str(plant_id))
+        except SunsynkApiError as err:
+            raise UpdateFailed(f"Cannot read plant info for {plant_id}: {err}") from err
+
+        payload = {
+            "id": plant.get("id"),
+            "currency": (plant.get("currency") or {}).get("id"),
+            "invest": plant.get("invest"),
+            "charges": [
+                {"price": price, "type": 1, "startRange": "00:00", "endRange": "24:00"}
+            ],
+        }
+
+        try:
+            await client.async_set_plant_income(session, str(plant_id), payload)
+        except SunsynkApiError as err:
+            raise UpdateFailed(f"Failed to write plant price for {plant_id}: {err}") from err
 
         await self.async_request_refresh()
 

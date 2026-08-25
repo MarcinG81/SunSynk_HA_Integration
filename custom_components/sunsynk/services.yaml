@@ -171,7 +171,10 @@ set_work_mode:
   name: Set Work Mode
   description: >
     Set the inverter system work mode.
-    0 = Sell First, 1 = Zero Export, 2 = Time-of-Use, 3 = Self-Use, 4 = Peak-Shaving.
+    0 = Selling First, 1 = Zero Export (Limit to Load), 2 = Limited to Home,
+    3 = Self Use, 4 = Time of Use. 0-2 confirmed against the Sunsynk portal
+    (2 confirmed on real hardware); 3-4 inferred from the same source, not
+    yet confirmed — see issue #14.
   fields:
     serial:
       name: Inverter Serial

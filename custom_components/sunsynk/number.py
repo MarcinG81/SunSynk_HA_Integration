@@ -118,6 +118,18 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
         mode=NumberMode.BOX,
     ),
     SunsynkNumberEntityDescription(
+        key="setting_grid_charge_current",
+        name="Grid Charge Current",
+        setting_key="sdBatteryCurrent",
+        native_min_value=0,
+        native_max_value=300,
+        native_step=1,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=NumberDeviceClass.CURRENT,
+        entity_category=EntityCategory.CONFIG,
+        mode=NumberMode.BOX,
+    ),
+    SunsynkNumberEntityDescription(
         key="setting_zero_export_power",
         name="Zero Export Power",
         setting_key="zeroExportPower",
@@ -187,7 +199,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time1_pac",
-        name="Sell Time 1 Power",
+        name="Slot 1 Power",
         setting_key="sellTime1Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -199,7 +211,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time2_pac",
-        name="Sell Time 2 Power",
+        name="Slot 2 Power",
         setting_key="sellTime2Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -211,7 +223,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time3_pac",
-        name="Sell Time 3 Power",
+        name="Slot 3 Power",
         setting_key="sellTime3Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -223,7 +235,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time4_pac",
-        name="Sell Time 4 Power",
+        name="Slot 4 Power",
         setting_key="sellTime4Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -235,7 +247,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time5_pac",
-        name="Sell Time 5 Power",
+        name="Slot 5 Power",
         setting_key="sellTime5Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -247,7 +259,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sell_time6_pac",
-        name="Sell Time 6 Power",
+        name="Slot 6 Power",
         setting_key="sellTime6Pac",
         native_min_value=0,
         native_max_value=30000,
@@ -259,7 +271,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap1",
-        name="Time Slot 1 Capacity",
+        name="Time Slot 1 Limit",
         setting_key="cap1",
         native_min_value=0,
         native_max_value=100,
@@ -270,7 +282,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap2",
-        name="Time Slot 2 Capacity",
+        name="Time Slot 2 Limit",
         setting_key="cap2",
         native_min_value=0,
         native_max_value=100,
@@ -281,7 +293,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap3",
-        name="Time Slot 3 Capacity",
+        name="Time Slot 3 Limit",
         setting_key="cap3",
         native_min_value=0,
         native_max_value=100,
@@ -292,7 +304,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap4",
-        name="Time Slot 4 Capacity",
+        name="Time Slot 4 Limit",
         setting_key="cap4",
         native_min_value=0,
         native_max_value=100,
@@ -303,7 +315,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap5",
-        name="Time Slot 5 Capacity",
+        name="Time Slot 5 Limit",
         setting_key="cap5",
         native_min_value=0,
         native_max_value=100,
@@ -314,7 +326,7 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_cap6",
-        name="Time Slot 6 Capacity",
+        name="Time Slot 6 Limit",
         setting_key="cap6",
         native_min_value=0,
         native_max_value=100,
@@ -472,12 +484,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SunsynkNumberEntity | TariffNumberEntity] = []
+    entities: list[NumberEntity] = []
 
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
         for description in WRITABLE_NUMBERS:
             entities.append(SunsynkNumberEntity(coordinator, serial, description, device_info))
+        entities.append(PlantEnergyPriceNumberEntity(coordinator, serial, device_info))
 
     tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
         f"{entry.entry_id}_tariff"
@@ -528,7 +541,7 @@ class SunsynkNumberEntity(CoordinatorEntity[SunsynkCoordinator], NumberEntity):
         int_fields = {
             "batteryShutdownCap", "batteryRestartCap", "batteryLowCap",
             "batteryMaxCurrentCharge", "batteryMaxCurrentDischarge",
-            "chargeCurrent", "dischargeCurrent", "zeroExportPower",
+            "chargeCurrent", "dischargeCurrent", "sdBatteryCurrent", "zeroExportPower",
             "solarMaxSellPower", "pvMaxLimit", "generatorStartCap",
             "genOnCap", "genOffCap", "sellTime1Pac", "sellTime2Pac",
             "sellTime3Pac", "sellTime4Pac", "sellTime5Pac", "sellTime6Pac",
@@ -591,3 +604,43 @@ class TariffNumberEntity(NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         getattr(self._manager, self._description.manager_setter)(value)
+
+
+class PlantEnergyPriceNumberEntity(CoordinatorEntity[SunsynkCoordinator], NumberEntity):
+    """Manually set a constant electricity price for the inverter's plant.
+
+    Plant-level (not inverter-level) setting. Writing this REPLACES the
+    plant's entire pricing configuration on the Sunsynk portal with a
+    single Constant Price entry — any existing Time-of-Use or Live Price
+    setup for that plant is overwritten. See coordinator.async_write_plant_price.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Manual Energy Price"
+    _attr_native_min_value = 0
+    _attr_native_max_value = 10
+    _attr_native_step = 0.0001
+    _attr_mode = NumberMode.BOX
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self, coordinator: SunsynkCoordinator, serial: str, device_info: DeviceInfo
+    ) -> None:
+        super().__init__(coordinator)
+        self._serial = serial
+        self._attr_unique_id = f"{serial}_plant_manual_energy_price"
+        self._attr_device_info = device_info
+
+    @property
+    def native_value(self) -> float | None:
+        plant = (self.coordinator.data or {}).get(self._serial, {}).get("plant", {})
+        charges = plant.get("charges") or []
+        if len(charges) != 1:
+            return None
+        try:
+            return float(charges[0].get("price"))
+        except (TypeError, ValueError):
+            return None
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.coordinator.async_write_plant_price(self._serial, value)
