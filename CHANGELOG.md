@@ -3,6 +3,27 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.8.0] - 2026-08-21
+
+### Added
+- **Sell Time 1-6 Enabled** switches (`sellTime1En`…`sellTime6En`) — already part of the settings write payload, but never had their own entity. (#14)
+- **Grid Charge Current** writable Number entity, mapped to `sdBatteryCurrent` — the Sunsynk portal's "Grid Amps" setting (the current limit specifically for charging from the grid, distinct from `chargeCurrent`/Battery Max Charge Current). Identified from a diagnostics dump: a real, populated value distinct from both of those fields, with a settings-group structure mirroring the already-exposed Generator group. (#15)
+- **Internal Power** diagnostic sensor — `pv + grid + battery - load`, approximating inverter conversion loss. Verified against a real diagnostics dump (323 W, a plausible figure). (#14)
+- **Current Energy Price** sensor and **Manual Energy Price** writable Number entity — plant-level pricing, reached via a different API endpoint (`/api/v1/plant/{plantId}`) than the rest of this integration. Resolves the currently-active pricing slot for Constant/Time-of-Use plants. ⚠️ Writing the manual price replaces the plant's *entire* pricing configuration on the Sunsynk portal with a single Constant Price entry — see the wiki before using it. Unverified against a live account with pricing configured. (#14)
+- **Battery SOH** diagnostic sensor — `correctCap / capacity * 100` (BMS-corrected capacity vs rated capacity). ⚠️ Unverified against an actually-degraded battery; the only real data point available had both fields equal (trivial 100%). A different formula based on lifetime charge/discharge totals was tried first and rejected — it produced 139% on real data, since those accumulators can drift out of sync independently of battery health. (#14)
+
+### Changed
+- Renamed several entities to match Sunsynk portal terminology — only the friendly name changes, `unique_id`/`entity_id` are untouched so no automations break:
+  - `Time Slot N On` → `Grid Charge Slot N`
+  - `Generator Time Slot N On` → `Generator Charge Slot N`
+  - `Time Slot N Capacity` → `Time Slot N Limit`
+  - `Sell Time N Power` → `Slot N Power`
+  (#14)
+- Power flow card on the auto-generated dashboard's Overview view now renders at 50% width instead of stretching full browser width.
+
+### Fixed
+- `sunsynk.set_work_mode` service description corrected: `2 = Limited to Home`, not `Time-of-Use` as previously documented — confirmed against real hardware. Values 3/4 (Self Use / Time of Use) are still unconfirmed. (#14)
+
 ## [1.7.1] - 2026-07-31
 
 ### Fixed
