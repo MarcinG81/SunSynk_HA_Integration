@@ -36,6 +36,7 @@ from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .helpers import build_device_info
 
 if TYPE_CHECKING:
+    from .forecast_guard import ForecastExportGuard
     from .tariff import TariffChargingManager
     from .virtual_slots import VirtualSlotScheduler
 
@@ -183,6 +184,15 @@ async def async_setup_entry(
             VirtualSlotStateSensor(entry.entry_id, vslot_scheduler, device_info),
         ])
 
+    forecast_guard: ForecastExportGuard | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_forecast_guard"
+    )
+    if forecast_guard is not None:
+        first_serial = coordinator.serials[0]
+        device_info = build_device_info(coordinator, first_serial)
+        async_add_entities([
+            ForecastGuardStateSensor(entry.entry_id, forecast_guard, device_info),
+        ])
 
 
 def _build_dynamic_descriptions(
@@ -614,3 +624,60 @@ class VirtualSlotStateSensor(SensorEntity):
             "next_boundary": next_boundary.isoformat() if next_boundary else None,
             "virtual_slots": self._scheduler.list_slots(),
         }
+
+
+class ForecastGuardStateSensor(SensorEntity):
+    """Reports what the Forecast Export Guard decided and why.
+
+    States: disabled | no_forecast | selling | holding_back.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Forecast Export Guard"
+    _attr_icon = "mdi:weather-sunset-up"
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        entry_id: str,
+        guard: ForecastExportGuard,
+        device_info: DeviceInfo,
+    ) -> None:
+        self._guard = guard
+        self._attr_unique_id = f"{entry_id}_forecast_guard_state"
+        self._attr_device_info = device_info
+        self._unsub: Any = None
+
+    async def async_added_to_hass(self) -> None:
+        self._unsub = self._guard.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> str:
+        return self._guard.mode
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs: dict[str, Any] = {
+            "margin_percent": self._guard.margin_percent,
+            "sunrise_offset_minutes": self._guard.sunrise_offset_minutes,
+        }
+        decision = self._guard.last_decision
+        if decision is not None:
+            attrs.update({
+                "forecast_tomorrow_kwh": decision.forecast_tomorrow_kwh,
+                "battery_capacity_kwh": decision.capacity_kwh,
+                "battery_soc": decision.soc,
+                "energy_needed_kwh": decision.energy_needed_kwh,
+                "sell_threshold_kwh": decision.threshold_kwh,
+            })
+        return attrs

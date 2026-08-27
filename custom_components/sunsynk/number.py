@@ -15,6 +15,7 @@ from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfPower,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -27,6 +28,7 @@ from .coordinator import SunsynkCoordinator
 from .helpers import build_device_info
 
 if TYPE_CHECKING:
+    from .forecast_guard import ForecastExportGuard
     from .tariff import TariffChargingManager
 
 
@@ -478,6 +480,46 @@ TARIFF_NUMBERS: tuple[TariffNumberEntityDescription, ...] = (
 )
 
 
+@dataclass(frozen=True)
+class ForecastGuardNumberEntityDescription:
+    key: str
+    name: str
+    native_min_value: float
+    native_max_value: float
+    native_step: float
+    guard_attr: str
+    guard_setter: str
+    native_unit_of_measurement: str | None = None
+    suggested_display_precision: int = 0
+    icon: str | None = None
+
+
+FORECAST_GUARD_NUMBERS: tuple[ForecastGuardNumberEntityDescription, ...] = (
+    ForecastGuardNumberEntityDescription(
+        key="forecast_guard_margin",
+        name="Forecast Guard Margin",
+        native_min_value=50,
+        native_max_value=200,
+        native_step=1,
+        guard_attr="_margin_percent",
+        guard_setter="set_margin_percent",
+        native_unit_of_measurement=PERCENTAGE,
+        icon="mdi:shield-sun",
+    ),
+    ForecastGuardNumberEntityDescription(
+        key="forecast_guard_sunrise_offset",
+        name="Forecast Guard Sunrise Offset",
+        native_min_value=0,
+        native_max_value=240,
+        native_step=5,
+        guard_attr="_sunrise_offset_minutes",
+        guard_setter="set_sunrise_offset_minutes",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        icon="mdi:weather-sunset-up",
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -501,6 +543,17 @@ async def async_setup_entry(
         for description in TARIFF_NUMBERS:
             entities.append(
                 TariffNumberEntity(entry.entry_id, tariff_manager, description, device_info)
+            )
+
+    forecast_guard: ForecastExportGuard | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_forecast_guard"
+    )
+    if forecast_guard is not None:
+        first_serial = coordinator.serials[0]
+        device_info = build_device_info(coordinator, first_serial)
+        for description in FORECAST_GUARD_NUMBERS:
+            entities.append(
+                ForecastGuardNumberEntity(entry.entry_id, forecast_guard, description, device_info)
             )
 
     async_add_entities(entities)
@@ -644,3 +697,57 @@ class PlantEnergyPriceNumberEntity(CoordinatorEntity[SunsynkCoordinator], Number
 
     async def async_set_native_value(self, value: float) -> None:
         await self.coordinator.async_write_plant_price(self._serial, value)
+
+
+class ForecastGuardNumberEntity(NumberEntity):
+    """Writable config parameter for the Forecast Export Guard."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_mode = NumberMode.BOX
+
+    def __init__(
+        self,
+        entry_id: str,
+        guard: ForecastExportGuard,
+        description: ForecastGuardNumberEntityDescription,
+        device_info: DeviceInfo,
+    ) -> None:
+        self._guard = guard
+        self._description = description
+        self._unsub: Any = None
+        self._attr_unique_id = f"{entry_id}_{description.key}"
+        self._attr_name = description.name
+        self._attr_device_info = device_info
+        self._attr_native_min_value = description.native_min_value
+        self._attr_native_max_value = description.native_max_value
+        self._attr_native_step = description.native_step
+        self._attr_native_unit_of_measurement = description.native_unit_of_measurement
+        self._attr_suggested_display_precision = description.suggested_display_precision
+        self._attr_icon = description.icon
+
+    async def async_added_to_hass(self) -> None:
+        self._unsub = self._guard.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        value = getattr(self._guard, self._description.guard_attr)
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    async def async_set_native_value(self, value: float) -> None:
+        getattr(self._guard, self._description.guard_setter)(value)

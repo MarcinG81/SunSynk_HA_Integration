@@ -12,6 +12,7 @@ def build_dashboard(
     tariff_eid: Callable[[str], str | None] | None = None,
     entry_id: str = "",
     vslot_eid: Callable[[str], str | None] | None = None,
+    forecast_guard_eid: Callable[[str], str | None] | None = None,
 ) -> dict[str, Any]:
     """Return a full Lovelace dashboard config dict with correct entity IDs.
 
@@ -132,6 +133,16 @@ def build_dashboard(
     vslot_sw    = vs("enabled")
     vslot_state = vs("state")
     has_vslots = vslot_sw is not None
+
+    # Forecast Export Guard entity IDs — only populated when configured
+    def fg(key: str) -> str | None:
+        return forecast_guard_eid(key) if forecast_guard_eid else None
+
+    fg_sw    = fg("enabled")
+    fg_state = fg("state")
+    fg_margin = fg("margin")
+    fg_offset = fg("sunrise_offset")
+    has_forecast_guard = fg_sw is not None
 
     return {
         "views": [
@@ -286,6 +297,16 @@ def build_dashboard(
                                     ],
                                 },
                             ] if has_tariff else []),
+                            *([
+                                {
+                                    "type": "entities",
+                                    "title": "Forecast Export Guard",
+                                    "entities": [
+                                        {"entity": fg_sw, "name": "Enable"},
+                                        {"entity": fg_state, "name": "Mode"},
+                                    ],
+                                },
+                            ] if has_forecast_guard else []),
                         ],
                     }
                 ],
@@ -432,6 +453,36 @@ def build_dashboard(
                             *[sw(f"setting_gen_time{i}on") for i in range(1, 7)],
                         ],
                     },
+                    *([
+                        {
+                            "type": "entities",
+                            "title": "Forecast Export Guard",
+                            "entities": [
+                                {"entity": fg_sw, "name": "Enable"},
+                                {"entity": fg_state, "name": "Mode"},
+                                {
+                                    "type": "attribute",
+                                    "entity": fg_state,
+                                    "attribute": "forecast_tomorrow_kwh",
+                                    "name": "Forecast tomorrow",
+                                },
+                                {
+                                    "type": "attribute",
+                                    "entity": fg_state,
+                                    "attribute": "energy_needed_kwh",
+                                    "name": "Energy needed to refill",
+                                },
+                                {
+                                    "type": "attribute",
+                                    "entity": fg_state,
+                                    "attribute": "sell_threshold_kwh",
+                                    "name": "Sell threshold",
+                                },
+                                fg_margin,
+                                fg_offset,
+                            ],
+                        },
+                    ] if has_forecast_guard else []),
                 ],
             },
 

@@ -17,6 +17,7 @@ from .coordinator import SunsynkCoordinator
 from .helpers import build_device_info
 
 if TYPE_CHECKING:
+    from .forecast_guard import ForecastExportGuard
     from .tariff import TariffChargingManager
     from .virtual_slots import VirtualSlotScheduler
 
@@ -228,7 +229,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SunsynkSwitchEntity | TariffManagerSwitch | VirtualSlotSchedulerSwitch] = []
+    entities: list[SwitchEntity] = []
 
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
@@ -253,6 +254,16 @@ async def async_setup_entry(
         device_info = build_device_info(coordinator, first_serial)
         entities.append(
             VirtualSlotSchedulerSwitch(entry.entry_id, vslot_scheduler, device_info)
+        )
+
+    forecast_guard: ForecastExportGuard | None = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_forecast_guard"
+    )
+    if forecast_guard is not None:
+        first_serial = coordinator.serials[0]
+        device_info = build_device_info(coordinator, first_serial)
+        entities.append(
+            ForecastGuardSwitch(entry.entry_id, forecast_guard, device_info)
         )
 
     async_add_entities(entities)
@@ -384,3 +395,46 @@ class VirtualSlotSchedulerSwitch(SwitchEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         self._scheduler.set_enabled(False)
+
+
+class ForecastGuardSwitch(SwitchEntity):
+    """Enable / disable the Forecast Export Guard."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Forecast Export Guard"
+    _attr_icon = "mdi:weather-sunset-up"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry_id: str,
+        guard: ForecastExportGuard,
+        device_info: DeviceInfo,
+    ) -> None:
+        self._guard = guard
+        self._unsub: Any = None
+        self._attr_unique_id = f"{entry_id}_forecast_guard_enabled"
+        self._attr_device_info = device_info
+
+    async def async_added_to_hass(self) -> None:
+        self._unsub = self._guard.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def is_on(self) -> bool:
+        return self._guard.is_enabled
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self._guard.set_enabled(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self._guard.set_enabled(False)

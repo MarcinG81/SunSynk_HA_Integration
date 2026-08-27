@@ -45,6 +45,7 @@ from .const import (
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .dashboard import build_dashboard
+from .forecast_guard import ForecastExportGuard
 from .tariff import TariffChargingManager
 from .virtual_slots import (
     MAX_VIRTUAL_SLOTS,
@@ -400,6 +401,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await vslot_scheduler.async_load()
     hass.data[DOMAIN][f"{entry.entry_id}_vslots"] = vslot_scheduler
 
+    # Forecast Export Guard: needs the Solar Forecast coordinator (tomorrow's
+    # kWh) to do anything, so only created when that's configured. Starts
+    # disabled; user enables via switch.
+    forecast_coordinator_for_guard = hass.data[DOMAIN].get(f"{entry.entry_id}_forecast")
+    if forecast_coordinator_for_guard is not None:
+        forecast_guard = ForecastExportGuard(
+            hass=hass,
+            coordinator=coordinator,
+            forecast_coordinator=forecast_coordinator_for_guard,
+            entry_id=entry.entry_id,
+        )
+        hass.data[DOMAIN][f"{entry.entry_id}_forecast_guard"] = forecast_guard
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Start tariff manager after platforms are set up (switch/sensor already registered)
@@ -407,6 +421,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if tariff_manager is not None:
         tariff_manager.start()
     vslot_scheduler.start()
+    forecast_guard = hass.data[DOMAIN].get(f"{entry.entry_id}_forecast_guard")
+    if forecast_guard is not None:
+        forecast_guard.start()
 
     hass.async_create_task(_async_setup_dashboard(hass, entry, coordinator))
 
@@ -435,6 +452,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         if vslot_scheduler is not None:
             vslot_scheduler.stop()
+        forecast_guard: ForecastExportGuard | None = hass.data[DOMAIN].pop(
+            f"{entry.entry_id}_forecast_guard", None
+        )
+        if forecast_guard is not None:
+            forecast_guard.stop()
 
     return unload_ok
 
@@ -486,8 +508,17 @@ async def _async_setup_dashboard(
     }
     vslot_eid_fn = (lambda key: vslot_uid_map.get(key)) if vslot_uid_map else None
 
+    fg_prefix = f"{entry.entry_id}_forecast_guard_"
+    fg_uid_map: dict[str, str] = {
+        e.unique_id[len(fg_prefix):]: e.entity_id
+        for e in reg.entities.values()
+        if e.platform == DOMAIN and e.unique_id.startswith(fg_prefix)
+    }
+    fg_eid_fn = (lambda key: fg_uid_map.get(key)) if fg_uid_map else None
+
     dashboard_config = build_dashboard(
-        prefix, eid, forecast_eid_fn, tariff_eid_fn, entry.entry_id, vslot_eid_fn
+        prefix, eid, forecast_eid_fn, tariff_eid_fn, entry.entry_id, vslot_eid_fn,
+        forecast_guard_eid=fg_eid_fn,
     )
 
     lovelace = hass.data.get("lovelace")
