@@ -150,6 +150,17 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         except SunsynkApiError as err:
             raise UpdateFailed(f"Failed to write setting {setting_key}: {err}") from err
 
+        # Update our own cache immediately with what we just told the API,
+        # rather than waiting for async_request_refresh() below — that call
+        # is debounced (10s cooldown), so a second write_setting() landing
+        # within that window would otherwise build its "preserve the other
+        # fields" payload from data that predates this write, resending
+        # stale values for whatever this write just changed and reverting
+        # it. This keeps same-burst writes (e.g. writing on/cap/pac/start
+        # for one virtual slot back to back) correct regardless of timing.
+        if self.data is not None and serial in self.data:
+            self.data[serial].setdefault("settings", {}).update(payload)
+
         await self.async_request_refresh()
 
     async def async_write_plant_price(self, serial: str, price: float) -> None:
