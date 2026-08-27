@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.8.2] - 2026-08-27
+
+### Fixed
+- **Sequential settings writes within a few seconds of each other could silently revert one another.** `async_write_setting()` builds its "preserve every other field" payload from the coordinator's local cache, which was only refreshed via a trailing `async_request_refresh()` call — but that call is debounced by Home Assistant (10-second cooldown), so only the *first* write in a fast sequence actually got a confirmed cache refresh; every write after it, within that 10s window, built its payload from data that predated the writes in between. Most visibly, this hit the **Virtual Slot Scheduler**, which writes a physical slot's `on`/`cap`/`sellPower`/`start` as four back-to-back calls: `time{n}on` (written first) could get silently reverted to its pre-update value by the writes that followed it in the same burst — the slot could end up left off even though the code explicitly turned it on, with only the last field written in a burst reliably sticking. Reproduced and confirmed with a regression test. Fixed by updating the coordinator's own cache immediately after each successful write, rather than waiting on the debounced refresh — no extra API calls, and every write in a burst now sees the true current state regardless of Home Assistant's debounce timing. If you've had trouble getting Virtual Slot Scheduler slots to stay enabled, please update and try again.
+
 ## [1.8.1] - 2026-08-25
 
 ### Fixed
