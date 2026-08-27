@@ -161,7 +161,89 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         if self.data is not None and serial in self.data:
             self.data[serial].setdefault("settings", {}).update(payload)
 
+        await SunsynkCoordinator._async_verify_write(
+            self, client, session, serial, setting_key, value
+        )
+
         await self.async_request_refresh()
+
+    async def _async_verify_write(
+        self,
+        client: SunsynkClient,
+        session: aiohttp.ClientSession,
+        serial: str,
+        setting_key: str,
+        value: Any,
+    ) -> None:
+        """Fail-safe: re-read the setting we just wrote straight from the API.
+
+        The write endpoint returns success even when the inverter silently
+        ignores a value (out-of-range, conflicting with another setting,
+        dongle briefly offline), so a 200 response alone doesn't prove the
+        change actually took. Re-reading confirms it, and raises a Repair
+        so the mismatch isn't just a debug-log line nobody sees.
+        """
+        issue_id = f"setting_write_mismatch_{serial}_{setting_key}"
+        try:
+            fresh_settings = await client.async_get_settings(session, serial)
+        except SunsynkApiError as err:
+            _LOGGER.debug(
+                "Could not verify write of %s for %s: %s", setting_key, serial, err
+            )
+            return
+
+        actual = fresh_settings.get(setting_key)
+        if SunsynkCoordinator._values_match(value, actual):
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            return
+
+        _LOGGER.warning(
+            "Write verification failed for %s on inverter %s: sent %r, "
+            "inverter reports %r",
+            setting_key, serial, value, actual,
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="setting_write_mismatch",
+            translation_placeholders={
+                "serial": serial,
+                "setting_key": setting_key,
+                "expected": str(value),
+                "actual": str(actual),
+            },
+        )
+
+    _TRUE_STRINGS = frozenset({"true", "1"})
+    _FALSE_STRINGS = frozenset({"false", "0"})
+
+    @classmethod
+    def _values_match(cls, sent: Any, actual: Any) -> bool:
+        """Type-tolerant comparison between what we sent and what the API echoes back.
+
+        The API returns booleans as "true"/"false" strings (we send 1/0)
+        and numbers as strings with inconsistent formatting (e.g. "90.0"
+        for an int we sent as 90), so a naive `!=` would false-positive on
+        a successful write.
+        """
+        if actual is None:
+            return sent is None
+
+        sent_str = str(sent).strip().lower()
+        actual_str = str(actual).strip().lower()
+        if sent_str == actual_str:
+            return True
+        if sent_str in cls._TRUE_STRINGS and actual_str in cls._TRUE_STRINGS:
+            return True
+        if sent_str in cls._FALSE_STRINGS and actual_str in cls._FALSE_STRINGS:
+            return True
+        try:
+            return float(sent_str) == float(actual_str)
+        except (TypeError, ValueError):
+            return False
 
     async def async_write_plant_price(self, serial: str, price: float) -> None:
         """Set a manual constant electricity price for the inverter's plant.

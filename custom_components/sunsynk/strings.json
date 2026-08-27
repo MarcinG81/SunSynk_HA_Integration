@@ -91,6 +91,10 @@
     "inverter_offline": {
       "title": "Inverter {serial} is offline",
       "description": "Data for inverter **{serial}** could not be fetched. Check that the inverter dongle is connected and the Sunsynk app shows live data."
+    },
+    "setting_write_mismatch": {
+      "title": "Setting {setting_key} did not apply on {serial}",
+      "description": "We told inverter **{serial}** to set **{setting_key}** to `{expected}`, but reading it back reports `{actual}`. The inverter or dongle may have rejected the value — check it directly in the Sunsynk app. This will clear automatically once a write to this setting is confirmed."
     }
   }
 }
