@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.8.1] - 2026-08-25
+
+### Fixed
+- The auto-generated dashboard is now wired up for the entities added in 1.8.0 — Grid Charge Current (Battery Settings card), Internal Power (Inverter Info), Battery SOH (Battery Details), and a new **Plant Pricing** diagnostics card for Current/Manual Energy Price. Only the Sell Time N Enabled switches had made it into the dashboard generator; the rest were live entities with no card to see them on.
+
 ## [1.8.0] - 2026-08-21
 
 ### Added
