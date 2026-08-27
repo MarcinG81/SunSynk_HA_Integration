@@ -62,6 +62,7 @@ def build_dashboard(
     bat_chg_lim      = e("battery_charge_current_limit")
     bat_dschg_lim    = e("battery_discharge_current_limit")
     bat_count        = e("battery_number_of_batteries", "number_of_batteries")
+    bat_soh          = e("battery_soh")
     grid_power       = e("grid_pac",              "grid_power")
     grid_freq        = e("grid_fac",              "grid_frequency")
     grid_qac         = e("grid_qac",              "grid_reactive_power")
@@ -86,6 +87,8 @@ def build_dashboard(
     inv_gen_total    = e("inverter_etotal",       "generation_total")
     inv_dc_temp      = e("inverter_dc_temp",      "inverter_dc_temperature")
     inv_ac_temp      = e("inverter_ac_temp",      "inverter_ac_igbt_temperature")
+    inv_internal_pwr = e("inverter_internal_power", "internal_power")
+    plant_price      = e("plant_energy_price",    "current_energy_price")
 
     # Switch / Number / Text entity IDs
     sw = lambda k: e(k, k, "switch")
@@ -382,6 +385,7 @@ def build_dashboard(
                             nm("setting_battery_max_current_discharge"),
                             nm("setting_charge_current"),
                             nm("setting_discharge_current"),
+                            nm("setting_grid_charge_current"),
                         ],
                     },
                     {
@@ -579,6 +583,7 @@ def build_dashboard(
                             inv_brand,
                             inv_model,
                             bat_count,
+                            inv_internal_pwr,
                         ],
                     },
                     {
@@ -612,6 +617,15 @@ def build_dashboard(
                             bat_dschg_volt,
                             bat_chg_lim,
                             bat_dschg_lim,
+                            bat_soh,
+                        ],
+                    },
+                    {
+                        "type": "entities",
+                        "title": "Plant Pricing",
+                        "entities": [
+                            plant_price,
+                            nm("plant_manual_energy_price"),
                         ],
                     },
                     {
