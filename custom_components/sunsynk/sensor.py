@@ -254,6 +254,33 @@ def _build_dynamic_descriptions(
                     state_class=SensorStateClass.MEASUREMENT,
                 ))
 
+    # Generator/micro-inverter power — only the /flow endpoint reports these, and
+    # only when that port is actually wired up (existsGen/existsMin flags). A
+    # micro-inverter physically wired into the generator port (#17) may surface
+    # under either flag depending on how Sunsynk classifies it, so both are
+    # exposed independently rather than guessing which one applies.
+    flow_data = serial_data.get("flow", {})
+    if flow_data.get("existsGen"):
+        descriptions.append(SunsynkSensorEntityDescription(
+            key="generator_power",
+            name="Generator Power",
+            endpoint="flow",
+            data_key="genPower",
+            native_unit_of_measurement=UnitOfPower.WATT,
+            device_class=SensorDeviceClass.POWER,
+            state_class=SensorStateClass.MEASUREMENT,
+        ))
+    if flow_data.get("existsMin"):
+        descriptions.append(SunsynkSensorEntityDescription(
+            key="micro_inverter_power",
+            name="Micro Inverter Power",
+            endpoint="flow",
+            data_key="minPower",
+            native_unit_of_measurement=UnitOfPower.WATT,
+            device_class=SensorDeviceClass.POWER,
+            state_class=SensorStateClass.MEASUREMENT,
+        ))
+
     return descriptions
 
 

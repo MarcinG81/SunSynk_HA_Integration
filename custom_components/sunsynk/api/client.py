@@ -131,6 +131,19 @@ class SunsynkClient:
                     result["igbt_temp"] = last.get("value")
         return result
 
+    async def async_get_flow_data(
+        self, session: aiohttp.ClientSession, serial: str
+    ) -> dict[str, Any]:
+        """Energy flow: PV/battery/grid/load/generator/micro-inverter power in one call.
+
+        Same data behind the flow diagram in the Sunsynk Connect app. This is
+        the only endpoint that reports generator port power (`genPower`) and
+        micro-inverter power (`minPower`) — `existsGen`/`existsMin` indicate
+        whether each is actually wired up for this inverter. (#17)
+        """
+        url = f"{self._base}/api/v1/inverter/{serial}/flow"
+        return await self._get(session, url)
+
     async def async_get_settings(
         self, session: aiohttp.ClientSession, serial: str
     ) -> dict[str, Any]:
@@ -170,10 +183,11 @@ class SunsynkClient:
             self.async_get_output_data(session, serial),
             self.async_get_temp_data(session, serial),
             self.async_get_settings(session, serial),
+            self.async_get_flow_data(session, serial),
             return_exceptions=True,
         )
 
-        keys = ["inverter", "pv", "grid", "battery", "load", "output", "temp", "settings"]
+        keys = ["inverter", "pv", "grid", "battery", "load", "output", "temp", "settings", "flow"]
         data: dict[str, Any] = {}
 
         for key, result in zip(keys, results):
