@@ -529,6 +529,8 @@ class TariffStateSensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {"price_entity": self._manager.price_entity}
+        if self._manager.export_price_entity != self._manager.price_entity:
+            attrs["export_price_entity"] = self._manager.export_price_entity
         if self._manager.cheap_threshold is not None:
             attrs["cheap_threshold"] = self._manager.cheap_threshold
         if self._manager.expensive_threshold is not None:
@@ -571,8 +573,8 @@ class TariffPriceQualitySensor(SensorEntity):
 
     @callback
     def _handle_update(self) -> None:
-        quality = self._manager.price_quality
-        self._attr_icon = "mdi:check-circle" if quality == "ok" else "mdi:alert-circle"
+        ok = self._manager.price_quality == "ok" and self._manager.export_price_quality == "ok"
+        self._attr_icon = "mdi:check-circle" if ok else "mdi:alert-circle"
         self.async_write_ha_state()
 
     @property
@@ -589,6 +591,13 @@ class TariffPriceQualitySensor(SensorEntity):
         if state is not None:
             attrs["last_updated"] = state.last_updated.isoformat()
             attrs["current_state"] = state.state
+        if self._manager.export_price_entity != self._manager.price_entity:
+            attrs["export_price_entity"] = self._manager.export_price_entity
+            attrs["export_price_quality"] = self._manager.export_price_quality
+            export_state = self.hass.states.get(self._manager.export_price_entity) if self.hass else None
+            if export_state is not None:
+                attrs["export_last_updated"] = export_state.last_updated.isoformat()
+                attrs["export_current_state"] = export_state.state
         return attrs
 
 

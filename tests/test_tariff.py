@@ -31,6 +31,7 @@ def _make_manager(
     start_hour=None,
     end_hour=None,
     price_max_age=90,
+    export_price_entity=None,
 ) -> TariffChargingManager:
     return TariffChargingManager(
         hass=hass,
@@ -47,6 +48,7 @@ def _make_manager(
         start_hour=start_hour,
         end_hour=end_hour,
         price_max_age_minutes=price_max_age,
+        export_price_entity=export_price_entity,
     )
 
 
@@ -364,5 +366,126 @@ async def test_no_discharging_when_threshold_none(mock_hass, mock_coordinator):
     mgr._enabled = True
 
     await mgr._evaluate_discharging("TEST123", price=0.50, soc=80.0, in_schedule=True)
+
+
+# ── Separate import/export price entities (#16) ──────────────────────────────
+
+
+def _states_for(mapping: dict[str, MagicMock]):
+    """A hass.states.get side_effect that resolves per entity_id."""
+    return lambda entity_id: mapping.get(entity_id)
+
+
+def test_export_price_entity_defaults_to_price_entity_when_unset(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    assert mgr.export_price_entity == mgr.price_entity == "sensor.electricity_price"
+
+
+def test_export_price_entity_used_when_given(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator, export_price_entity="sensor.export_price")
+    assert mgr.price_entity == "sensor.electricity_price"
+    assert mgr.export_price_entity == "sensor.export_price"
+
+
+def test_compute_price_quality_reads_the_requested_entity(mock_hass, mock_coordinator):
+    mock_hass.states.get.side_effect = _states_for({
+        "sensor.electricity_price": _price_state("0.10"),
+        "sensor.export_price": None,
+    })
+    mgr = _make_manager(mock_hass, mock_coordinator, export_price_entity="sensor.export_price")
+
+    import_quality, _ = mgr._compute_price_quality(mgr.price_entity)
+    export_quality, _ = mgr._compute_price_quality(mgr.export_price_entity)
+
+    assert import_quality == QUALITY_OK
+    assert export_quality == QUALITY_NOT_FOUND
+
+
+@pytest.mark.asyncio
+async def test_evaluate_charges_on_import_price_and_discharges_on_export_price(
+    mock_hass, mock_coordinator
+):
+    """The core of #16: cheap import price should charge even though the
+    unrelated export price would never cross the discharge threshold, and
+    vice versa — each side must only look at its own entity.
+    """
+    mock_hass.states.get.side_effect = _states_for({
+        "sensor.import_price": _price_state("0.05"),   # cheap → should charge
+        "sensor.export_price": _price_state("0.50"),   # expensive → should discharge
+    })
+    mgr = TariffChargingManager(
+        hass=mock_hass,
+        coordinator=mock_coordinator,
+        price_entity="sensor.import_price",
+        cheap_threshold=0.10,
+        cheap_current=100,
+        normal_charge_current=50,
+        target_soc=90,
+        expensive_threshold=0.30,
+        peak_discharge_current=100,
+        normal_discharge_current=50,
+        discharge_min_soc=10,
+        export_price_entity="sensor.export_price",
+    )
+    mgr._enabled = True
+
+    await mgr._evaluate()
+
+    assert mgr._charging_active is True
+    assert mgr._discharging_active is True
+    mock_coordinator.async_write_setting.assert_any_await("TEST123", "chargeCurrent", 100)
+    mock_coordinator.async_write_setting.assert_any_await("TEST123", "dischargeCurrent", 100)
+
+
+@pytest.mark.asyncio
+async def test_evaluate_stops_only_charging_when_import_quality_bad(mock_hass, mock_coordinator):
+    """Bad import price data must pause charging without touching an
+    already-active discharge driven by a perfectly healthy export price.
+    """
+    mock_hass.states.get.side_effect = _states_for({
+        "sensor.import_price": None,  # entity missing → NOT_FOUND
+        "sensor.export_price": _price_state("0.50"),
+    })
+    mgr = TariffChargingManager(
+        hass=mock_hass,
+        coordinator=mock_coordinator,
+        price_entity="sensor.import_price",
+        cheap_threshold=0.10,
+        cheap_current=100,
+        normal_charge_current=50,
+        target_soc=90,
+        expensive_threshold=0.30,
+        peak_discharge_current=100,
+        normal_discharge_current=50,
+        discharge_min_soc=10,
+        export_price_entity="sensor.export_price",
+    )
+    mgr._enabled = True
+    mgr._charging_active = True
+
+    await mgr._evaluate()
+
+    assert mgr._charging_active is False
+    assert mgr._discharging_active is True
+    mock_coordinator.async_write_setting.assert_any_await("TEST123", "chargeCurrent", 50)
+    mock_coordinator.async_write_setting.assert_any_await("TEST123", "dischargeCurrent", 100)
+
+
+@pytest.mark.asyncio
+async def test_stop_charging_is_a_noop_when_already_inactive(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+
+    await mgr._stop_charging("TEST123", "test reason")
+
+    mock_coordinator.async_write_setting.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stop_discharging_is_a_noop_when_already_inactive(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+
+    await mgr._stop_discharging("TEST123", "test reason")
+
+    mock_coordinator.async_write_setting.assert_not_awaited()
 
     mock_coordinator.async_write_setting.assert_not_awaited()

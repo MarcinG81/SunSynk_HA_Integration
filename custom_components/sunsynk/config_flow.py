@@ -21,6 +21,7 @@ from .const import (
     CONF_CHEAP_THRESHOLD,
     CONF_DISCHARGE_MIN_SOC,
     CONF_EXPENSIVE_THRESHOLD,
+    CONF_EXPORT_PRICE_ENTITY,
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_NORMAL_CHARGE_CURRENT,
@@ -188,6 +189,9 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                 price_entity = user_input.get(CONF_PRICE_ENTITY, "")
                 if price_entity:
                     tariff_fields[CONF_PRICE_ENTITY] = price_entity
+                    export_price_entity = user_input.get(CONF_EXPORT_PRICE_ENTITY, "")
+                    if export_price_entity:
+                        tariff_fields[CONF_EXPORT_PRICE_ENTITY] = export_price_entity
                     try:
                         tariff_fields.update(
                             self._parse_tariff_fields(user_input)
@@ -301,10 +305,15 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     CONF_PERFORMANCE_RATIO,
                     default=str(current_pr) if current_pr != "" else str(DEFAULT_PERFORMANCE_RATIO),
                 ): str,
-                # Tariff — shared price sensor
+                # Tariff — price sensor(s). Export defaults to the same entity as
+                # import when left blank, so single-price setups are unaffected.
                 vol.Optional(
                     CONF_PRICE_ENTITY,
                     description={"suggested_value": _opt(CONF_PRICE_ENTITY) or None},
+                ): EntitySelector(EntitySelectorConfig(domain=["sensor", "input_number"])),
+                vol.Optional(
+                    CONF_EXPORT_PRICE_ENTITY,
+                    description={"suggested_value": _opt(CONF_EXPORT_PRICE_ENTITY) or None},
                 ): EntitySelector(EntitySelectorConfig(domain=["sensor", "input_number"])),
                 # Cheap-rate charging
                 vol.Optional(

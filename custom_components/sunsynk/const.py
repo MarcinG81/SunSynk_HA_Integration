@@ -49,6 +49,7 @@ SOLAR_FORECAST_UPDATE_INTERVAL: Final = 30  # minutes
 
 # Tariff-aware charging / discharging
 CONF_PRICE_ENTITY: Final = "price_entity"
+CONF_EXPORT_PRICE_ENTITY: Final = "export_price_entity"
 CONF_CHEAP_THRESHOLD: Final = "cheap_threshold"
 CONF_CHEAP_CHARGE_CURRENT: Final = "cheap_charge_current"
 CONF_NORMAL_CHARGE_CURRENT: Final = "normal_charge_current"
