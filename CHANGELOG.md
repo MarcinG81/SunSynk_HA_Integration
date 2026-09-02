@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.8.3] - 2026-09-02
+
+### Fixed
+- **PV Max Limit reported as % instead of W.** `pvMaxLimit` is a Watt value — confirmed against a real portal screenshot showing "Inverter Power Limiter (500~7500W)" for the same setting a user's HA instance displayed as "4000 %". Was originally modeled as a 0-100 percentage; fixed to match Zero Export Power and Solar Max Sell Power, the other two power-limit settings. (#19)
+- **"No plant found for inverter X" when writing Manual Energy Price.** `async_write_plant_price()` only ever read the plant ID from the coordinator's cache, which can be empty even on an account that genuinely has a plant linked (e.g. right after a reload, or if a previous background refresh's best-effort plant fetch failed) — with no way to recover short of a refresh happening to succeed on its own. Now falls back to one fresh inverter-info fetch before concluding there's truly no plant, mirroring the same cache-miss-refetch pattern already used for regular settings writes. (#20)
+
+### Changed
+- **Battery SOH formula reverted to lifetime charge/discharge totals.** `correctCap / capacity` (introduced in 1.8.0 as the safer alternative after the counter-based formula produced 139% on one diagnostics dump) has now been checked against two real accounts and read a flat 100% on both — including a battery a few years old with genuine, measurable wear. It never reflected actual degradation on any hardware seen so far. Reverted to `100 - (etotalChg - etotalDischg) / etotalDischg * 100`, which correctly read ~95% on that same aged battery — but the output is now clamped to 0-100%, so an account whose counters have drifted (the original 139% case) shows a plausible number instead of a meaningless one, rather than reintroducing that failure mode unguarded. Still a best-effort estimate, not a certified BMS health reading. (#14)
+
 ## [1.8.2] - 2026-08-27
 
 ### Fixed
