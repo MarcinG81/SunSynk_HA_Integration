@@ -185,7 +185,20 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
         plant_id = (self.data or {}).get(serial, {}).get("plant", {}).get("id")
         if not plant_id:
-            raise UpdateFailed(f"No plant found for inverter {serial}")
+            # Cache may simply predate a successful plant lookup (e.g. right
+            # after startup, or a previous refresh's plant fetch failed) —
+            # try once more against a fresh inverter-info fetch before
+            # concluding there's genuinely no plant linked to this inverter.
+            try:
+                inverter_info = await client.async_get_inverter_info(session, serial)
+            except SunsynkApiError as err:
+                raise UpdateFailed(f"Cannot read inverter info for {serial}: {err}") from err
+            plant_id = (inverter_info.get("plant") or {}).get("id")
+            if not plant_id:
+                raise UpdateFailed(
+                    f"No plant found for inverter {serial} — this Sunsynk/Deye "
+                    "account may not have a plant linked to this inverter."
+                )
 
         try:
             plant = await client.async_get_plant_info(session, str(plant_id))
