@@ -92,27 +92,43 @@ def _model_value(d: dict[str, Any]) -> str | None:
 
 
 def _battery_soh_value(d: dict[str, Any]) -> float | None:
-    """Battery State of Health: BMS-corrected capacity vs rated capacity.
+    """Battery State of Health, estimated from lifetime charge/discharge totals.
 
-    UNVERIFIED — derived from correctCap/capacity, not confirmed against a
-    real degraded battery (only tested against a dump where both fields
-    were equal, giving a trivial 100%). A chattersley/sunsynk-home-assistant
-    formula based on lifetime etotalChg/etotalDischg was tried first and
-    rejected: on real data (#14, #15) it produced 139%, since those
-    counters can apparently drift out of sync (e.g. independent resets)
-    and don't reliably bound each other. This ratio at least can't do
-    that — correctCap and capacity are both point-in-time capacity
-    readings, not accumulators — but treat the output with caution until
-    someone with a genuinely degraded battery confirms it tracks reality.
+    BEST-EFFORT ESTIMATE, not a true capacity-based SOH. Formula:
+    100 - (etotalChg - etotalDischg) / etotalDischg * 100 — the same one
+    chattersley/sunsynk-home-assistant uses (there labeled "battery
+    efficiency", not SOH; #14 conflated the two, worth knowing if comparing
+    numbers against that project).
+
+    History: an earlier revision of this integration used this exact
+    formula, then dropped it after it produced 139% on a real diagnostics
+    dump (#14/#15) — etotalChg/etotalDischg are independent lifetime
+    accumulators that can drift apart for reasons unrelated to battery
+    health (firmware update, BMS reset, battery replacement), so a raw
+    ratio isn't bulletproof. Replaced it with correctCap/capacity instead
+    (both point-in-time capacity readings, structurally can't diverge the
+    same way) — but that turned out worse in practice: checked against two
+    real accounts since, including one a few years old with real measurable
+    wear, it read a flat 100% both times, i.e. it never reflects actual
+    degradation on the hardware seen so far. Reverted to this formula
+    per #14, since on that same aged battery it read 95% — a plausible,
+    non-trivial number this integration had not yet managed to produce.
+
+    Output is clamped to 0-100% so a diverged-counter account (like the
+    139% case above) shows a plausible-looking number instead of a
+    nonsensical one — the underlying counter drift is still there, just no
+    longer visible in this specific reading. Treat this as a rough
+    estimate, not a certified BMS health figure.
     """
     try:
-        correct_cap = float(d.get("correctCap"))
-        capacity = float(d.get("capacity"))
+        etotal_chg = float(d.get("etotalChg"))
+        etotal_dischg = float(d.get("etotalDischg"))
     except (TypeError, ValueError):
         return None
-    if not capacity:
+    if not etotal_dischg:
         return None
-    return round(correct_cap / capacity * 100, 1)
+    soh = 100 - (etotal_chg - etotal_dischg) / etotal_dischg * 100
+    return round(max(0.0, min(100.0, soh)), 1)
 
 
 INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (

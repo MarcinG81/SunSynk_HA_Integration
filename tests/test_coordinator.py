@@ -126,3 +126,80 @@ async def test_full_slot_arm_sequence_does_not_revert_the_on_flag(fake_coordinat
     assert fake_coordinator.data["TEST123"]["settings"]["cap1"] == 90
     assert fake_coordinator.data["TEST123"]["settings"]["sellTime1Pac"] == 0
     assert fake_coordinator.data["TEST123"]["settings"]["sellTime1"] == "23:30"
+
+
+# ── async_write_plant_price: plant_id cache-miss fallback (#20) ──────────────
+#
+# Regression coverage for "No plant found for inverter X" (#20): the cache's
+# plant dict can be empty even though the account genuinely has a plant —
+# e.g. right after startup, or a previous refresh's best-effort plant fetch
+# failed. Failing immediately off a possibly-stale cache was too eager; a
+# fresh inverter-info fetch should get one more chance before giving up.
+
+
+@pytest.mark.asyncio
+async def test_write_plant_price_falls_back_to_fresh_fetch_when_cache_has_no_plant(
+    fake_coordinator,
+):
+    fake_coordinator.data["TEST123"]["plant"] = {}  # cache missed the plant lookup
+
+    mock_client = MagicMock()
+    mock_client.async_get_inverter_info = AsyncMock(
+        return_value={"plant": {"id": 555}}
+    )
+    mock_client.async_get_plant_info = AsyncMock(
+        return_value={"id": 555, "currency": {"id": "USD"}, "invest": 1000}
+    )
+    mock_client.async_set_plant_income = AsyncMock()
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    ):
+        await SunsynkCoordinator.async_write_plant_price(fake_coordinator, "TEST123", 0.25)
+
+    mock_client.async_get_inverter_info.assert_awaited_once()
+    mock_client.async_set_plant_income.assert_awaited_once()
+    args = mock_client.async_set_plant_income.call_args.args
+    assert args[1] == "555"
+    assert args[2]["charges"][0]["price"] == 0.25
+
+
+@pytest.mark.asyncio
+async def test_write_plant_price_raises_when_fresh_fetch_also_has_no_plant(
+    fake_coordinator,
+):
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    fake_coordinator.data["TEST123"]["plant"] = {}
+
+    mock_client = MagicMock()
+    mock_client.async_get_inverter_info = AsyncMock(return_value={})  # no "plant" key at all
+    mock_client.async_set_plant_income = AsyncMock()
+
+    with (
+        patch("custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client),
+        pytest.raises(UpdateFailed, match="No plant found"),
+    ):
+        await SunsynkCoordinator.async_write_plant_price(fake_coordinator, "TEST123", 0.25)
+
+    mock_client.async_set_plant_income.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_write_plant_price_uses_cached_plant_id_without_refetching(fake_coordinator):
+    fake_coordinator.data["TEST123"]["plant"] = {"id": 777}
+
+    mock_client = MagicMock()
+    mock_client.async_get_inverter_info = AsyncMock()
+    mock_client.async_get_plant_info = AsyncMock(
+        return_value={"id": 777, "currency": {"id": "USD"}, "invest": 0}
+    )
+    mock_client.async_set_plant_income = AsyncMock()
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    ):
+        await SunsynkCoordinator.async_write_plant_price(fake_coordinator, "TEST123", 0.30)
+
+    mock_client.async_get_inverter_info.assert_not_awaited()
+    mock_client.async_set_plant_income.assert_awaited_once()
