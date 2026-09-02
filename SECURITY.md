@@ -8,7 +8,7 @@ Only the latest release receives security fixes.
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Report security issues privately via [GitHub Security Advisories](https://github.com/MarcinG81/SunSynk_HA_Integration/security/advisories/new) or by emailing **marcin.gaszewski@gmail.com**.
+Report security issues privately via [GitHub Security Advisories](https://github.com/MarcinG81/SunSynk_HA_Integration/security/advisories/new) or by emailing maintainer.
 
 Include:
 - A description of the vulnerability
