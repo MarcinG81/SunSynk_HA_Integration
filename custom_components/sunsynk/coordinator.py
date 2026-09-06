@@ -1,6 +1,7 @@
 """DataUpdateCoordinator for Sunsynk integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -23,6 +24,16 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Some accounts (observed on a parallel/multi-inverter setup, #21) apparently
+# relay a settings write to the physical inverter asynchronously — the write
+# endpoint acknowledges immediately ("send command success:{}") before the
+# command has actually propagated. Reading straight back with no delay raced
+# ahead of that propagation and flagged every single write as a mismatch,
+# even ones that had genuinely succeeded moments later. This is a pragmatic
+# fixed wait, not a guarantee — accounts with slower relays may still see
+# occasional false positives.
+_VERIFY_WRITE_DELAY_SECONDS = 2
 
 
 class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
@@ -182,8 +193,11 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         dongle briefly offline), so a 200 response alone doesn't prove the
         change actually took. Re-reading confirms it, and raises a Repair
         so the mismatch isn't just a debug-log line nobody sees.
+
+        Waits briefly first — see _VERIFY_WRITE_DELAY_SECONDS.
         """
         issue_id = f"setting_write_mismatch_{serial}_{setting_key}"
+        await asyncio.sleep(_VERIFY_WRITE_DELAY_SECONDS)
         try:
             fresh_settings = await client.async_get_settings(session, serial)
         except SunsynkApiError as err:

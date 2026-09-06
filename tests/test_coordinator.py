@@ -30,6 +30,15 @@ from custom_components.sunsynk.const import DOMAIN
 from custom_components.sunsynk.coordinator import SunsynkCoordinator
 
 
+@pytest.fixture(autouse=True)
+def _no_verify_write_delay():
+    """async_write_setting's verification step sleeps briefly for real
+    (see _VERIFY_WRITE_DELAY_SECONDS) to give slower/relayed APIs time to
+    apply a write before reading it back — skip that delay in tests."""
+    with patch("custom_components.sunsynk.coordinator.asyncio.sleep", AsyncMock()):
+        yield
+
+
 @pytest.fixture
 def fake_coordinator():
     auth = MagicMock()
@@ -327,3 +336,22 @@ async def test_write_verification_does_not_block_on_api_error(fake_coordinator):
     mock_ir.async_create_issue.assert_not_called()
     mock_ir.async_delete_issue.assert_not_called()
     fake_coordinator.async_request_refresh.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_write_verification_waits_before_reading_back(fake_coordinator):
+    """Regression coverage for #21: a parallel/multi-inverter setup relays
+    writes asynchronously — the API acknowledges before the command has
+    actually propagated, so an immediate read-back raced ahead of it and
+    flagged every write as a mismatch. Verification must wait first.
+    """
+    mock_client = _echoing_client([])
+
+    with (
+        patch("custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client),
+        patch("custom_components.sunsynk.coordinator.asyncio.sleep", AsyncMock()) as mock_sleep,
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+
+    mock_sleep.assert_awaited_once()
+    assert mock_sleep.call_args.args[0] > 0
