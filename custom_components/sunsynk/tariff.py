@@ -44,6 +44,14 @@ class TariffChargingManager:
     this many minutes the data is considered stale and any active mode
     is cancelled to avoid acting on outdated prices.  Pass None to
     skip the staleness check.
+
+    export_price_entity: optional second price sensor. When set, it
+    drives discharging decisions while price_entity continues to drive
+    charging — for tariffs like Octopus where the import and export
+    rates aren't linked (#16). Leave unset (or equal to price_entity)
+    to keep the original single-price behaviour: both sides read the
+    same sensor. Quality (staleness/availability) is tracked separately
+    per entity, so a problem on one side only pauses that side.
     """
 
     def __init__(
@@ -66,10 +74,13 @@ class TariffChargingManager:
         end_hour: int | None = None,
         # price data quality
         price_max_age_minutes: int | None = 90,
+        # optional separate export/sell price (defaults to price_entity)
+        export_price_entity: str | None = None,
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
         self._price_entity = price_entity
+        self._export_price_entity = export_price_entity or price_entity
 
         self._cheap_threshold = cheap_threshold
         self._cheap_current = cheap_current
@@ -89,6 +100,7 @@ class TariffChargingManager:
         self._charging_active = False
         self._discharging_active = False
         self._price_quality: str = QUALITY_NOT_FOUND
+        self._export_price_quality: str = QUALITY_NOT_FOUND
         self._listeners: list[Callable[[], None]] = []
         self._unsub_price: Any = None
         self._unsub_coordinator: Any = None
@@ -110,19 +122,27 @@ class TariffChargingManager:
 
     def start(self) -> None:
         """Register price-sensor and coordinator listeners."""
+        tracked_entities = {self._price_entity, self._export_price_entity}
         self._unsub_price = async_track_state_change_event(
-            self._hass, [self._price_entity], self._on_price_changed
+            self._hass, list(tracked_entities), self._on_price_changed
         )
         self._unsub_coordinator = self._coordinator.async_add_listener(
             self._on_coordinator_update
         )
         # Assess initial quality and log result
-        quality, _ = self._compute_price_quality()
+        quality, _ = self._compute_price_quality(self._price_entity)
         self._price_quality = quality
         if quality != QUALITY_OK:
             _LOGGER.warning(
                 "Tariff: price entity '%s' quality at startup: %s",
                 self._price_entity, quality,
+            )
+        export_quality, _ = self._compute_price_quality(self._export_price_entity)
+        self._export_price_quality = export_quality
+        if self._export_price_entity != self._price_entity and export_quality != QUALITY_OK:
+            _LOGGER.warning(
+                "Tariff: export price entity '%s' quality at startup: %s",
+                self._export_price_entity, export_quality,
             )
 
     def stop(self) -> None:
@@ -159,18 +179,22 @@ class TariffChargingManager:
             self._send_notification("Tariff Manager disabled", "Normal charge/discharge currents restored.")
         else:
             _LOGGER.info("Tariff manager enabled — re-evaluating current price")
-            state = self._hass.states.get(self._price_entity)
-            if state and state.state not in ("unknown", "unavailable"):
-                self._hass.async_create_task(self._evaluate(state.state))
+            self._hass.async_create_task(self._evaluate())
         self._notify_listeners()
 
     # ── Price quality ──────────────────────────────────────────────────────
 
-    def _compute_price_quality(self) -> tuple[str, str]:
-        """Return (quality_state, detail_message) without side effects."""
-        state = self._hass.states.get(self._price_entity)
+    def _compute_price_quality(self, entity_id: str | None = None) -> tuple[str, str]:
+        """Return (quality_state, detail_message) for one price entity, without side effects.
+
+        Defaults to the import price entity when called with no argument —
+        kept for backward compatibility with callers that only care about
+        the (charging-side) price, and with existing tests.
+        """
+        entity_id = entity_id or self._price_entity
+        state = self._hass.states.get(entity_id)
         if state is None:
-            return QUALITY_NOT_FOUND, f"Entity '{self._price_entity}' not found"
+            return QUALITY_NOT_FOUND, f"Entity '{entity_id}' not found"
         if state.state in ("unknown", "unavailable"):
             return QUALITY_UNAVAILABLE, f"State is '{state.state}'"
         try:
@@ -187,49 +211,41 @@ class TariffChargingManager:
                 )
         return QUALITY_OK, "ok"
 
-    def _refresh_quality(self) -> bool:
-        """Recompute quality; if changed notify listeners; return True if quality is OK."""
-        quality, detail = self._compute_price_quality()
-        if quality != self._price_quality:
-            prev = self._price_quality
-            self._price_quality = quality
-            _LOGGER.info(
-                "Tariff: price quality changed %s → %s (%s)",
-                prev, quality, detail,
-            )
-            if quality != QUALITY_OK:
-                self._hass.async_create_task(self._handle_bad_quality(detail))
-            self._notify_listeners()
-        return quality == QUALITY_OK
+    def _read_price(self, entity_id: str) -> float | None:
+        """Return the current numeric state of a price entity, or None."""
+        state = self._hass.states.get(entity_id)
+        if state is None or state.state in ("unknown", "unavailable"):
+            return None
+        try:
+            return float(state.state)
+        except (ValueError, TypeError):
+            return None
 
-    async def _handle_bad_quality(self, detail: str) -> None:
-        """Stop any active mode when price data quality drops."""
-        stopped_something = False
-        for serial in self._coordinator.serials:
-            if self._charging_active and self._normal_charge_current is not None:
-                _LOGGER.warning(
-                    "Tariff: stopping charging [%s] due to bad price quality — %s", serial, detail
-                )
-                await self._coordinator.async_write_setting(
-                    serial, "chargeCurrent", self._normal_charge_current
-                )
-                self._charging_active = False
-                stopped_something = True
-            if self._discharging_active and self._normal_discharge_current is not None:
-                _LOGGER.warning(
-                    "Tariff: stopping discharging [%s] due to bad price quality — %s", serial, detail
-                )
-                await self._coordinator.async_write_setting(
-                    serial, "dischargeCurrent", self._normal_discharge_current
-                )
-                self._discharging_active = False
-                stopped_something = True
-        if stopped_something:
-            self._send_notification(
-                "Tariff: stopped — price data quality issue",
-                f"Normal currents restored. Reason: {detail}",
+    async def _stop_charging(self, serial: str, reason: str) -> None:
+        """Stop charging (no-op if already stopped)."""
+        if not self._charging_active:
+            return
+        _LOGGER.warning("Tariff: stopping charging [%s] — %s", serial, reason)
+        if self._normal_charge_current is not None:
+            await self._coordinator.async_write_setting(
+                serial, "chargeCurrent", self._normal_charge_current
             )
-            self._notify_listeners()
+        self._charging_active = False
+        self._send_notification("Tariff: Charging stopped", f"{reason.capitalize()}.")
+        self._notify_listeners()
+
+    async def _stop_discharging(self, serial: str, reason: str) -> None:
+        """Stop discharging (no-op if already stopped)."""
+        if not self._discharging_active:
+            return
+        _LOGGER.warning("Tariff: stopping discharging [%s] — %s", serial, reason)
+        if self._normal_discharge_current is not None:
+            await self._coordinator.async_write_setting(
+                serial, "dischargeCurrent", self._normal_discharge_current
+            )
+        self._discharging_active = False
+        self._send_notification("Tariff: Discharging stopped", f"{reason.capitalize()}.")
+        self._notify_listeners()
 
     # ── Scheduler ─────────────────────────────────────────────────────────
 
@@ -247,42 +263,45 @@ class TariffChargingManager:
 
     @callback
     def _on_price_changed(self, event: Any) -> None:
-        new_state = event.data.get("new_state")
-        if new_state and new_state.state not in ("unknown", "unavailable"):
-            self._hass.async_create_task(self._evaluate(new_state.state))
-        else:
-            # State went unavailable — refresh quality immediately
-            self._refresh_quality()
+        self._hass.async_create_task(self._evaluate())
 
     @callback
     def _on_coordinator_update(self) -> None:
-        # Periodic quality check (catches staleness between price updates)
-        quality_ok = self._refresh_quality()
-        if quality_ok:
-            state = self._hass.states.get(self._price_entity)
-            if state and state.state not in ("unknown", "unavailable"):
-                self._hass.async_create_task(self._evaluate(state.state))
+        self._hass.async_create_task(self._evaluate())
 
     # ── Core evaluation ────────────────────────────────────────────────────
 
-    async def _evaluate(self, price_state: str) -> None:
+    async def _evaluate(self) -> None:
+        """Re-check both price entities and act on each side independently.
+
+        Import price quality only gates charging; export price quality only
+        gates discharging — so a stale/missing export sensor (e.g. someone
+        hasn't got around to setting one, and it defaults to price_entity)
+        never blocks charging, and vice versa. Always re-reads current state
+        rather than trusting a triggering event's payload, since a single
+        entity's state-change event doesn't carry the *other* entity's
+        current value.
+        """
         if not self._enabled:
             return
 
-        # Validate quality before acting
-        quality, detail = self._compute_price_quality()
-        if quality != self._price_quality:
-            self._price_quality = quality
+        import_quality, import_detail = self._compute_price_quality(self._price_entity)
+        if import_quality != self._price_quality:
+            _LOGGER.info(
+                "Tariff: import price quality changed %s → %s (%s)",
+                self._price_quality, import_quality, import_detail,
+            )
+            self._price_quality = import_quality
             self._notify_listeners()
-        if quality != QUALITY_OK:
-            await self._handle_bad_quality(detail)
-            return
 
-        try:
-            price = float(price_state)
-        except (ValueError, TypeError):
-            _LOGGER.debug("Tariff: cannot parse price '%s'", price_state)
-            return
+        export_quality, export_detail = self._compute_price_quality(self._export_price_entity)
+        if export_quality != self._export_price_quality:
+            _LOGGER.info(
+                "Tariff: export price quality changed %s → %s (%s)",
+                self._export_price_quality, export_quality, export_detail,
+            )
+            self._export_price_quality = export_quality
+            self._notify_listeners()
 
         in_schedule = self._is_in_schedule()
 
@@ -293,8 +312,19 @@ class TariffChargingManager:
             except (ValueError, TypeError):
                 soc = 0.0
 
-            await self._evaluate_charging(serial, price, soc, in_schedule)
-            await self._evaluate_discharging(serial, price, soc, in_schedule)
+            if import_quality == QUALITY_OK:
+                price = self._read_price(self._price_entity)
+                if price is not None:
+                    await self._evaluate_charging(serial, price, soc, in_schedule)
+            else:
+                await self._stop_charging(serial, f"import price quality: {import_detail}")
+
+            if export_quality == QUALITY_OK:
+                price = self._read_price(self._export_price_entity)
+                if price is not None:
+                    await self._evaluate_discharging(serial, price, soc, in_schedule)
+            else:
+                await self._stop_discharging(serial, f"export price quality: {export_detail}")
 
     async def _evaluate_charging(
         self, serial: str, price: float, soc: float, in_schedule: bool
@@ -404,9 +434,7 @@ class TariffChargingManager:
         """Trigger a fresh evaluation if the manager is active."""
         if not self._enabled:
             return
-        state = self._hass.states.get(self._price_entity)
-        if state and state.state not in ("unknown", "unavailable"):
-            self._hass.async_create_task(self._evaluate(state.state))
+        self._hass.async_create_task(self._evaluate())
 
     def set_cheap_threshold(self, value: float | None) -> None:
         self._cheap_threshold = value
@@ -478,6 +506,14 @@ class TariffChargingManager:
     @property
     def price_entity(self) -> str:
         return self._price_entity
+
+    @property
+    def export_price_entity(self) -> str:
+        return self._export_price_entity
+
+    @property
+    def export_price_quality(self) -> str:
+        return self._export_price_quality
 
     @property
     def cheap_threshold(self) -> float | None:

@@ -254,6 +254,33 @@ def _build_dynamic_descriptions(
                     state_class=SensorStateClass.MEASUREMENT,
                 ))
 
+    # Generator/micro-inverter power — only the /flow endpoint reports these, and
+    # only when that port is actually wired up (existsGen/existsMin flags). A
+    # micro-inverter physically wired into the generator port (#17) may surface
+    # under either flag depending on how Sunsynk classifies it, so both are
+    # exposed independently rather than guessing which one applies.
+    flow_data = serial_data.get("flow", {})
+    if flow_data.get("existsGen"):
+        descriptions.append(SunsynkSensorEntityDescription(
+            key="generator_power",
+            name="Generator Power",
+            endpoint="flow",
+            data_key="genPower",
+            native_unit_of_measurement=UnitOfPower.WATT,
+            device_class=SensorDeviceClass.POWER,
+            state_class=SensorStateClass.MEASUREMENT,
+        ))
+    if flow_data.get("existsMin"):
+        descriptions.append(SunsynkSensorEntityDescription(
+            key="micro_inverter_power",
+            name="Micro Inverter Power",
+            endpoint="flow",
+            data_key="minPower",
+            native_unit_of_measurement=UnitOfPower.WATT,
+            device_class=SensorDeviceClass.POWER,
+            state_class=SensorStateClass.MEASUREMENT,
+        ))
+
     return descriptions
 
 
@@ -502,6 +529,8 @@ class TariffStateSensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {"price_entity": self._manager.price_entity}
+        if self._manager.export_price_entity != self._manager.price_entity:
+            attrs["export_price_entity"] = self._manager.export_price_entity
         if self._manager.cheap_threshold is not None:
             attrs["cheap_threshold"] = self._manager.cheap_threshold
         if self._manager.expensive_threshold is not None:
@@ -544,8 +573,8 @@ class TariffPriceQualitySensor(SensorEntity):
 
     @callback
     def _handle_update(self) -> None:
-        quality = self._manager.price_quality
-        self._attr_icon = "mdi:check-circle" if quality == "ok" else "mdi:alert-circle"
+        ok = self._manager.price_quality == "ok" and self._manager.export_price_quality == "ok"
+        self._attr_icon = "mdi:check-circle" if ok else "mdi:alert-circle"
         self.async_write_ha_state()
 
     @property
@@ -562,6 +591,13 @@ class TariffPriceQualitySensor(SensorEntity):
         if state is not None:
             attrs["last_updated"] = state.last_updated.isoformat()
             attrs["current_state"] = state.state
+        if self._manager.export_price_entity != self._manager.price_entity:
+            attrs["export_price_entity"] = self._manager.export_price_entity
+            attrs["export_price_quality"] = self._manager.export_price_quality
+            export_state = self.hass.states.get(self._manager.export_price_entity) if self.hass else None
+            if export_state is not None:
+                attrs["export_last_updated"] = export_state.last_updated.isoformat()
+                attrs["export_current_state"] = export_state.state
         return attrs
 
 

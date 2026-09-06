@@ -89,6 +89,9 @@ def build_dashboard(
     inv_ac_temp      = e("inverter_ac_temp",      "inverter_ac_igbt_temperature")
     inv_internal_pwr = e("inverter_internal_power", "internal_power")
     plant_price      = e("plant_energy_price",    "current_energy_price")
+    gen_power        = e_opt("generator_power")
+    min_power        = e_opt("micro_inverter_power")
+    has_generator    = gen_power is not None or min_power is not None
 
     # Switch / Number / Text entity IDs
     sw = lambda k: e(k, k, "switch")
@@ -620,6 +623,14 @@ def build_dashboard(
                             bat_soh,
                         ],
                     },
+                    *([{
+                        "type": "entities",
+                        "title": "Generator",
+                        "entities": [
+                            *([{"entity": gen_power, "name": "Generator Power"}] if gen_power else []),
+                            *([{"entity": min_power, "name": "Micro Inverter Power"}] if min_power else []),
+                        ],
+                    }] if has_generator else []),
                     {
                         "type": "entities",
                         "title": "Plant Pricing",

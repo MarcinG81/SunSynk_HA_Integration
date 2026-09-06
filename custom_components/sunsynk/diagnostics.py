@@ -59,6 +59,8 @@ async def async_get_config_entry_diagnostics(
             "mode": tariff_manager.mode,
             "price_quality": tariff_manager.price_quality,
             "price_entity": tariff_manager.price_entity,
+            "export_price_quality": tariff_manager.export_price_quality,
+            "export_price_entity": tariff_manager.export_price_entity,
         }
 
     return result
