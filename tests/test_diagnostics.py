@@ -105,6 +105,8 @@ class TestAsyncGetConfigEntryDiagnostics:
         tariff_manager.mode = "charging"
         tariff_manager.price_quality = "ok"
         tariff_manager.price_entity = "sensor.price"
+        tariff_manager.export_price_quality = "ok"
+        tariff_manager.export_price_entity = "sensor.price"
         hass.data[DOMAIN]["entry1_tariff"] = tariff_manager
 
         result = await async_get_config_entry_diagnostics(hass, entry)
@@ -114,6 +116,8 @@ class TestAsyncGetConfigEntryDiagnostics:
             "mode": "charging",
             "price_quality": "ok",
             "price_entity": "sensor.price",
+            "export_price_quality": "ok",
+            "export_price_entity": "sensor.price",
         }
 
     @pytest.mark.asyncio

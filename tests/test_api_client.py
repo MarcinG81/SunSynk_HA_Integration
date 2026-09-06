@@ -166,12 +166,13 @@ class TestFetchAll:
     @pytest.mark.asyncio
     async def test_merges_all_endpoints_under_expected_keys(self, client: SunsynkClient):
         ok = FakeResponse({"msg": "Success", "data": {"x": 1}})
-        # inverter, pv, grid, battery, load, output each make one GET call;
-        # temp makes its own GET (7 GETs), settings makes an 8th.
-        session = fake_session(get=[ok, ok, ok, ok, ok, ok, ok, ok])
+        # inverter, pv, grid, battery, load, output, temp, settings, flow —
+        # 9 GET calls total, one per endpoint (asyncio.gather call order).
+        session = fake_session(get=[ok, ok, ok, ok, ok, ok, ok, ok, ok])
         result = await client.async_fetch_all(session, "SN1")
         assert set(result.keys()) == {
-            "inverter", "pv", "grid", "battery", "load", "output", "temp", "settings",
+            "inverter", "pv", "grid", "battery", "load", "output", "temp",
+            "settings", "flow",
         }
 
     @pytest.mark.asyncio
@@ -180,9 +181,9 @@ class TestFetchAll:
     ):
         ok = FakeResponse({"msg": "Success", "data": {"x": 1}})
         # asyncio.gather preserves call order: inverter, pv, grid, battery,
-        # load, output, temp, settings. Make "grid" (3rd) fail.
+        # load, output, temp, settings, flow. Make "grid" (3rd) fail.
         failing = FakeResponse({"msg": "Success", "data": {}}, status=500)
-        session = fake_session(get=[ok, ok, failing, ok, ok, ok, ok, ok])
+        session = fake_session(get=[ok, ok, failing, ok, ok, ok, ok, ok, ok])
         result = await client.async_fetch_all(session, "SN1")
         assert result["grid"] == {}
         assert result["inverter"] == {"x": 1}
