@@ -7,7 +7,7 @@ that don't require that: credential validation and tariff-field parsing.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -18,13 +18,32 @@ from custom_components.sunsynk.config_flow import (
 )
 
 
+def _fake_client_session_cm() -> MagicMock:
+    """A fake `async with aiohttp.ClientSession() as session:` — avoids
+    _async_validate_credentials opening a real network session, which
+    leaves a background thread the HA test harness's strict cleanup
+    check (verify_cleanup) flags as a leak even though it's unrelated to
+    anything this test actually exercises.
+    """
+    session = MagicMock()
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=session)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    client_session_cls = MagicMock(return_value=cm)
+    return client_session_cls
+
+
 class TestAsyncValidateCredentials:
     @pytest.mark.asyncio
     async def test_succeeds_when_token_obtained(self):
         mock_auth = AsyncMock()
         mock_auth.async_get_token = AsyncMock(return_value="token")
-        with patch(
-            "custom_components.sunsynk.config_flow.SunsynkAuth", return_value=mock_auth
+        with (
+            patch("custom_components.sunsynk.config_flow.SunsynkAuth", return_value=mock_auth),
+            patch(
+                "custom_components.sunsynk.config_flow.aiohttp.ClientSession",
+                _fake_client_session_cm(),
+            ),
         ):
             await _async_validate_credentials("api.sunsynk.net", "user", "pass")
         mock_auth.async_get_token.assert_awaited_once()
@@ -35,6 +54,10 @@ class TestAsyncValidateCredentials:
         mock_auth.async_get_token = AsyncMock(side_effect=SunsynkAuthError("bad creds"))
         with (
             patch("custom_components.sunsynk.config_flow.SunsynkAuth", return_value=mock_auth),
+            patch(
+                "custom_components.sunsynk.config_flow.aiohttp.ClientSession",
+                _fake_client_session_cm(),
+            ),
             pytest.raises(SunsynkAuthError),
         ):
             await _async_validate_credentials("api.sunsynk.net", "user", "wrong")
