@@ -4,13 +4,41 @@ from __future__ import annotations
 import aiohttp
 import pytest
 
-from custom_components.sunsynk.api.client import SunsynkApiError, SunsynkClient
+from custom_components.sunsynk.api.client import (
+    SunsynkApiError,
+    SunsynkClient,
+    _is_success,
+)
 from tests.conftest import FakeResponse, fake_session
 
 
 @pytest.fixture
 def client() -> SunsynkClient:
     return SunsynkClient("api.sunsynk.net", "test-token")
+
+
+class TestIsSuccess:
+    def test_exact_success_string(self):
+        assert _is_success("Success") is True
+
+    def test_case_insensitive(self):
+        assert _is_success("SUCCESS") is True
+        assert _is_success("success") is True
+
+    def test_real_world_parallel_inverter_variant(self):
+        """A real report (#21) from a parallel/multi-inverter setup: the
+        settings-write endpoint replied with this instead of "Success" for
+        a write that had, in fact, succeeded (confirmed by the resulting
+        state being visible afterwards) — the strict equality check used
+        to treat this as an error.
+        """
+        assert _is_success("send command success:{}") is True
+
+    def test_genuine_failure_messages_are_not_success(self):
+        assert _is_success("Invalid token") is False
+        assert _is_success("Failed") is False
+        assert _is_success(None) is False
+        assert _is_success("") is False
 
 
 def test_headers_include_bearer_token(client: SunsynkClient):
@@ -58,6 +86,14 @@ class TestPost:
         session = fake_session(post=FakeResponse({"msg": "Success", "data": {"ok": True}}))
         result = await client._post(session, "https://api.sunsynk.net/x", {"a": 1})
         assert result == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_accepts_parallel_inverter_success_variant(self, client: SunsynkClient):
+        session = fake_session(
+            post=FakeResponse({"msg": "send command success:{}", "data": {}})
+        )
+        result = await client._post(session, "https://api.sunsynk.net/x", {"a": 1})
+        assert result == {}
 
     @pytest.mark.asyncio
     async def test_raises_on_non_success_msg(self, client: SunsynkClient):
