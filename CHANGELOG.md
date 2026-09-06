@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.0] - 2026-09-02
+
+### Added
+- **Generator Power / Micro Inverter Power sensors.** None of the endpoints previously polled (pv/grid/battery/load/output) report generator port power — only the `/flow` endpoint does (the same data behind the flow diagram in the Sunsynk Connect app). Adds two diagnostic sensors sourced from it, each created only when the inverter actually reports something wired into that port: **Generator Power** (`genPower`, shown when the API reports `existsGen`) and **Micro Inverter Power** (`minPower`, shown when `existsMin`). A micro-inverter physically wired into the generator port (e.g. to keep it working in Island mode) can surface under either flag depending on the setup, so both are exposed independently rather than guessing. Confirmed against a real SolarEdge-as-microinverter setup — tracked the vendor app's own reading correctly. Wired into the auto-generated dashboard's new Diagnostics → Generator card. (#17)
+- **Separate import/export price entities for Tariff Manager.** Adds an optional **Export/Sell Price Sensor** alongside the existing price sensor (now labelled **Import/Buy Price Sensor**). Leave it blank and nothing changes — both charging and discharging keep reading the one sensor, exactly as before. Set it, and cheap-rate charging keeps reading the import price while expensive-rate discharging switches to the export price — for tariffs like Octopus Intelligent Go (import) + Outgoing (export) where the two rates aren't linked. Price-data quality (availability/staleness) is now tracked per entity rather than shared, so a problem with one sensor only pauses its own side. (#16)
+- **Write verification fail-safe.** Every settings write is now followed by a fresh, uncached read of that setting straight from the Sunsynk API. If the value read back doesn't match what was sent, a Home Assistant Repair is raised under Settings → System → Repairs naming the inverter and setting, clearing automatically once a later write to that setting is confirmed. Guards against the inverter or dongle silently rejecting a write (out of range, briefly offline) that previously looked successful from a 200 response alone.
+
 ## [1.8.3] - 2026-09-02
 
 ### Fixed
