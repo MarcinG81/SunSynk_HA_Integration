@@ -48,6 +48,7 @@ def fake_coordinator():
     return SimpleNamespace(
         hass=MagicMock(),
         _auth=auth,
+        serials=["TEST123"],
         _async_get_session=AsyncMock(return_value=MagicMock()),
         async_request_refresh=AsyncMock(),
         data={
@@ -355,3 +356,99 @@ async def test_write_verification_waits_before_reading_back(fake_coordinator):
 
     mock_sleep.assert_awaited_once()
     assert mock_sleep.call_args.args[0] > 0
+
+
+# ── Parallel-inverter master redirect for battery settings (#21) ─────────────
+#
+# Regression coverage: a parallel/multi-inverter account had chargeCurrent
+# and dischargeCurrent corrupted on BOTH units (0 on the slave, a wildly
+# out-of-range 1040 on the master) after this integration wrote them to each
+# configured serial independently. The reporter confirmed the Sunsynk portal
+# itself only needs the master updated for a change to reach the whole
+# parallel group. Battery settings writes to a parallel slave should now
+# redirect to that group's master (found via `equipMode`: 0 = slave,
+# 1 = master); everything else is unaffected.
+
+
+def _parallel_coordinator() -> SimpleNamespace:
+    auth = MagicMock()
+    auth._api_server = "api.sunsynk.net"
+    auth.async_get_token = AsyncMock(return_value="token")
+
+    return SimpleNamespace(
+        hass=MagicMock(),
+        _auth=auth,
+        serials=["SLAVE1", "MASTER1"],
+        _async_get_session=AsyncMock(return_value=MagicMock()),
+        async_request_refresh=AsyncMock(),
+        data={
+            "SLAVE1": {
+                "inverter": {"parallel": 1, "equipMode": 0},
+                "settings": {"sn": "SLAVE1", "dischargeCurrent": 0, "time1on": "false"},
+            },
+            "MASTER1": {
+                "inverter": {"parallel": 1, "equipMode": 1},
+                "settings": {"sn": "MASTER1", "dischargeCurrent": 1040, "time1on": "false"},
+            },
+        },
+    )
+
+
+class TestResolveParallelWriteTarget:
+    def test_battery_setting_on_slave_redirects_to_master(self):
+        coordinator = _parallel_coordinator()
+        target = SunsynkCoordinator._resolve_parallel_write_target(
+            coordinator, "SLAVE1", "dischargeCurrent"
+        )
+        assert target == "MASTER1"
+
+    def test_battery_setting_on_master_stays_on_master(self):
+        coordinator = _parallel_coordinator()
+        target = SunsynkCoordinator._resolve_parallel_write_target(
+            coordinator, "MASTER1", "dischargeCurrent"
+        )
+        assert target == "MASTER1"
+
+    def test_non_battery_setting_is_never_redirected(self):
+        """Only System Mode Timer slot settings verified fine independently
+        per-unit in the reporter's diagnostics — no evidence they need the
+        same redirect, so leave them alone."""
+        coordinator = _parallel_coordinator()
+        target = SunsynkCoordinator._resolve_parallel_write_target(
+            coordinator, "SLAVE1", "time1on"
+        )
+        assert target == "SLAVE1"
+
+    def test_non_parallel_setup_is_never_redirected(self, fake_coordinator):
+        target = SunsynkCoordinator._resolve_parallel_write_target(
+            fake_coordinator, "TEST123", "dischargeCurrent"
+        )
+        assert target == "TEST123"
+
+    def test_no_master_found_falls_back_to_original_serial(self):
+        """Defensive: if the group has no equipMode==1 unit for some reason
+        (e.g. a momentary bad poll), don't silently write nowhere useful."""
+        coordinator = _parallel_coordinator()
+        coordinator.data["MASTER1"]["inverter"]["equipMode"] = 0
+        target = SunsynkCoordinator._resolve_parallel_write_target(
+            coordinator, "SLAVE1", "dischargeCurrent"
+        )
+        assert target == "SLAVE1"
+
+
+@pytest.mark.asyncio
+async def test_write_setting_redirects_battery_key_to_parallel_master():
+    coordinator = _parallel_coordinator()
+    sent_payloads: list[dict] = []
+    mock_client = _echoing_client(sent_payloads)
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    ):
+        await SunsynkCoordinator.async_write_setting(coordinator, "SLAVE1", "dischargeCurrent", 27)
+
+    # The actual API write must have targeted the master's serial, not the
+    # slave's — and the master's (not the slave's) cache reflects it.
+    assert sent_payloads[0]["sn"] == "MASTER1"
+    assert coordinator.data["MASTER1"]["settings"]["dischargeCurrent"] == 27
+    assert coordinator.data["SLAVE1"]["settings"]["dischargeCurrent"] == 0

@@ -123,10 +123,48 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
         return result
 
+    def _resolve_parallel_write_target(self, serial: str, setting_key: str) -> str:
+        """For a parallel-group slave, battery settings should be written to
+        the master's serial instead.
+
+        #21: a parallel/multi-inverter account showed chargeCurrent and
+        dischargeCurrent corrupted on BOTH units (0 on the slave, a wildly
+        out-of-range 1040 on the master) after this integration wrote them
+        to each configured serial independently. The reporter confirmed the
+        Sunsynk portal itself only needs the master updated — it propagates
+        to the slave — so two independent writes likely raced against that
+        propagation and corrupted each other. `equipMode` (0 = slave,
+        1 = master) and `parallel` are already present in the `inverter`
+        data fetched every poll; non-parallel accounts don't have `parallel`
+        set, so they're unaffected.
+
+        Scoped to battery settings only (chargeCurrent/dischargeCurrent and
+        the rest of BATTERY_SETTING_KEYS) — the same diagnostics showed
+        System Mode Timer slot settings verifying correctly when written to
+        each unit independently, so there's no evidence those need the same
+        redirect, and blanket-redirecting everything risked breaking that.
+        """
+        if setting_key not in BATTERY_SETTING_KEYS:
+            return serial
+
+        inverter_info = (self.data or {}).get(serial, {}).get("inverter", {})
+        if not inverter_info.get("parallel") or inverter_info.get("equipMode") == 1:
+            return serial
+
+        for other_serial in self.serials:
+            if other_serial == serial:
+                continue
+            other_info = (self.data or {}).get(other_serial, {}).get("inverter", {})
+            if other_info.get("parallel") and other_info.get("equipMode") == 1:
+                return other_serial
+
+        return serial
+
     async def async_write_setting(
         self, serial: str, setting_key: str, value: Any
     ) -> None:
         """Write a single setting to the inverter."""
+        serial = SunsynkCoordinator._resolve_parallel_write_target(self, serial, setting_key)
         session = await self._async_get_session()
 
         try:
