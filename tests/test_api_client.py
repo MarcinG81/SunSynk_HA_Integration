@@ -124,12 +124,22 @@ class TestEndpointUrls:
         assert session.get.call_args.args[0] == "https://api.sunsynk.net/api/v1/plant/42"
 
     @pytest.mark.asyncio
+    async def test_get_plant_info_sends_required_lan_param(self, client: SunsynkClient):
+        """Regression coverage (#20): omitting `lan` isn't a 404, the API
+        rejects the call outright — "Required request parameter 'lan' for
+        method parameter type String is not present"."""
+        session = fake_session(get=FakeResponse({"msg": "Success", "data": {}}))
+        await client.async_get_plant_info(session, "42")
+        assert session.get.call_args.kwargs["params"] == {"lan": "en"}
+
+    @pytest.mark.asyncio
     async def test_set_plant_income_url(self, client: SunsynkClient):
         session = fake_session(post=FakeResponse({"msg": "Success", "data": {}}))
         await client.async_set_plant_income(session, "42", {"price": 1})
         assert session.post.call_args.args[0] == (
             "https://api.sunsynk.net/api/v1/plant/42/income"
         )
+        assert session.post.call_args.kwargs["params"] == {"lan": "en"}
 
 
 class TestGetTempData:
