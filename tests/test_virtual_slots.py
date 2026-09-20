@@ -304,4 +304,76 @@ async def test_shutdown_disables_slot1_and_slot6(mock_hass, mock_coordinator):
 
     written = _written(mock_coordinator)
     assert ("time1on", 0) in written
+
+
+# ── sellTime{n}En — the "Sell" permission checkbox (#21) ─────────────────────
+#
+# Sunsynk added a per-slot "Sell" checkbox (sellTime{n}En) specifically so
+# battery discharge can be sold to the grid while System Work Mode is
+# Zero-Export/Limited to Home — a slot can have on/cap/sellTime{n}Pac all
+# correctly set and still export nothing without it. Previously never
+# written by this scheduler at all.
+
+
+@pytest.mark.asyncio
+async def test_discharge_slot_enables_sell_permission(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="00:00", end="23:59", mode=MODE_DISCHARGE, current=30,
+        target_soc=20, sell_power=3000,
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    written = _written(mock_coordinator)
+    assert ("sellTime1En", 1) in written
+
+
+@pytest.mark.asyncio
+async def test_charge_slot_does_not_enable_sell_permission(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="00:00", end="23:59", mode=MODE_CHARGE, current=60, target_soc=90
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    written = _written(mock_coordinator)
+    assert ("sellTime1En", 0) in written
+    assert ("sellTime1En", 1) not in written
+
+
+@pytest.mark.asyncio
+async def test_idle_slot_does_not_enable_sell_permission(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    written = _written(mock_coordinator)
+    assert ("sellTime1En", 0) in written
+
+
+@pytest.mark.asyncio
+async def test_price_override_discharge_enables_sell_permission(mock_hass, mock_coordinator):
+    """A live Tariff Manager discharge override goes through the same
+    physical-slot write path, so it needs sellTime{n}En too."""
+    tariff_manager = MagicMock()
+    tariff_manager.is_charging_active = False
+    tariff_manager.is_discharging_active = True
+    tariff_manager.discharge_min_soc = 10
+    sched = _make_scheduler(mock_hass, mock_coordinator, tariff_manager=tariff_manager)
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    written = _written(mock_coordinator)
+    assert sched.active_source == "price_override"
+    assert ("sellTime1En", 1) in written
     assert ("time6on", 0) in written
