@@ -69,13 +69,13 @@ set_virtual_slot:
           mode: box
     start:
       name: Start Time
-      description: "Window start, HH:MM (24h)."
+      description: "Window start, HH:MM (24h). Sunsynk only accepts :00/:30 minute values."
       required: true
       selector:
         text:
     end:
       name: End Time
-      description: "Window end, HH:MM (24h). May be before start to wrap past midnight."
+      description: "Window end, HH:MM (24h). May be before start to wrap past midnight. Sunsynk only accepts :00/:30 minute values."
       required: true
       selector:
         text:

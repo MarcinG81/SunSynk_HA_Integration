@@ -72,11 +72,17 @@ _SERVICE_SET_WORK_MODE_SCHEMA = vol.Schema({
     vol.Required("serial"): str,
     vol.Required("mode"): vol.All(vol.Coerce(int), vol.Range(min=0, max=4)),
 })
+# Sunsynk time slots only accept :00/:30 minute values — confirmed both via
+# the Sunsynk portal itself (rejects e.g. 22:45) and chattersley/
+# sunsynk-home-assistant's own docs (#21). A finer-grained value isn't
+# rejected outright by the settings-write API, it's just silently ignored
+# by the inverter, so validating it here beats a confusing no-op later.
+_TIME_HH_MM_PATTERN = r"^([01]\d|2[0-3]):(00|30)$"
 _SERVICE_SET_VIRTUAL_SLOT_SCHEMA = vol.Schema({
     vol.Required("serial"): str,
     vol.Required("slot_id"): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_VIRTUAL_SLOTS)),
-    vol.Required("start"): cv.matches_regex(r"^([01]\d|2[0-3]):[0-5]\d$"),
-    vol.Required("end"): cv.matches_regex(r"^([01]\d|2[0-3]):[0-5]\d$"),
+    vol.Required("start"): cv.matches_regex(_TIME_HH_MM_PATTERN),
+    vol.Required("end"): cv.matches_regex(_TIME_HH_MM_PATTERN),
     vol.Optional("weekdays"): [vol.In(WEEKDAY_NAMES)],
     vol.Required("mode"): vol.In(["charge", "discharge", "idle"]),
     vol.Optional("current"): vol.All(vol.Coerce(int), vol.Range(min=0, max=500)),

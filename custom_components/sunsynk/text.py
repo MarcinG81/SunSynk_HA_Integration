@@ -16,7 +16,12 @@ from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .helpers import build_device_info
 
-_TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+# Sunsynk time slots only accept :00/:30 minute values — confirmed both via
+# the Sunsynk portal itself (rejects e.g. 22:45) and chattersley/
+# sunsynk-home-assistant's own docs (#21). A finer-grained value isn't
+# rejected outright by the settings-write API, it's just silently ignored
+# by the inverter, which is far more confusing to debug.
+_TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):(00|30)$")
 
 
 @dataclass(frozen=True)
@@ -29,7 +34,7 @@ WRITABLE_TEXTS: tuple[SunsynkTextEntityDescription, ...] = tuple(
         key=f"setting_sell_time{i}",
         name=f"Time Slot {i} Start",
         setting_key=f"sellTime{i}",
-        pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
+        pattern=r"^([01]\d|2[0-3]):(00|30)$",
         native_min=5,
         native_max=5,
         mode=TextMode.TEXT,
