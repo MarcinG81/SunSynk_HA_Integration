@@ -60,8 +60,14 @@ ALL_WEEKDAYS: frozenset[int] = frozenset(range(7))
 
 # setting_key names for each owned physical slot
 _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
-    1: {"on": "time1on", "cap": "cap1", "pac": "sellTime1Pac", "start": "sellTime1"},
-    6: {"on": "time6on", "cap": "cap6", "pac": "sellTime6Pac", "start": "sellTime6"},
+    1: {
+        "on": "time1on", "cap": "cap1", "pac": "sellTime1Pac",
+        "start": "sellTime1", "en": "sellTime1En",
+    },
+    6: {
+        "on": "time6on", "cap": "cap6", "pac": "sellTime6Pac",
+        "start": "sellTime6", "en": "sellTime6En",
+    },
 }
 # Slots 2-5 are turned off once when the scheduler takes ownership, and
 # otherwise left alone.
@@ -465,11 +471,21 @@ class VirtualSlotScheduler:
     async def _write_window_if_changed(
         self, index: int, resolution: Resolution, start: str
     ) -> bool:
-        """Write time{n}on / cap{n} / sellTime{n}Pac / sellTime{n} (start)."""
+        """Write time{n}on / cap{n} / sellTime{n}Pac / sellTime{n} (start) / sellTime{n}En.
+
+        `sellTime{n}En` is the per-slot "Sell" permission checkbox Sunsynk
+        added specifically so battery discharge can be sold to the grid
+        while System Work Mode is Zero-Export/Limited to Home — without it,
+        a slot can have `on`, `cap` and `sellTime{n}Pac` all correctly set
+        and still never actually export anything. Previously never written
+        here at all, so a virtual discharge slot could silently do nothing
+        on an inverter in that work mode (#21).
+        """
         on = resolution.mode != MODE_IDLE
         cap = resolution.target_soc if resolution.target_soc is not None else 0
         pac = resolution.sell_power if resolution.mode == MODE_DISCHARGE else 0
-        cache_key = (on, cap, pac, start)
+        sell_en = resolution.mode == MODE_DISCHARGE
+        cache_key = (on, cap, pac, start, sell_en)
         if self._last_written.get(index) == cache_key:
             return False
 
@@ -479,6 +495,7 @@ class VirtualSlotScheduler:
             await self._coordinator.async_write_setting(serial, keys["cap"], cap)
             await self._coordinator.async_write_setting(serial, keys["pac"], pac)
             await self._coordinator.async_write_setting(serial, keys["start"], start)
+            await self._coordinator.async_write_setting(serial, keys["en"], 1 if sell_en else 0)
 
         self._last_written[index] = cache_key
         return True
