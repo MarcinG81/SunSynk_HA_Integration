@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.1] - 2026-09-21
+
+Six fixes, all traced back to a single real-world report (#21) from a parallel/multi-inverter account running Sunsynk's Zero-Export/Limited to Home work mode — plus one from a single-inverter account (#20). Bundled together since several only became visible once the earlier ones in the chain were fixed.
+
+### Fixed
+- **Virtual Slot Scheduler never enabled the per-slot "Sell" permission.** Sunsynk added a per-slot checkbox (`sellTime{n}En`) specifically so battery discharge can be sold to the grid while System Work Mode is Zero-Export/Limited to Home, without switching to Selling First. This integration already exposed it as a manual switch (since 1.8.0), but the scheduler's own slot-arming logic never wrote it — a virtual discharge slot (or a live Tariff Manager price override) could have `on`, `cap` and sell-power all correctly set and still export nothing. Now enabled automatically whenever a discharge slot is armed, disabled otherwise. (#21)
+- **Sunsynk's 30-minute time-slot boundary wasn't validated.** Confirmed via a reporter's own test — the Sunsynk portal silently rejected a slot saved with 22:45/22:50, but accepted 20:30/21:00 without complaint; a non-half-hour value isn't rejected by the settings-write API either, it's just silently ignored by the inverter. Neither `sunsynk.set_virtual_slot` nor the manual "Time Slot N Start" text entities enforced this. Both now require `:00`/`:30` minute values, rejected immediately with a clear error instead of silently never taking effect. (#21)
+- **Settings-write API responses weren't always exactly `"Success"`.** A parallel-inverter setup's API acknowledged a write with `"send command success:{}"` instead — a message that means success but isn't an exact string match. The strict equality check treated it as a failure even though the write had gone through. Now matches "success" case-insensitively. (#21)
+- **Tariff Manager's "Price Quality" sensor only ever showed the import side's status.** With a separate export price entity configured, a stale/missing export sensor could silently block discharging with nothing in the visible state pointing at why. Now falls back to reporting the export side whenever import is fine but export isn't. (#21)
+- **Write-verification could false-positive on relayed/parallel setups.** The fail-safe added in 1.9.0 read a setting straight back with no delay at all; on an account where the write is relayed to the physical inverter asynchronously, that consistently raced ahead of the propagation and raised a false Repair for practically every write. Added a short wait before the read-back. (#21)
+- **Battery settings written to a parallel slave could corrupt the group.** chargeCurrent/dischargeCurrent written independently to both units in a parallel pair could race against the portal's own master→slave propagation and corrupt both. Battery settings targeting a parallel slave now redirect to that group's master instead (detected via the already-polled `equipMode` field); non-parallel accounts are unaffected. Time-slot settings are untouched — those verified correctly written per-unit independently. (#21)
+- **"Cannot read plant info" when setting Manual Energy Price, on a single-inverter account.** The plant-info endpoint requires a `lan` query parameter that wasn't being sent — the API rejects the call outright rather than 404ing. Added `lan=en`, matching the other endpoints that already need it. (#20)
+
 ## [1.9.0] - 2026-09-02
 
 ### Added
