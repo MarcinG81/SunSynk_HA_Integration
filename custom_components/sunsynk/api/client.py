@@ -11,6 +11,22 @@ import aiohttp
 _LOGGER = logging.getLogger(__name__)
 
 
+def _is_success(msg: Any) -> bool:
+    """Whether an API response's `msg` field indicates success.
+
+    Most endpoints reply with exactly "Success", but at least one
+    multi-inverter/parallel setup has been observed replying to a
+    settings write with "send command success:{}" instead — a message
+    that means the command DID succeed but doesn't equal the expected
+    string exactly (#21). A strict `== "Success"` check treated that as
+    a failure even though the setting was actually applied (confirmed by
+    the resulting slot showing up correctly). Match "success" as a
+    case-insensitive substring instead, since this API's success message
+    isn't documented anywhere and apparently isn't fully consistent.
+    """
+    return isinstance(msg, str) and "success" in msg.lower()
+
+
 class SunsynkApiError(Exception):
     """Raised when an API call fails."""
 
@@ -41,7 +57,7 @@ class SunsynkClient:
                 resp.raise_for_status()
                 data = await resp.json()
 
-            if data.get("msg") != "Success":
+            if not _is_success(data.get("msg")):
                 raise SunsynkApiError(f"API error: {data.get('msg')} for {url}")
 
             return data.get("data", {})
@@ -64,7 +80,7 @@ class SunsynkClient:
                 resp.raise_for_status()
                 data = await resp.json()
 
-            if data.get("msg") != "Success":
+            if not _is_success(data.get("msg")):
                 raise SunsynkApiError(f"API error: {data.get('msg')} for {url}")
 
             return data.get("data", {})

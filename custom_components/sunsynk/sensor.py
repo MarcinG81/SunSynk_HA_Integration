@@ -579,7 +579,14 @@ class TariffPriceQualitySensor(SensorEntity):
 
     @property
     def native_value(self) -> str:
-        return self._manager.price_quality
+        """The import price's quality, unless it's fine and the export
+        price (a separate entity, if configured) isn't — otherwise a
+        healthy import reading would hide a stale/missing export sensor
+        silently blocking discharging, with no visible indication why (#21).
+        """
+        if self._manager.price_quality != "ok":
+            return self._manager.price_quality
+        return self._manager.export_price_quality
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
