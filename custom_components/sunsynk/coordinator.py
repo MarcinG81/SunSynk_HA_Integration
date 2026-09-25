@@ -124,29 +124,31 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         return result
 
     def _resolve_parallel_write_target(self, serial: str, setting_key: str) -> str:
-        """For a parallel-group slave, battery settings should be written to
-        the master's serial instead.
+        """For a parallel-group slave, all settings should be written to the
+        master's serial instead.
 
         #21: a parallel/multi-inverter account showed chargeCurrent and
         dischargeCurrent corrupted on BOTH units (0 on the slave, a wildly
-        out-of-range 1040 on the master) after this integration wrote them
-        to each configured serial independently. The reporter confirmed the
-        Sunsynk portal itself only needs the master updated — it propagates
-        to the slave — so two independent writes likely raced against that
-        propagation and corrupted each other. `equipMode` (0 = slave,
+        out-of-range value on the master) after this integration wrote them
+        to each configured serial independently. `equipMode` (0 = slave,
         1 = master) and `parallel` are already present in the `inverter`
         data fetched every poll; non-parallel accounts don't have `parallel`
         set, so they're unaffected.
 
-        Scoped to battery settings only (chargeCurrent/dischargeCurrent and
-        the rest of BATTERY_SETTING_KEYS) — the same diagnostics showed
-        System Mode Timer slot settings verifying correctly when written to
-        each unit independently, so there's no evidence those need the same
-        redirect, and blanket-redirecting everything risked breaking that.
+        Originally scoped to battery settings only — an earlier diagnostics
+        dump showed System Mode Timer slot settings (time1on/sellTime1/etc.)
+        verifying correctly when written to each unit independently. That
+        turned out to be an artifact of the verification delay (2s) being
+        shorter than the actual sync window: the same reporter later wrote a
+        slot's start time directly to the slave *on the Sunsynk portal
+        itself* (bypassing this integration entirely) and watched the
+        portal silently revert it back to the master's value 10-15 seconds
+        later. So a 2-second verification read can land before that revert
+        and look successful, while the value doesn't actually stick. Since
+        the slave was never going to keep an independent value for *any*
+        setting, redirecting only some categories was an artificially
+        narrow fix — now applied to every setting.
         """
-        if setting_key not in BATTERY_SETTING_KEYS:
-            return serial
-
         inverter_info = (self.data or {}).get(serial, {}).get("inverter", {})
         if not inverter_info.get("parallel") or inverter_info.get("equipMode") == 1:
             return serial
