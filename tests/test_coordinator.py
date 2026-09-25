@@ -358,16 +358,18 @@ async def test_write_verification_waits_before_reading_back(fake_coordinator):
     assert mock_sleep.call_args.args[0] > 0
 
 
-# ── Parallel-inverter master redirect for battery settings (#21) ─────────────
+# ── Parallel-inverter master redirect for all settings (#21) ─────────────────
 #
 # Regression coverage: a parallel/multi-inverter account had chargeCurrent
 # and dischargeCurrent corrupted on BOTH units (0 on the slave, a wildly
-# out-of-range 1040 on the master) after this integration wrote them to each
-# configured serial independently. The reporter confirmed the Sunsynk portal
-# itself only needs the master updated for a change to reach the whole
-# parallel group. Battery settings writes to a parallel slave should now
-# redirect to that group's master (found via `equipMode`: 0 = slave,
-# 1 = master); everything else is unaffected.
+# out-of-range value on the master) after this integration wrote them to
+# each configured serial independently. Originally redirected only battery
+# settings, but the reporter later confirmed directly on the Sunsynk portal
+# that a slave never independently keeps *any* setting — writing a slot's
+# start time to the slave there too got silently reverted back to the
+# master's value 10-15 seconds later. So every setting written to a
+# parallel slave now redirects to that group's master (found via
+# `equipMode`: 0 = slave, 1 = master); non-parallel accounts are unaffected.
 
 
 def _parallel_coordinator() -> SimpleNamespace:
@@ -409,15 +411,18 @@ class TestResolveParallelWriteTarget:
         )
         assert target == "MASTER1"
 
-    def test_non_battery_setting_is_never_redirected(self):
-        """Only System Mode Timer slot settings verified fine independently
-        per-unit in the reporter's diagnostics — no evidence they need the
-        same redirect, so leave them alone."""
+    def test_time_slot_setting_on_slave_also_redirects_to_master(self):
+        """Originally left unredirected — an earlier diagnostics dump made
+        it look like these verified fine independently. Turned out to be a
+        2-second verification window landing before a ~10-15s master->slave
+        revert the reporter later confirmed directly on the Sunsynk portal
+        (wrote to the slave there too, watched it snap back). Redirected
+        now like every other setting."""
         coordinator = _parallel_coordinator()
         target = SunsynkCoordinator._resolve_parallel_write_target(
             coordinator, "SLAVE1", "time1on"
         )
-        assert target == "SLAVE1"
+        assert target == "MASTER1"
 
     def test_non_parallel_setup_is_never_redirected(self, fake_coordinator):
         target = SunsynkCoordinator._resolve_parallel_write_target(
@@ -452,3 +457,22 @@ async def test_write_setting_redirects_battery_key_to_parallel_master():
     assert sent_payloads[0]["sn"] == "MASTER1"
     assert coordinator.data["MASTER1"]["settings"]["dischargeCurrent"] == 27
     assert coordinator.data["SLAVE1"]["settings"]["dischargeCurrent"] == 0
+
+
+@pytest.mark.asyncio
+async def test_write_setting_redirects_time_slot_key_to_parallel_master():
+    """Same as above but for a System Mode Timer slot setting — these were
+    originally left unredirected, then confirmed to need the same treatment
+    (see TestResolveParallelWriteTarget's docstring for the story)."""
+    coordinator = _parallel_coordinator()
+    sent_payloads: list[dict] = []
+    mock_client = _echoing_client(sent_payloads)
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    ):
+        await SunsynkCoordinator.async_write_setting(coordinator, "SLAVE1", "time1on", 1)
+
+    assert sent_payloads[0]["sn"] == "MASTER1"
+    assert coordinator.data["MASTER1"]["settings"]["time1on"] == 1
+    assert coordinator.data["SLAVE1"]["settings"]["time1on"] == "false"
