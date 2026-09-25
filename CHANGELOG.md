@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.2] - 2026-09-25
+
+### Fixed
+- **Parallel-slave write redirect widened to all settings, not just battery.** 1.9.1's fix for chargeCurrent/dischargeCurrent corruption on parallel setups was scoped to battery settings only — a diagnostics dump had made System Mode Timer slot settings (`time1on`, `sellTime1`, `cap1`, etc.) look like they verified fine independently on each unit. That turned out to be a timing artifact: the reporter went on to write a slot's start time directly to the slave *on the Sunsynk portal itself*, bypassing this integration, and watched the portal silently revert it to the master's value 10-15 seconds later — well outside this integration's 2-second write-verification window, so the confirmation read caught the still-fresh (but doomed) value and reported success. Since the slave never independently keeps any setting, the redirect now applies to every setting written to a parallel slave, not a specific category. As a side effect this also roughly halves per-tick API writes on parallel accounts. (#21)
+
 ## [1.9.1] - 2026-09-21
 
 Six fixes, all traced back to a single real-world report (#21) from a parallel/multi-inverter account running Sunsynk's Zero-Export/Limited to Home work mode — plus one from a single-inverter account (#20). Bundled together since several only became visible once the earlier ones in the chain were fixed.
