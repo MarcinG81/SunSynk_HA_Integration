@@ -291,7 +291,7 @@ class VirtualSlotScheduler:
 
     async def _async_bootstrap(self) -> None:
         """Take ownership: disable slots 2-5, then compute 1 & 6 from scratch."""
-        for serial in self._coordinator.serials:
+        for serial in self._coordinator.write_target_serials:
             for key in _UNUSED_SLOT_ON_KEYS:
                 await self._coordinator.async_write_setting(serial, key, 0)
         self._last_written = {}
@@ -299,7 +299,7 @@ class VirtualSlotScheduler:
         await self._async_tick()
 
     async def _async_shutdown(self) -> None:
-        for serial in self._coordinator.serials:
+        for serial in self._coordinator.write_target_serials:
             await self._coordinator.async_write_setting(serial, _PHYSICAL_KEYS[1]["on"], 0)
             await self._coordinator.async_write_setting(serial, _PHYSICAL_KEYS[6]["on"], 0)
         self._last_written = {}
@@ -490,7 +490,7 @@ class VirtualSlotScheduler:
             return False
 
         keys = _PHYSICAL_KEYS[index]
-        for serial in self._coordinator.serials:
+        for serial in self._coordinator.write_target_serials:
             await self._coordinator.async_write_setting(serial, keys["on"], 1 if on else 0)
             await self._coordinator.async_write_setting(serial, keys["cap"], cap)
             await self._coordinator.async_write_setting(serial, keys["pac"], pac)
@@ -518,7 +518,7 @@ class VirtualSlotScheduler:
             current_key = ("idle",)
             if current_key == self._last_current_key:
                 return False
-            for serial in self._coordinator.serials:
+            for serial in self._coordinator.write_target_serials:
                 if self._normal_charge_current is not None:
                     await self._coordinator.async_write_setting(
                         serial, "chargeCurrent", self._normal_charge_current
@@ -537,7 +537,7 @@ class VirtualSlotScheduler:
         current_key = (key, value)
         if current_key == self._last_current_key:
             return False
-        for serial in self._coordinator.serials:
+        for serial in self._coordinator.write_target_serials:
             await self._coordinator.async_write_setting(serial, key, value)
         self._last_current_key = current_key
         return True
