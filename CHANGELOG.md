@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.3] - 2026-09-26
+
+### Fixed
+- **Settings were still written to a parallel group's master twice per tick.** 1.9.2 redirected a parallel slave's writes to its master, but Tariff Manager and Virtual Slot Scheduler both still looped over every *configured* serial and called the write once per serial — for a parallel group, that meant the master received the same setting twice in quick succession (once via the redirected slave call, once via its own native call). A reporter confirmed a second write landing right behind the first was, on its own, enough to make the master intermittently reject/revert one of them — fresh Repairs kept appearing against the master's own serial even after 1.9.2. Added `write_target_serials` (the configured serials with a parallel slave already collapsed into its master) and switched both features' write loops to use it, so each setting is now written exactly once per distinct physical target. Non-parallel accounts are unaffected. (#21)
+
 ## [1.9.2] - 2026-09-25
 
 ### Fixed
