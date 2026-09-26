@@ -160,7 +160,7 @@ class TariffChargingManager:
         """Enable or disable without losing configuration."""
         self._enabled = enabled
         if not enabled:
-            for serial in self._coordinator.serials:
+            for serial in self._coordinator.write_target_serials:
                 if self._charging_active and self._normal_charge_current is not None:
                     self._hass.async_create_task(
                         self._coordinator.async_write_setting(
@@ -305,7 +305,7 @@ class TariffChargingManager:
 
         in_schedule = self._is_in_schedule()
 
-        for serial in self._coordinator.serials:
+        for serial in self._coordinator.write_target_serials:
             battery = (self._coordinator.data or {}).get(serial, {}).get("battery", {})
             try:
                 soc = float(battery.get("soc", 0))

@@ -438,6 +438,32 @@ async def test_evaluate_charges_on_import_price_and_discharges_on_export_price(
 
 
 @pytest.mark.asyncio
+async def test_evaluate_never_writes_to_a_parallel_slave(mock_hass, mock_coordinator):
+    """Regression coverage (#21): _evaluate() used to loop over every
+    *configured* serial, so a parallel group's slave got its own
+    (redundant) chargeCurrent/dischargeCurrent write alongside the
+    master's — a second write landing right behind the first was, on its
+    own, enough to make the master intermittently reject/revert one of
+    them. Must iterate write_target_serials (slave already collapsed into
+    its master), not coordinator.serials.
+    """
+    mock_hass.states.get.return_value = _price_state("0.05")
+    mock_coordinator.serials = ["SLAVE1", "MASTER1"]
+    mock_coordinator.write_target_serials = ["MASTER1"]
+    mock_coordinator.data = {
+        "MASTER1": {"battery": {"soc": 50}},
+        "SLAVE1": {"battery": {"soc": 50}},
+    }
+    mgr = _make_manager(mock_hass, mock_coordinator, cheap_threshold=0.10, target_soc=90)
+    mgr._enabled = True
+
+    await mgr._evaluate()
+
+    called_serials = {c.args[0] for c in mock_coordinator.async_write_setting.call_args_list}
+    assert called_serials == {"MASTER1"}
+
+
+@pytest.mark.asyncio
 async def test_evaluate_stops_only_charging_when_import_quality_bad(mock_hass, mock_coordinator):
     """Bad import price data must pause charging without touching an
     already-active discharge driven by a perfectly healthy export price.

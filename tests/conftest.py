@@ -66,6 +66,10 @@ def mock_coordinator(mock_hass):
     """Return a mock SunsynkCoordinator."""
     coordinator = MagicMock()
     coordinator.serials = ["TEST123"]
+    # Mirrors real SunsynkCoordinator.write_target_serials — for a plain
+    # (non-parallel) single-inverter fixture this is identical to `serials`.
+    # A test exercising parallel-group dedup overrides this directly.
+    coordinator.write_target_serials = ["TEST123"]
     coordinator.data = {
         "TEST123": {
             "battery": {"soc": 50, "power": 0},

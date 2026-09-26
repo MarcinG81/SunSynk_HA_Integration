@@ -63,6 +63,40 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             self._session = aiohttp.ClientSession()
         return self._session
 
+    @property
+    def write_target_serials(self) -> list[str]:
+        """`self.serials`, collapsing a parallel group's slave into its
+        master.
+
+        Callers that write the same setting to "every configured inverter"
+        (Tariff Manager, Virtual Slot Scheduler) used to do that literally —
+        fine for genuinely independent inverters, but for a parallel group
+        `async_write_setting` already redirects the slave's write to the
+        master (#21), so iterating both meant writing the same setting to
+        the master twice per tick. A second write landing right behind the
+        first was itself enough to make the master briefly reject/revert
+        one of them — the master's own repairs, not just the slave's, is
+        what gave this away. Use this instead of `self.serials` for any
+        write loop; keep using `self.serials` for reads (fetching data
+        still needs every configured serial).
+        """
+        def _info(serial: str) -> dict[str, Any]:
+            return (self.data or {}).get(serial, {}).get("inverter", {})
+
+        has_master = any(
+            _info(s).get("parallel") and _info(s).get("equipMode") == 1
+            for s in self.serials
+        )
+        if not has_master:
+            # No confirmed master anywhere (e.g. a momentary bad poll) —
+            # don't guess at dropping a serial with nothing left to cover it.
+            return list(self.serials)
+
+        return [
+            serial for serial in self.serials
+            if not (_info(serial).get("parallel") and _info(serial).get("equipMode") == 0)
+        ]
+
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         """Fetch data from all inverter endpoints."""
         session = await self._async_get_session()

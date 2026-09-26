@@ -377,3 +377,33 @@ async def test_price_override_discharge_enables_sell_permission(mock_hass, mock_
     assert sched.active_source == "price_override"
     assert ("sellTime1En", 1) in written
     assert ("time6on", 0) in written
+
+
+# ── write_target_serials dedup: a parallel slave's writes are skipped ───────
+#
+# Regression coverage (#21): async_write_setting redirects a slave's write
+# to its master, but this scheduler used to still call it once per
+# *configured* serial — for a parallel group, that meant writing the same
+# setting to the master twice per tick (once via the redirected slave call,
+# once via the native master call). A second write landing right behind the
+# first was, on its own, enough to make the master intermittently
+# reject/revert one of them.
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_never_calls_write_setting_for_a_parallel_slave(
+    mock_hass, mock_coordinator
+):
+    mock_coordinator.serials = ["SLAVE1", "MASTER1"]
+    mock_coordinator.write_target_serials = ["MASTER1"]  # slave collapsed in
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="00:00", end="23:59", mode=MODE_CHARGE, current=60, target_soc=90
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    called_serials = {c.args[0] for c in mock_coordinator.async_write_setting.call_args_list}
+    assert called_serials == {"MASTER1"}

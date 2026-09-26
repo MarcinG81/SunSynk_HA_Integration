@@ -476,3 +476,38 @@ async def test_write_setting_redirects_time_slot_key_to_parallel_master():
     assert sent_payloads[0]["sn"] == "MASTER1"
     assert coordinator.data["MASTER1"]["settings"]["time1on"] == 1
     assert coordinator.data["SLAVE1"]["settings"]["time1on"] == "false"
+
+
+# ── write_target_serials: dedup a parallel group down to its master ─────────
+#
+# Regression coverage: `async_write_setting` redirecting a slave's write to
+# its master (above) stops the slave's own copy of a setting from being
+# corrupted — but callers that loop "for serial in coordinator.serials" and
+# call async_write_setting once per configured serial were still writing the
+# same setting to the master twice per tick (once via the redirected slave
+# call, once via the native master call). A second write landing right
+# behind the first was, on its own, enough to make the master itself
+# intermittently reject/revert one of them — confirmed by a reporter seeing
+# fresh Repairs against the *master's* serial, not just the slave's, even
+# after the redirect fix. write_target_serials lets write-issuing callers
+# (Tariff Manager, Virtual Slot Scheduler) iterate a list with the slave
+# already collapsed into its master, so each setting is written once.
+
+
+class TestWriteTargetSerials:
+    def _get(self, coordinator) -> list[str]:
+        return SunsynkCoordinator.write_target_serials.fget(coordinator)
+
+    def test_non_parallel_setup_returns_all_serials_unchanged(self, fake_coordinator):
+        assert self._get(fake_coordinator) == ["TEST123"]
+
+    def test_parallel_group_collapses_slave_into_master(self):
+        coordinator = _parallel_coordinator()
+        assert self._get(coordinator) == ["MASTER1"]
+
+    def test_parallel_group_with_no_master_found_keeps_all_serials(self):
+        """Defensive: don't silently drop a serial with nothing left to
+        cover it (e.g. a momentary bad poll leaves equipMode unreadable)."""
+        coordinator = _parallel_coordinator()
+        coordinator.data["MASTER1"]["inverter"]["equipMode"] = 0
+        assert self._get(coordinator) == ["SLAVE1", "MASTER1"]
