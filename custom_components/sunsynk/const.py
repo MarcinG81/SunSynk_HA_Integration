@@ -876,7 +876,7 @@ SYSTEM_MODE_SETTING_KEYS = frozenset([
     "sn", "safetyType", "battMode", "solarSell", "pvMaxLimit", "energyMode",
     "peakAndVallery", "sysWorkMode",
     "sellTime1", "sellTime2", "sellTime3", "sellTime4", "sellTime5", "sellTime6",
-    "sellTime1En", "sellTime2En", "sellTime3En", "sellTime4En", "sellTime5En", "sellTime6En",
+    "sellTime1on", "sellTime2on", "sellTime3on", "sellTime4on", "sellTime5on", "sellTime6on",
     "sellTime1Pac", "sellTime2Pac",
     "sellTime3Pac", "sellTime4Pac", "sellTime5Pac", "sellTime6Pac",
     "cap1", "cap2", "cap3", "cap4", "cap5", "cap6",

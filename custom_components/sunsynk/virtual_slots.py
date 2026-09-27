@@ -62,11 +62,11 @@ ALL_WEEKDAYS: frozenset[int] = frozenset(range(7))
 _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
     1: {
         "on": "time1on", "cap": "cap1", "pac": "sellTime1Pac",
-        "start": "sellTime1", "en": "sellTime1En",
+        "start": "sellTime1", "en": "sellTime1on",
     },
     6: {
         "on": "time6on", "cap": "cap6", "pac": "sellTime6Pac",
-        "start": "sellTime6", "en": "sellTime6En",
+        "start": "sellTime6", "en": "sellTime6on",
     },
 }
 # Slots 2-5 are turned off once when the scheduler takes ownership, and
@@ -471,15 +471,17 @@ class VirtualSlotScheduler:
     async def _write_window_if_changed(
         self, index: int, resolution: Resolution, start: str
     ) -> bool:
-        """Write time{n}on / cap{n} / sellTime{n}Pac / sellTime{n} (start) / sellTime{n}En.
+        """Write time{n}on / cap{n} / sellTime{n}Pac / sellTime{n} (start) / sellTime{n}on (sell permission).
 
-        `sellTime{n}En` is the per-slot "Sell" permission checkbox Sunsynk
-        added specifically so battery discharge can be sold to the grid
-        while System Work Mode is Zero-Export/Limited to Home — without it,
-        a slot can have `on`, `cap` and `sellTime{n}Pac` all correctly set
-        and still never actually export anything. Previously never written
-        here at all, so a virtual discharge slot could silently do nothing
-        on an inverter in that work mode (#21).
+        The per-slot "Sell" permission checkbox is `sellTime{n}on`, not
+        `sellTime{n}En` as originally guessed from naming convention alone
+        — confirmed by a reporter (#21) inspecting their own raw settings
+        dump, where `sellTime{n}En` doesn't appear at all but
+        `sellTime3on` was `true` for the one slot they had manually ticked
+        "Sell" on via the inverter screen. Without this field set, a slot
+        can have `on`, `cap` and `sellTime{n}Pac` all correctly set and
+        still never actually export anything while System Work Mode is
+        Zero-Export/Limited to Home.
         """
         on = resolution.mode != MODE_IDLE
         cap = resolution.target_soc if resolution.target_soc is not None else 0
