@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.4] - 2026-09-27
+
+### Fixed
+- **The Sell permission checkbox still didn't reliably stick.** The per-slot "Sell" permission field was being written as `sellTime{n}En`, guessed from naming convention — that field doesn't exist in the real API. A reporter's own raw settings dump showed the correct field is `sellTime{n}on`: `sellTime3on` was `true` for the one slot they'd manually ticked "Sell" on via the inverter screen. Separately, `SYSTEM_MODE_SETTING_KEYS` still listed the old `sellTime{n}En` name, so even once the field name was corrected, `async_write_setting()` didn't recognize it as part of the System Mode Timer settings group and sent it as a lone single-field payload instead of the full group payload the API appears to expect — likely why it kept silently failing to persist even at the point the correct field was already being written. Both are now fixed. (#21)
+
 ## [1.9.3] - 2026-09-26
 
 ### Fixed
