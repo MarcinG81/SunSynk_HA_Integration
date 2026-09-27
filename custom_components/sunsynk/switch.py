@@ -78,37 +78,37 @@ WRITABLE_SWITCHES: tuple[SunsynkSwitchEntityDescription, ...] = (
     SunsynkSwitchEntityDescription(
         key="setting_sell_time1_en",
         name="Sell Time 1 Enabled",
-        setting_key="sellTime1En",
+        setting_key="sellTime1on",
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time2_en",
         name="Sell Time 2 Enabled",
-        setting_key="sellTime2En",
+        setting_key="sellTime2on",
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time3_en",
         name="Sell Time 3 Enabled",
-        setting_key="sellTime3En",
+        setting_key="sellTime3on",
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time4_en",
         name="Sell Time 4 Enabled",
-        setting_key="sellTime4En",
+        setting_key="sellTime4on",
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time5_en",
         name="Sell Time 5 Enabled",
-        setting_key="sellTime5En",
+        setting_key="sellTime5on",
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time6_en",
         name="Sell Time 6 Enabled",
-        setting_key="sellTime6En",
+        setting_key="sellTime6on",
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
