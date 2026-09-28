@@ -147,6 +147,71 @@ async def test_full_slot_arm_sequence_does_not_revert_the_on_flag(fake_coordinat
     assert fake_coordinator.data["TEST123"]["settings"]["sellTime1"] == "23:30"
 
 
+# ── settings-write payload scoping: a slot write must not touch other slots
+# or unrelated global fields (#21) ────────────────────────────────────────
+#
+# A reporter on a parallel/dual-inverter system found that writing one
+# physical slot's fields (time1on/cap1/sellTime1Pac/sellTime1/sellTime1on)
+# used to resend all 36 SYSTEM_MODE_SETTING_KEYS fields — every other
+# slot's cached values plus unrelated global settings — on every single
+# field write. That (a) multiplied write volume enough to visibly desync
+# master/slave (screen "flickering many times" per write), and (b)
+# reintroduced a stale, chronologically-earlier start time from an
+# untouched slot (e.g. slot 2's original 05:30 grid-charge start) into the
+# payload, which silently corrupted the *targeted* slot's own end time
+# (Sunsynk derives slot N's end from slot N+1's start). Slot fields now
+# group only with their own slot's siblings.
+
+
+@pytest.mark.asyncio
+async def test_slot_write_payload_excludes_other_slots_fields(fake_coordinator):
+    fake_coordinator.data["TEST123"]["settings"]["sellTime2"] = "05:30"
+    fake_coordinator.data["TEST123"]["settings"]["cap2"] = "20"
+    sent_payloads: list[dict] = []
+    mock_client = _echoing_client(sent_payloads)
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+
+    assert "sellTime2" not in sent_payloads[0]
+    assert "cap2" not in sent_payloads[0]
+
+
+@pytest.mark.asyncio
+async def test_slot_write_payload_still_includes_same_slot_siblings(fake_coordinator):
+    """The reason these are grouped at all: sellTime{n}on silently failed to
+    persist when sent alone, without its own slot's other fields (#21)."""
+    sent_payloads: list[dict] = []
+    mock_client = _echoing_client(sent_payloads)
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+
+    for key in ("cap1", "sellTime1Pac", "sellTime1", "time1on"):
+        assert key in sent_payloads[0]
+
+
+@pytest.mark.asyncio
+async def test_global_system_mode_write_still_uses_full_group(fake_coordinator):
+    """Non-slot System Mode Timer settings (solarSell, pvMaxLimit, ...) keep
+    the original full-group write behavior — only slot-indexed fields were
+    ever implicated in the desync/corruption reports."""
+    fake_coordinator.data["TEST123"]["settings"]["pvMaxLimit"] = "6000"
+    sent_payloads: list[dict] = []
+    mock_client = _echoing_client(sent_payloads)
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "solarSell", 1)
+
+    assert sent_payloads[0]["pvMaxLimit"] == "6000"
+
+
 # ── async_write_plant_price: plant_id cache-miss fallback (#20) ──────────────
 #
 # Regression coverage for "No plant found for inverter X" (#20): the cache's

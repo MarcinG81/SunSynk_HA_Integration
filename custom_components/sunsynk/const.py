@@ -872,18 +872,29 @@ BATTERY_SETTING_KEYS = frozenset([
     "dischargeCurrent", "chargeVolt", "dischargeVolt",
 ])
 
+# Each System Mode Timer slot's own fields (start time, cap, sell power,
+# sell permission, sell voltage threshold), grouped per slot index rather
+# than lumped in with every other slot. Kept separate from
+# SYSTEM_MODE_SETTING_KEYS so that writing slot 1's fields never also
+# resends slots 2-5's cached, unrelated values — on a parallel/dual-inverter
+# system a reporter found that resending all 6 slots on every Virtual Slot
+# Scheduler write (a) multiplied write volume enough to visibly desync
+# master/slave, and (b) reintroduced a stale, chronologically-earlier start
+# time from an untouched slot into the payload, which appears to silently
+# corrupt the *targeted* slot's own end time (Sunsynk derives slot N's end
+# from slot N+1's start) rather than being rejected outright (#21).
+SLOT_SETTING_KEY_GROUPS: dict[int, frozenset[str]] = {
+    n: frozenset({
+        f"time{n}on", f"cap{n}", f"sellTime{n}Pac", f"sellTime{n}",
+        f"sellTime{n}on", f"sellTime{n}Volt",
+    })
+    for n in range(1, 7)
+}
+
 SYSTEM_MODE_SETTING_KEYS = frozenset([
     "sn", "safetyType", "battMode", "solarSell", "pvMaxLimit", "energyMode",
-    "peakAndVallery", "sysWorkMode",
-    "sellTime1", "sellTime2", "sellTime3", "sellTime4", "sellTime5", "sellTime6",
-    "sellTime1on", "sellTime2on", "sellTime3on", "sellTime4on", "sellTime5on", "sellTime6on",
-    "sellTime1Pac", "sellTime2Pac",
-    "sellTime3Pac", "sellTime4Pac", "sellTime5Pac", "sellTime6Pac",
-    "cap1", "cap2", "cap3", "cap4", "cap5", "cap6",
-    "sellTime1Volt", "sellTime2Volt", "sellTime3Volt", "sellTime4Volt",
-    "sellTime5Volt", "sellTime6Volt", "zeroExportPower", "solarMaxSellPower",
+    "peakAndVallery", "sysWorkMode", "zeroExportPower", "solarMaxSellPower",
     "mondayOn", "tuesdayOn", "wednesdayOn", "thursdayOn", "fridayOn",
-    "saturdayOn", "sundayOn", "time1on", "time2on", "time3on", "time4on",
-    "time5on", "time6on", "genTime1on", "genTime2on", "genTime3on",
+    "saturdayOn", "sundayOn", "genTime1on", "genTime2on", "genTime3on",
     "genTime4on", "genTime5on", "genTime6on",
 ])
