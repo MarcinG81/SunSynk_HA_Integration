@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.5] - 2026-09-29
+
+### Fixed
+- **A single System Mode Timer slot write resent every other slot's data.** `async_write_setting()` groups certain settings so a write doesn't accidentally blank out unrelated fields the API expects in the same payload — but the group used for slot fields (`time{n}on`/`cap{n}`/`sellTime{n}Pac`/`sellTime{n}`/`sellTime{n}on`) was all 36 System Mode Timer keys across all 6 slots plus unrelated global settings, not just the slot actually being written. On a parallel/dual-inverter system, a reporter found this multiplied write volume enough to visibly desync master/slave (inverter screen flickering many times per write, with intermittent Repairs on both units), and reintroduced a stale, chronologically-earlier start time from an untouched slot into the payload — which silently corrupted the targeted slot's own end time, since Sunsynk derives slot N's end from slot N+1's start. Each slot's write now only carries its own 6 fields (adding `sellTime{n}Volt`, previously only reachable via the 36-key group); non-slot settings (`solarSell`, `pvMaxLimit`, `sysWorkMode`, weekday flags, generator timer on-flags) keep the original full-group behavior, since only the slot-indexed fields were ever implicated. (#21)
+
 ## [1.9.4] - 2026-09-27
 
 ### Fixed
