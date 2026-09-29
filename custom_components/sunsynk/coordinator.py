@@ -19,6 +19,7 @@ from .calibration import PerformanceRatioCalibrator
 from .const import (
     BATTERY_SETTING_KEYS,
     DOMAIN,
+    SLOT_SETTING_KEY_GROUPS,
     SOLAR_FORECAST_UPDATE_INTERVAL,
     SYSTEM_MODE_SETTING_KEYS,
 )
@@ -217,8 +218,14 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             except SunsynkApiError as err:
                 raise UpdateFailed(f"Cannot read settings for {serial}: {err}") from err
 
+        slot_keys = next(
+            (keys for keys in SLOT_SETTING_KEY_GROUPS.values() if setting_key in keys),
+            None,
+        )
         if setting_key in BATTERY_SETTING_KEYS:
             allowed_keys = BATTERY_SETTING_KEYS
+        elif slot_keys is not None:
+            allowed_keys = slot_keys
         elif setting_key in SYSTEM_MODE_SETTING_KEYS:
             allowed_keys = SYSTEM_MODE_SETTING_KEYS
         else:
