@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.6] - 2026-09-30
+
+### Fixed
+- **Virtual Slot Scheduler's slot 1 had no controlled end time.** Slot 1's *end* isn't a field the scheduler ever wrote — Sunsynk derives it from the next physical slot's (2) own start time, even while slot 2 stays disabled. A reporter found slot 1 silently bounded by slot 2's leftover, pre-VSS start time instead of the intended end of the active virtual window — visible on the inverter screen as e.g. "21:00 - 05:30", where 05:30 was slot 2's original, untouched grid-charge start. Slot 2's start is now pinned to slot 6's start on every relevant write — always a validly-ordered value, since slot 1 is defined as whichever boundary has the earlier time-of-day — giving slot 1 a real, controlled end for the first time. Slot 2 itself stays disabled; only its start time moves. (#21)
+
 ## [1.9.5] - 2026-09-29
 
 ### Fixed
