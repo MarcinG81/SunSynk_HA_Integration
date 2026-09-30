@@ -235,6 +235,70 @@ async def test_bootstrap_disables_unused_slots_and_writes_slot1(mock_hass, mock_
     assert sched.current_physical_slot == 1
 
 
+# ── slot 2 as slot 1's implicit end boundary (#21) ────────────────────────
+#
+# Slot 1's *end* isn't a field this scheduler writes — Sunsynk derives it
+# from the next physical slot's (2) own start time, even while slot 2 is
+# disabled. A reporter found slot 1 silently truncated back to whatever
+# slot 2's leftover, pre-VSS start time was. Slot 2's start is now pinned
+# to slot 6's start (always a validly later-or-equal value, since slot 1
+# is defined as whichever boundary has the earlier time-of-day).
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_pins_slot2_start_to_slot6_start(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="10:00", end="18:00", mode=MODE_CHARGE, current=40, target_soc=80
+    )
+    sched._slots[2] = VirtualSlot(
+        slot_id=2, start="18:00", end="10:00", mode=MODE_DISCHARGE, current=30, target_soc=20,
+        sell_power=3000,
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)  # slot 1 active (10:00), slot 6 upcoming (18:00)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    assert ("sellTime2", "18:00") in _written(mock_coordinator)
+
+
+@pytest.mark.asyncio
+async def test_slot2_boundary_not_rewritten_when_unchanged(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="10:00", end="18:00", mode=MODE_CHARGE, current=40, target_soc=80
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+    await sched._async_bootstrap()
+
+    mock_coordinator.async_write_setting.reset_mock()
+    await sched._async_tick()
+
+    assert ("sellTime2", "18:00") not in _written(mock_coordinator)
+
+
+@pytest.mark.asyncio
+async def test_slot2_boundary_updates_when_slot6_start_changes(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="10:00", end="18:00", mode=MODE_CHARGE, current=40, target_soc=80
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+    await sched._async_bootstrap()
+    assert ("sellTime2", "18:00") in _written(mock_coordinator)
+
+    mock_coordinator.async_write_setting.reset_mock()
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="10:00", end="19:00", mode=MODE_CHARGE, current=40, target_soc=80
+    )
+    await sched._async_tick()
+
+    assert ("sellTime2", "19:00") in _written(mock_coordinator)
+
+
 @pytest.mark.asyncio
 async def test_tick_reassigns_physical_slot_across_midnight_wrap(mock_hass, mock_coordinator):
     """slot 1 = 23:30-05:30 charge (wraps), slot 2 = 05:30-23:30 discharge.

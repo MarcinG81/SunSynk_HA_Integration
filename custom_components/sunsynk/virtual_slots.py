@@ -228,6 +228,7 @@ class VirtualSlotScheduler:
         self._next_boundary: datetime | None = None
         self._last_written: dict[int, tuple] = {}
         self._last_current_key: tuple | None = None
+        self._last_written_slot2_boundary: str | None = None
 
         self._listeners: list[Callable[[], None]] = []
         self._unsub_coordinator: Any = None
@@ -296,6 +297,7 @@ class VirtualSlotScheduler:
                 await self._coordinator.async_write_setting(serial, key, 0)
         self._last_written = {}
         self._last_current_key = None
+        self._last_written_slot2_boundary = None
         await self._async_tick()
 
     async def _async_shutdown(self) -> None:
@@ -452,9 +454,10 @@ class VirtualSlotScheduler:
 
         wrote1 = await self._write_window_if_changed(1, plan.slot1, plan.slot1_start)
         wrote6 = await self._write_window_if_changed(6, plan.slot6, plan.slot6_start)
+        wrote_boundary = await self._write_slot2_boundary_if_changed(plan.slot6_start)
         wrote_current = await self._apply_current_if_changed(plan.active_resolution)
 
-        changed = wrote1 or wrote6 or wrote_current
+        changed = wrote1 or wrote6 or wrote_boundary or wrote_current
         if plan.active_resolution.source != self._current_source:
             self._current_source = plan.active_resolution.source
             changed = True
@@ -500,6 +503,33 @@ class VirtualSlotScheduler:
             await self._coordinator.async_write_setting(serial, keys["en"], 1 if sell_en else 0)
 
         self._last_written[index] = cache_key
+        return True
+
+    async def _write_slot2_boundary_if_changed(self, slot6_start: str) -> bool:
+        """Keep physical slot 2's start time pinned to slot 6's start.
+
+        Slot 1's *end* isn't a field this scheduler writes anywhere — the
+        inverter derives it from the next physical slot's own start time.
+        Slot 2 stays permanently disabled (`time2on=0`, see
+        `_async_bootstrap`), but a reporter found its *leftover* start time
+        from before VSS took ownership still silently bounded slot 1's end
+        on the inverter screen, even while disabled — so a virtual slot
+        assigned to physical slot 1 could get truncated (or extended) back
+        to whatever slot 2 happened to be set to previously, once the
+        inverter re-validated the full System Mode Timer a short time
+        after activation. `slot1_start <= slot6_start` always holds by
+        construction (slot 1 is defined as whichever boundary has the
+        earlier time-of-day), so pinning slot 2's start to slot 6's start
+        is always a validly-ordered value and gives slot 1 a real,
+        controlled end for the first time (#21).
+        """
+        if self._last_written_slot2_boundary == slot6_start:
+            return False
+
+        for serial in self._coordinator.write_target_serials:
+            await self._coordinator.async_write_setting(serial, "sellTime2", slot6_start)
+
+        self._last_written_slot2_boundary = slot6_start
         return True
 
     async def _apply_current_if_changed(self, resolution: Resolution) -> bool:
