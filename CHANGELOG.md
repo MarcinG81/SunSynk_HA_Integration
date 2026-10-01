@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.7] - 2026-10-01
+
+### Fixed
+- **A Tariff Manager price-override discharge exported 0 W.** The max export power handed to the active physical slot for a price-driven discharge was hardcoded to 0 — Tariff Manager has no config option of its own for this, unlike a virtual slot's explicit `sell_power` field. A price override could correctly raise `dischargeCurrent` and still export nothing, since the slot's own `sellTime{n}Pac` silently capped it at zero. Now uses the inverter's own rated power (`ratePower`) so only Tariff Manager's `dischargeCurrent` actually limits export, falling back to a generous default if rated power isn't known yet. (#21)
+- **hassfest validation failure.** Home Assistant's hassfest tooling now rejects listing `cryptography`/`aiohttp` in a custom integration's manifest `requirements`, since both are already Home Assistant core dependencies. Removed — no functional change.
+
 ## [1.9.6] - 2026-09-30
 
 ### Fixed
