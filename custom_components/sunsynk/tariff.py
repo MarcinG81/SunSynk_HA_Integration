@@ -1,7 +1,10 @@
 """Tariff-aware battery charging/discharging manager."""
+
 from __future__ import annotations
 
 import logging
+import math
+from asyncio import Lock
 from collections.abc import Callable
 from typing import Any
 
@@ -97,11 +100,18 @@ class TariffChargingManager:
         self._price_max_age_minutes = price_max_age_minutes
 
         self._enabled = False  # user must explicitly enable via switch
-        self._charging_active = False
-        self._discharging_active = False
+        # Runtime decisions are per physical write target.  A config entry may
+        # contain several independent inverters (with parallel slaves already
+        # collapsed to their master by ``write_target_serials``), so a single
+        # boolean would let the first inverter suppress decisions for all
+        # remaining ones.
+        self._charging_active_serials: set[str] = set()
+        self._discharging_active_serials: set[str] = set()
         self._price_quality: str = QUALITY_NOT_FOUND
         self._export_price_quality: str = QUALITY_NOT_FOUND
+        self._soc_quality_by_serial: dict[str, str] = {}
         self._listeners: list[Callable[[], None]] = []
+        self._evaluate_lock = Lock()
         self._unsub_price: Any = None
         self._unsub_coordinator: Any = None
 
@@ -110,8 +120,10 @@ class TariffChargingManager:
     def async_add_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
         """Register a callback fired on every state change. Returns unsub."""
         self._listeners.append(cb)
+
         def _remove() -> None:
             self._listeners.remove(cb)
+
         return _remove
 
     def _notify_listeners(self) -> None:
@@ -135,18 +147,23 @@ class TariffChargingManager:
         if quality != QUALITY_OK:
             _LOGGER.warning(
                 "Tariff: price entity '%s' quality at startup: %s",
-                self._price_entity, quality,
+                self._price_entity,
+                quality,
             )
         export_quality, _ = self._compute_price_quality(self._export_price_entity)
         self._export_price_quality = export_quality
-        if self._export_price_entity != self._price_entity and export_quality != QUALITY_OK:
+        if (
+            self._export_price_entity != self._price_entity
+            and export_quality != QUALITY_OK
+        ):
             _LOGGER.warning(
                 "Tariff: export price entity '%s' quality at startup: %s",
-                self._export_price_entity, export_quality,
+                self._export_price_entity,
+                export_quality,
             )
 
     def stop(self) -> None:
-        """Unregister all listeners."""
+        """Unregister all listeners without changing inverter settings."""
         if self._unsub_price:
             self._unsub_price()
             self._unsub_price = None
@@ -160,27 +177,56 @@ class TariffChargingManager:
         """Enable or disable without losing configuration."""
         self._enabled = enabled
         if not enabled:
-            for serial in self._coordinator.write_target_serials:
-                if self._charging_active and self._normal_charge_current is not None:
-                    self._hass.async_create_task(
-                        self._coordinator.async_write_setting(
-                            serial, "chargeCurrent", self._normal_charge_current
-                        )
-                    )
-                if self._discharging_active and self._normal_discharge_current is not None:
-                    self._hass.async_create_task(
-                        self._coordinator.async_write_setting(
-                            serial, "dischargeCurrent", self._normal_discharge_current
-                        )
-                    )
-            self._charging_active = False
-            self._discharging_active = False
-            _LOGGER.info("Tariff manager disabled — normal currents restored")
-            self._send_notification("Tariff Manager disabled", "Normal charge/discharge currents restored.")
+            if self._charging_active_serials or self._discharging_active_serials:
+                self._hass.async_create_task(self._async_restore_active_currents())
+            _LOGGER.info("Tariff manager disabled — restoring normal currents")
+            self._send_notification(
+                "Tariff Manager disabled",
+                "Normal charge/discharge current restoration started.",
+            )
         else:
             _LOGGER.info("Tariff manager enabled — re-evaluating current price")
             self._hass.async_create_task(self._evaluate())
         self._notify_listeners()
+
+    async def _async_restore_active_currents(self) -> bool:
+        """Await restoration of all currents currently owned by the manager."""
+        success = True
+        async with self._evaluate_lock:
+            charge_serials = set(self._charging_active_serials)
+            discharge_serials = set(self._discharging_active_serials)
+
+            for serial in self._coordinator.write_target_serials:
+                restores: dict[str, int] = {}
+                if serial in charge_serials and self._normal_charge_current is not None:
+                    restores["chargeCurrent"] = self._normal_charge_current
+                if (
+                    serial in discharge_serials
+                    and self._normal_discharge_current is not None
+                ):
+                    restores["dischargeCurrent"] = self._normal_discharge_current
+                if restores:
+                    try:
+                        await self._coordinator.async_write_settings(serial, restores)
+                    except Exception as err:  # noqa: BLE001
+                        success = False
+                        _LOGGER.error(
+                            "Tariff shutdown: could not restore currents for %s: %s",
+                            serial,
+                            err,
+                        )
+
+            self._charging_active_serials.clear()
+            self._discharging_active_serials.clear()
+
+        self._notify_listeners()
+        return success
+
+    async def async_shutdown(self) -> bool:
+        """Stop callbacks and restore owned currents before unload/reload."""
+        self.stop()
+        self._enabled = False
+        return await self._async_restore_active_currents()
 
     # ── Price quality ──────────────────────────────────────────────────────
 
@@ -223,28 +269,32 @@ class TariffChargingManager:
 
     async def _stop_charging(self, serial: str, reason: str) -> None:
         """Stop charging (no-op if already stopped)."""
-        if not self._charging_active:
+        if serial not in self._charging_active_serials:
             return
         _LOGGER.warning("Tariff: stopping charging [%s] — %s", serial, reason)
         if self._normal_charge_current is not None:
             await self._coordinator.async_write_setting(
                 serial, "chargeCurrent", self._normal_charge_current
             )
-        self._charging_active = False
-        self._send_notification("Tariff: Charging stopped", f"{reason.capitalize()}.")
+        self._charging_active_serials.discard(serial)
+        self._send_notification(
+            "Tariff: Charging stopped", f"Inverter {serial}: {reason.capitalize()}."
+        )
         self._notify_listeners()
 
     async def _stop_discharging(self, serial: str, reason: str) -> None:
         """Stop discharging (no-op if already stopped)."""
-        if not self._discharging_active:
+        if serial not in self._discharging_active_serials:
             return
         _LOGGER.warning("Tariff: stopping discharging [%s] — %s", serial, reason)
         if self._normal_discharge_current is not None:
             await self._coordinator.async_write_setting(
                 serial, "dischargeCurrent", self._normal_discharge_current
             )
-        self._discharging_active = False
-        self._send_notification("Tariff: Discharging stopped", f"{reason.capitalize()}.")
+        self._discharging_active_serials.discard(serial)
+        self._send_notification(
+            "Tariff: Discharging stopped", f"Inverter {serial}: {reason.capitalize()}."
+        )
         self._notify_listeners()
 
     # ── Scheduler ─────────────────────────────────────────────────────────
@@ -272,6 +322,11 @@ class TariffChargingManager:
     # ── Core evaluation ────────────────────────────────────────────────────
 
     async def _evaluate(self) -> None:
+        """Serialize evaluations triggered by price and coordinator updates."""
+        async with self._evaluate_lock:
+            await self._evaluate_locked()
+
+    async def _evaluate_locked(self) -> None:
         """Re-check both price entities and act on each side independently.
 
         Import price quality only gates charging; export price quality only
@@ -289,16 +344,22 @@ class TariffChargingManager:
         if import_quality != self._price_quality:
             _LOGGER.info(
                 "Tariff: import price quality changed %s → %s (%s)",
-                self._price_quality, import_quality, import_detail,
+                self._price_quality,
+                import_quality,
+                import_detail,
             )
             self._price_quality = import_quality
             self._notify_listeners()
 
-        export_quality, export_detail = self._compute_price_quality(self._export_price_entity)
+        export_quality, export_detail = self._compute_price_quality(
+            self._export_price_entity
+        )
         if export_quality != self._export_price_quality:
             _LOGGER.info(
                 "Tariff: export price quality changed %s → %s (%s)",
-                self._export_price_quality, export_quality, export_detail,
+                self._export_price_quality,
+                export_quality,
+                export_detail,
             )
             self._export_price_quality = export_quality
             self._notify_listeners()
@@ -307,24 +368,60 @@ class TariffChargingManager:
 
         for serial in self._coordinator.write_target_serials:
             battery = (self._coordinator.data or {}).get(serial, {}).get("battery", {})
-            try:
-                soc = float(battery.get("soc", 0))
-            except (ValueError, TypeError):
-                soc = 0.0
+            soc, soc_quality = self._read_soc(battery)
+            previous_soc_quality = self._soc_quality_by_serial.get(serial)
+            if soc_quality != previous_soc_quality:
+                log = _LOGGER.info if soc_quality == QUALITY_OK else _LOGGER.warning
+                log(
+                    "Tariff: battery SOC quality changed [%s] %s → %s",
+                    serial,
+                    previous_soc_quality or "unknown",
+                    soc_quality,
+                )
+                self._soc_quality_by_serial[serial] = soc_quality
+                self._notify_listeners()
+
+            if soc is None:
+                # Missing, non-finite or out-of-range SOC is never equivalent
+                # to 0%.  Stop anything this manager owns and do not make a
+                # new charge/discharge decision until trustworthy SOC returns.
+                reason = f"battery SOC quality: {soc_quality}"
+                await self._stop_charging(serial, reason)
+                await self._stop_discharging(serial, reason)
+                continue
 
             if import_quality == QUALITY_OK:
                 price = self._read_price(self._price_entity)
                 if price is not None:
                     await self._evaluate_charging(serial, price, soc, in_schedule)
             else:
-                await self._stop_charging(serial, f"import price quality: {import_detail}")
+                await self._stop_charging(
+                    serial, f"import price quality: {import_detail}"
+                )
 
             if export_quality == QUALITY_OK:
                 price = self._read_price(self._export_price_entity)
                 if price is not None:
                     await self._evaluate_discharging(serial, price, soc, in_schedule)
             else:
-                await self._stop_discharging(serial, f"export price quality: {export_detail}")
+                await self._stop_discharging(
+                    serial, f"export price quality: {export_detail}"
+                )
+
+    @staticmethod
+    def _read_soc(battery: dict[str, Any]) -> tuple[float | None, str]:
+        """Return a validated SOC; unsafe values fail closed."""
+        if "soc" not in battery or battery["soc"] is None:
+            return None, "missing"
+        try:
+            soc = float(battery["soc"])
+        except (TypeError, ValueError):
+            return None, QUALITY_INVALID
+        if not math.isfinite(soc):
+            return None, QUALITY_INVALID
+        if not 0 <= soc <= 100:
+            return None, "out_of_range"
+        return soc, QUALITY_OK
 
     async def _evaluate_charging(
         self, serial: str, price: float, soc: float, in_schedule: bool
@@ -332,41 +429,41 @@ class TariffChargingManager:
         if self._cheap_threshold is None or self._cheap_current is None:
             return
 
-        should_charge = in_schedule and price <= self._cheap_threshold and soc < self._target_soc
+        should_charge = (
+            in_schedule and price <= self._cheap_threshold and soc < self._target_soc
+        )
 
-        if should_charge and not self._charging_active:
+        if should_charge and serial not in self._charging_active_serials:
+            # Charging wins if thresholds overlap.  A physical inverter must
+            # never be commanded to charge and discharge at the same time.
+            await self._stop_discharging(serial, "charging took priority")
             _LOGGER.info(
                 "Tariff charging ON [%s] — price %.4f ≤ %.4f, SOC %.0f%% < %d%%",
-                serial, price, self._cheap_threshold, soc, self._target_soc,
+                serial,
+                price,
+                self._cheap_threshold,
+                soc,
+                self._target_soc,
             )
             await self._coordinator.async_write_setting(
                 serial, "chargeCurrent", self._cheap_current
             )
-            self._charging_active = True
+            self._charging_active_serials.add(serial)
             self._send_notification(
                 "Tariff: Charging started",
-                f"Price {price:.4f} ≤ threshold {self._cheap_threshold}. "
+                f"Inverter {serial}: price {price:.4f} ≤ threshold {self._cheap_threshold}. "
                 f"Charging at {self._cheap_current} A until {self._target_soc}% SOC.",
             )
             self._notify_listeners()
 
-        elif not should_charge and self._charging_active:
+        elif not should_charge and serial in self._charging_active_serials:
             if not in_schedule:
                 reason = "outside active schedule"
             elif price > self._cheap_threshold:
                 reason = f"price {price:.4f} > threshold {self._cheap_threshold}"
             else:
                 reason = f"SOC {soc:.0f}% reached target {self._target_soc}%"
-            _LOGGER.info("Tariff charging OFF [%s] — %s", serial, reason)
-            await self._coordinator.async_write_setting(
-                serial, "chargeCurrent", self._normal_charge_current
-            )
-            self._charging_active = False
-            self._send_notification(
-                "Tariff: Charging stopped",
-                f"{reason.capitalize()}. Restored {self._normal_charge_current} A.",
-            )
-            self._notify_listeners()
+            await self._stop_charging(serial, reason)
 
     async def _evaluate_discharging(
         self, serial: str, price: float, soc: float, in_schedule: bool
@@ -375,43 +472,44 @@ class TariffChargingManager:
             return
 
         should_discharge = (
-            in_schedule and price >= self._expensive_threshold and soc > self._discharge_min_soc
+            in_schedule
+            and price >= self._expensive_threshold
+            and soc > self._discharge_min_soc
         )
 
-        if should_discharge and not self._discharging_active:
+        if (
+            should_discharge
+            and serial not in self._discharging_active_serials
+            and serial not in self._charging_active_serials
+        ):
             _LOGGER.info(
                 "Tariff discharging ON [%s] — price %.4f ≥ %.4f, SOC %.0f%% > %d%%",
-                serial, price, self._expensive_threshold, soc, self._discharge_min_soc,
+                serial,
+                price,
+                self._expensive_threshold,
+                soc,
+                self._discharge_min_soc,
             )
             await self._coordinator.async_write_setting(
                 serial, "dischargeCurrent", self._peak_discharge_current
             )
-            self._discharging_active = True
+            self._discharging_active_serials.add(serial)
             self._send_notification(
                 "Tariff: Discharging started",
-                f"Price {price:.4f} ≥ threshold {self._expensive_threshold}. "
+                f"Inverter {serial}: price {price:.4f} ≥ threshold {self._expensive_threshold}. "
                 f"Discharging at {self._peak_discharge_current} A "
                 f"(min SOC {self._discharge_min_soc}%).",
             )
             self._notify_listeners()
 
-        elif not should_discharge and self._discharging_active:
+        elif not should_discharge and serial in self._discharging_active_serials:
             if not in_schedule:
                 reason = "outside active schedule"
             elif price < self._expensive_threshold:
                 reason = f"price {price:.4f} < threshold {self._expensive_threshold}"
             else:
                 reason = f"SOC {soc:.0f}% reached minimum {self._discharge_min_soc}%"
-            _LOGGER.info("Tariff discharging OFF [%s] — %s", serial, reason)
-            await self._coordinator.async_write_setting(
-                serial, "dischargeCurrent", self._normal_discharge_current
-            )
-            self._discharging_active = False
-            self._send_notification(
-                "Tariff: Discharging stopped",
-                f"{reason.capitalize()}. Restored {self._normal_discharge_current} A.",
-            )
-            self._notify_listeners()
+            await self._stop_discharging(serial, reason)
 
     # ── Notifications ──────────────────────────────────────────────────────
 
@@ -482,11 +580,44 @@ class TariffChargingManager:
 
     @property
     def is_charging_active(self) -> bool:
-        return self._charging_active
+        """Return whether any inverter is tariff-charging."""
+        return bool(self._charging_active_serials)
 
     @property
     def is_discharging_active(self) -> bool:
-        return self._discharging_active
+        """Return whether any inverter is tariff-discharging."""
+        return bool(self._discharging_active_serials)
+
+    def is_charging_active_for(self, serial: str) -> bool:
+        """Return whether one physical write target is tariff-charging."""
+        return serial in self._charging_active_serials
+
+    def is_discharging_active_for(self, serial: str) -> bool:
+        """Return whether one physical write target is tariff-discharging."""
+        return serial in self._discharging_active_serials
+
+    def mode_for(self, serial: str) -> str:
+        """Return the tariff mode for one physical write target."""
+        if not self._enabled:
+            return "disabled"
+        if self.is_charging_active_for(serial):
+            return "charging"
+        if self.is_discharging_active_for(serial):
+            return "discharging"
+        return "idle"
+
+    @property
+    def per_inverter_modes(self) -> dict[str, str]:
+        """Return a stable snapshot of modes keyed by physical target."""
+        return {
+            serial: self.mode_for(serial)
+            for serial in self._coordinator.write_target_serials
+        }
+
+    @property
+    def soc_quality_by_inverter(self) -> dict[str, str]:
+        """Return SOC quality for each physical write target."""
+        return dict(self._soc_quality_by_serial)
 
     @property
     def price_quality(self) -> str:
@@ -494,14 +625,15 @@ class TariffChargingManager:
 
     @property
     def mode(self) -> str:
-        """Return human-readable current mode."""
+        """Return aggregate mode; ``mixed`` means targets differ."""
         if not self._enabled:
             return "disabled"
-        if self._charging_active:
-            return "charging"
-        if self._discharging_active:
-            return "discharging"
-        return "idle"
+        modes = set(self.per_inverter_modes.values())
+        if not modes:
+            return "idle"
+        if len(modes) == 1:
+            return modes.pop()
+        return "mixed"
 
     @property
     def price_entity(self) -> str:
@@ -526,6 +658,14 @@ class TariffChargingManager:
     @property
     def target_soc(self) -> int:
         return self._target_soc
+
+    @property
+    def normal_charge_current(self) -> int | None:
+        return self._normal_charge_current
+
+    @property
+    def normal_discharge_current(self) -> int | None:
+        return self._normal_discharge_current
 
     @property
     def discharge_min_soc(self) -> int:

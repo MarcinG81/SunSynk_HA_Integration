@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.venv/
+/wiki/
+.claude/

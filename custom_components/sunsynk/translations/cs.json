@@ -36,11 +36,13 @@
           "password": "New Sunsynk Account Password",
           "serials": "Sériové číslo/čísla měniče",
           "refresh_interval": "Interval aktualizace (sekundy)",
+          "create_dashboard": "Create and maintain Sunsynk dashboard",
           "latitude": "Zeměpisná šířka (solární předpověď)",
           "longitude": "Zeměpisná délka (solární předpověď)",
           "panel_kwp": "Špičkový výkon panelů (kWp)",
           "performance_ratio": "Výkonnostní koeficient (0–1)",
           "price_entity": "Senzor ceny elektřiny",
+          "export_price_entity": "Export/Sell Price Sensor (optional)",
           "cheap_threshold": "Nabíjet pod cenou (práh levného tarifu)",
           "cheap_charge_current": "Nabíjecí proud při levném tarifu (A)",
           "normal_charge_current": "Normální nabíjecí proud k obnovení (A)",
@@ -55,11 +57,13 @@
         },
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
+          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
           "latitude": "Volitelné — výchozí je poloha domova v HA",
           "longitude": "Volitelné — výchozí je poloha domova v HA",
           "panel_kwp": "Celkový instalovaný výkon panelů v kilowattech špičkových. Ponechte prázdné pro deaktivaci solární předpovědi.",
           "performance_ratio": "Koeficient účinnosti systému, výchozí 0,80",
           "price_entity": "Libovolný senzor hlásící cenu elektřiny (např. Octopus Agile, NordPool, Tibber). Ponechte prázdné pro deaktivaci správy tarifů.",
+          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
           "cheap_threshold": "Pokud cena ≤ této hodnotě, nabíjet baterii. Ponechte prázdné pro deaktivaci levného nabíjení.",
           "cheap_charge_current": "Nabíjecí proud baterie v levném období (např. 100 A).",
           "normal_charge_current": "Nabíjecí proud obnovený po skončení levného období.",
@@ -91,6 +95,10 @@
     "inverter_offline": {
       "title": "Měnič {serial} je offline",
       "description": "Data pro měnič **{serial}** se nepodařilo načíst. Zkontrolujte, zda je dongle připojen a aplikace Sunsynk zobrazuje živá data."
+    },
+    "setting_write_mismatch": {
+      "title": "Setting {setting_key} did not apply on {serial}",
+      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
     }
   }
 }

@@ -36,11 +36,13 @@
           "password": "New Sunsynk Account Password",
           "serials": "Seriennummer(n) des Wechselrichters",
           "refresh_interval": "Aktualisierungsintervall (Sekunden)",
+          "create_dashboard": "Create and maintain Sunsynk dashboard",
           "latitude": "Breitengrad (Solarprognose)",
           "longitude": "Längengrad (Solarprognose)",
           "panel_kwp": "Spitzenleistung der Panels (kWp)",
           "performance_ratio": "Leistungsverhältnis (0–1)",
           "price_entity": "Strompreissensor",
+          "export_price_entity": "Export/Sell Price Sensor (optional)",
           "cheap_threshold": "Laden bei Preis unter (Günstiger-Tarif-Schwelle)",
           "cheap_charge_current": "Ladestrom beim günstigen Tarif (A)",
           "normal_charge_current": "Normaler Ladestrom nach Tarif-Ende (A)",
@@ -55,11 +57,13 @@
         },
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
+          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
           "latitude": "Optional — Standard: HA-Heimatstandort",
           "longitude": "Optional — Standard: HA-Heimatstandort",
           "panel_kwp": "Gesamte installierte Panelleistung in Kilowatt-Peak. Leer lassen, um die Solarprognose zu deaktivieren.",
           "performance_ratio": "Systemeffizienzfaktor, Standard 0,80",
           "price_entity": "Beliebiger Sensor, der den Strompreis meldet (z. B. Octopus Agile, NordPool, Tibber). Leer lassen, um die Tarifverwaltung zu deaktivieren.",
+          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
           "cheap_threshold": "Wenn Preis ≤ diesem Wert, Akku laden. Leer lassen, um günstiges Laden zu deaktivieren.",
           "cheap_charge_current": "Akku-Ladestrom während des günstigen Tarifs (z. B. 100 A).",
           "normal_charge_current": "Ladestrom, der nach Ende des günstigen Tarifs wiederhergestellt wird.",
@@ -91,6 +95,10 @@
     "inverter_offline": {
       "title": "Wechselrichter {serial} ist offline",
       "description": "Daten für Wechselrichter **{serial}** konnten nicht abgerufen werden. Prüfe, ob der Dongle angeschlossen ist und die Sunsynk-App Live-Daten anzeigt."
+    },
+    "setting_write_mismatch": {
+      "title": "Setting {setting_key} did not apply on {serial}",
+      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
     }
   }
 }

@@ -1,4 +1,5 @@
 """Shared helpers for the Sunsynk integration."""
+
 from __future__ import annotations
 
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -10,6 +11,7 @@ from .coordinator import SunsynkCoordinator
 def build_device_info(coordinator: SunsynkCoordinator, serial: str) -> DeviceInfo:
     """Build a full DeviceInfo for a given inverter serial."""
     from .const import _model_value
+
     inverter_data = (coordinator.data or {}).get(serial, {}).get("inverter", {})
     brand_raw = inverter_data.get("brand")
     brand = brand_raw if isinstance(brand_raw, str) and brand_raw else "Sunsynk"

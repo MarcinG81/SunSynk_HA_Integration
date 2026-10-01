@@ -36,11 +36,13 @@
           "password": "Nowe hasło konta Sunsynk",
           "serials": "Numer(y) seryjny falownika",
           "refresh_interval": "Interwał odświeżania (sekundy)",
+          "create_dashboard": "Utwórz i utrzymuj dashboard Sunsynk",
           "latitude": "Szerokość geograficzna (prognoza słoneczna)",
           "longitude": "Długość geograficzna (prognoza słoneczna)",
           "panel_kwp": "Szczytowa moc paneli (kWp)",
           "performance_ratio": "Współczynnik sprawności (0–1)",
           "price_entity": "Czujnik ceny energii",
+          "export_price_entity": "Czujnik ceny eksportu/sprzedaży (opcjonalny)",
           "cheap_threshold": "Ładuj poniżej ceny (próg taniej taryfy)",
           "cheap_charge_current": "Prąd ładowania przy taniej taryfie (A)",
           "normal_charge_current": "Normalny prąd ładowania do przywrócenia (A)",
@@ -55,11 +57,13 @@
         },
         "data_description": {
           "password": "Zostaw puste, aby zachować zapisane hasło. Wpisz nowe hasło po zmianie w portalu Sunsynk lub Deye.",
+          "create_dashboard": "Opcjonalnie utwórz dashboard Lovelace, zarejestruj dołączoną kartę i aktualizuj dashboard po każdym przeładowaniu integracji. Domyślnie wyłączone.",
           "latitude": "Opcjonalne — domyślnie lokalizacja HA",
           "longitude": "Opcjonalne — domyślnie lokalizacja HA",
           "panel_kwp": "Łączna moc zainstalowanych paneli w kWp. Pozostaw puste, aby wyłączyć prognozę słoneczną.",
           "performance_ratio": "Współczynnik sprawności systemu, domyślnie 0,80",
           "price_entity": "Dowolny czujnik podający cenę energii (np. Octopus Agile, NordPool, Tibber). Pozostaw puste, aby wyłączyć zarządzanie taryfą.",
+          "export_price_entity": "Steruje decyzją o rozładowaniu zamiast ceny importu. Pozostaw puste, aby używać ceny importu w obu kierunkach.",
           "cheap_threshold": "Gdy cena ≤ tej wartości, ładuj baterię. Pozostaw puste, aby wyłączyć ładowanie przy taniej taryfie.",
           "cheap_charge_current": "Prąd ładowania baterii w czasie taniej taryfy (np. 100 A).",
           "normal_charge_current": "Prąd ładowania przywracany po zakończeniu taniej taryfy.",
@@ -91,6 +95,10 @@
     "inverter_offline": {
       "title": "Falownik {serial} jest offline",
       "description": "Nie można pobrać danych dla falownika **{serial}**. Sprawdź czy klucz sprzętowy jest podłączony i aplikacja Sunsynk wyświetla dane na żywo."
+    },
+    "setting_write_mismatch": {
+      "title": "Ustawienie {setting_key} nie zostało zastosowane na {serial}",
+      "description": "Po zapisaniu `{expected}` falownik zgłasza `{actual}`. Sprawdź ustawienie bezpośrednio w aplikacji Sunsynk."
     }
   }
 }

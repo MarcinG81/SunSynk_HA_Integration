@@ -77,4 +77,5 @@ def mock_coordinator(mock_hass):
         }
     }
     coordinator.async_write_setting = AsyncMock()
+    coordinator.async_write_settings = AsyncMock()
     return coordinator

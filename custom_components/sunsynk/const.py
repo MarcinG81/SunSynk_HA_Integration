@@ -1,4 +1,5 @@
 """Constants for the Sunsynk integration."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -26,6 +27,7 @@ DOMAIN: Final = "sunsynk"
 CONF_API_SERVER: Final = "api_server"
 CONF_SERIALS: Final = "serials"
 CONF_REFRESH_INTERVAL: Final = "refresh_interval"
+CONF_CREATE_DASHBOARD: Final = "create_dashboard"
 
 API_SERVER_SUNSYNK: Final = "api.sunsynk.net"
 API_SERVER_INTELESS: Final = "pv.inteless.com"
@@ -71,7 +73,9 @@ class SunsynkSensorEntityDescription(SensorEntityDescription):
     endpoint: str = ""
     data_key: str = ""
     fallback_data_key: str = ""  # tried when data_key resolves to None or ""
-    value_fn: Callable[[dict[str, Any]], Any] | None = None  # overrides data_key lookup when set
+    value_fn: Callable[[dict[str, Any]], Any] | None = (
+        None  # overrides data_key lookup when set
+    )
 
 
 def _model_value(d: dict[str, Any]) -> str | None:
@@ -533,7 +537,7 @@ BATTERY_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
     ),
     SunsynkSensorEntityDescription(
         key="battery_soh",
-        name="Battery SOH",
+        name="Battery SOH Estimate",
         endpoint="battery",
         data_key="",
         value_fn=_battery_soh_value,
@@ -858,19 +862,53 @@ ALL_STATIC_SENSORS = (
     + TEMP_SENSORS
 )
 
-BATTERY_SETTING_KEYS = frozenset([
-    "absorptionVolt", "battMode", "batteryCap", "batteryEfficiency",
-    "batteryEmptyV", "batteryImpedance", "batteryLowCap", "batteryLowVolt",
-    "batteryMaxCurrentCharge", "batteryMaxCurrentDischarge", "batteryOn",
-    "batteryRestartCap", "batteryRestartVolt", "batteryShutdownCap",
-    "batteryShutdownVolt", "bmsErrStop", "disableFloatCharge", "equChargeCycle",
-    "equChargeTime", "equVoltCharge", "floatVolt", "genChargeOn", "genSignal",
-    "generatorBatteryCurrent", "generatorForcedStart", "generatorStartCap",
-    "generatorStartVolt", "gridSignal", "lithiumMode", "lowNoiseMode",
-    "lowPowerMode", "safetyType", "sdBatteryCurrent", "sdChargeOn", "sdStartCap",
-    "sdStartVolt", "signalIslandModeEnable", "sn", "tempco", "chargeCurrent",
-    "dischargeCurrent", "chargeVolt", "dischargeVolt",
-])
+BATTERY_SETTING_KEYS = frozenset(
+    [
+        "absorptionVolt",
+        "battMode",
+        "batteryCap",
+        "batteryEfficiency",
+        "batteryEmptyV",
+        "batteryImpedance",
+        "batteryLowCap",
+        "batteryLowVolt",
+        "batteryMaxCurrentCharge",
+        "batteryMaxCurrentDischarge",
+        "batteryOn",
+        "batteryRestartCap",
+        "batteryRestartVolt",
+        "batteryShutdownCap",
+        "batteryShutdownVolt",
+        "bmsErrStop",
+        "disableFloatCharge",
+        "equChargeCycle",
+        "equChargeTime",
+        "equVoltCharge",
+        "floatVolt",
+        "genChargeOn",
+        "genSignal",
+        "generatorBatteryCurrent",
+        "generatorForcedStart",
+        "generatorStartCap",
+        "generatorStartVolt",
+        "gridSignal",
+        "lithiumMode",
+        "lowNoiseMode",
+        "lowPowerMode",
+        "safetyType",
+        "sdBatteryCurrent",
+        "sdChargeOn",
+        "sdStartCap",
+        "sdStartVolt",
+        "signalIslandModeEnable",
+        "sn",
+        "tempco",
+        "chargeCurrent",
+        "dischargeCurrent",
+        "chargeVolt",
+        "dischargeVolt",
+    ]
+)
 
 # Each System Mode Timer slot's own fields (start time, cap, sell power,
 # sell permission, sell voltage threshold), grouped per slot index rather
@@ -884,17 +922,43 @@ BATTERY_SETTING_KEYS = frozenset([
 # corrupt the *targeted* slot's own end time (Sunsynk derives slot N's end
 # from slot N+1's start) rather than being rejected outright (#21).
 SLOT_SETTING_KEY_GROUPS: dict[int, frozenset[str]] = {
-    n: frozenset({
-        f"time{n}on", f"cap{n}", f"sellTime{n}Pac", f"sellTime{n}",
-        f"sellTime{n}on", f"sellTime{n}Volt",
-    })
+    n: frozenset(
+        {
+            f"time{n}on",
+            f"cap{n}",
+            f"sellTime{n}Pac",
+            f"sellTime{n}",
+            f"sellTime{n}on",
+            f"sellTime{n}Volt",
+        }
+    )
     for n in range(1, 7)
 }
 
-SYSTEM_MODE_SETTING_KEYS = frozenset([
-    "sn", "safetyType", "battMode", "solarSell", "pvMaxLimit", "energyMode",
-    "peakAndVallery", "sysWorkMode", "zeroExportPower", "solarMaxSellPower",
-    "mondayOn", "tuesdayOn", "wednesdayOn", "thursdayOn", "fridayOn",
-    "saturdayOn", "sundayOn", "genTime1on", "genTime2on", "genTime3on",
-    "genTime4on", "genTime5on", "genTime6on",
-])
+SYSTEM_MODE_SETTING_KEYS = frozenset(
+    [
+        "sn",
+        "safetyType",
+        "battMode",
+        "solarSell",
+        "pvMaxLimit",
+        "energyMode",
+        "peakAndVallery",
+        "sysWorkMode",
+        "zeroExportPower",
+        "solarMaxSellPower",
+        "mondayOn",
+        "tuesdayOn",
+        "wednesdayOn",
+        "thursdayOn",
+        "fridayOn",
+        "saturdayOn",
+        "sundayOn",
+        "genTime1on",
+        "genTime2on",
+        "genTime3on",
+        "genTime4on",
+        "genTime5on",
+        "genTime6on",
+    ]
+)

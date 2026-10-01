@@ -6,7 +6,7 @@ force_charge:
   fields:
     serial:
       name: Inverter Serial
-      description: Serial number of the target inverter.
+      description: Exactly one target inverter. A parallel slave is routed to its master.
       required: true
       selector:
         text:
@@ -17,7 +17,7 @@ force_charge:
       selector:
         number:
           min: 0
-          max: 500
+          max: 300
           unit_of_measurement: A
 
 force_discharge:
@@ -28,7 +28,7 @@ force_discharge:
   fields:
     serial:
       name: Inverter Serial
-      description: Serial number of the target inverter.
+      description: Exactly one target inverter. A parallel slave is routed to its master.
       required: true
       selector:
         text:
@@ -39,7 +39,7 @@ force_discharge:
       selector:
         number:
           min: 0
-          max: 500
+          max: 300
           unit_of_measurement: A
 
 set_virtual_slot:
@@ -48,13 +48,13 @@ set_virtual_slot:
     Define or replace one of up to 10 HA-side virtual charge/discharge slots.
     These are resolved onto the physical Sunsynk time slots 1 and 6 (the only
     pair the inverter allows to wrap past midnight), which the Virtual Slot
-    Scheduler takes exclusive ownership of (slots 2-5 are turned off and left
-    untouched). A live price override from the Tariff Manager always takes
+    Scheduler takes exclusive ownership of (slots 2-5 are disabled and slot 2's
+    start is maintained as slot 1's end boundary). A live price override from the Tariff Manager always takes
     precedence over the virtual schedule while active.
   fields:
     serial:
       name: Inverter Serial
-      description: Serial number of the target inverter.
+      description: Exactly one target inverter schedule. A parallel slave shares its master's schedule.
       required: true
       selector:
         text:
@@ -111,7 +111,7 @@ set_virtual_slot:
       selector:
         number:
           min: 0
-          max: 500
+          max: 300
           unit_of_measurement: A
     target_soc:
       name: Target / Minimum SOC
@@ -129,7 +129,7 @@ set_virtual_slot:
       selector:
         number:
           min: 0
-          max: 20000
+          max: 30000
           unit_of_measurement: W
     priority:
       name: Priority
@@ -153,7 +153,7 @@ clear_virtual_slot:
   fields:
     serial:
       name: Inverter Serial
-      description: Serial number of the target inverter.
+      description: Exactly one target inverter schedule. A parallel slave shares its master's schedule.
       required: true
       selector:
         text:
@@ -178,7 +178,7 @@ set_work_mode:
   fields:
     serial:
       name: Inverter Serial
-      description: Serial number of the target inverter.
+      description: Exactly one target inverter. A parallel slave is routed to its master.
       required: true
       selector:
         text:

@@ -36,11 +36,13 @@
           "password": "New Sunsynk Account Password",
           "serials": "Número(s) de serie del inversor",
           "refresh_interval": "Intervalo de actualización (segundos)",
+          "create_dashboard": "Create and maintain Sunsynk dashboard",
           "latitude": "Latitud (previsión solar)",
           "longitude": "Longitud (previsión solar)",
           "panel_kwp": "Potencia pico de los paneles (kWp)",
           "performance_ratio": "Ratio de rendimiento (0–1)",
           "price_entity": "Sensor de precio de la electricidad",
+          "export_price_entity": "Export/Sell Price Sensor (optional)",
           "cheap_threshold": "Cargar por debajo del precio (umbral tarifa barata)",
           "cheap_charge_current": "Corriente de carga con tarifa barata (A)",
           "normal_charge_current": "Corriente de carga normal a restaurar (A)",
@@ -55,11 +57,13 @@
         },
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
+          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
           "latitude": "Opcional — por defecto la ubicación del hogar en HA",
           "longitude": "Opcional — por defecto la ubicación del hogar en HA",
           "panel_kwp": "Capacidad total instalada de paneles en kilovatios pico. Dejar en blanco para desactivar la previsión solar.",
           "performance_ratio": "Factor de eficiencia del sistema, por defecto 0,80",
           "price_entity": "Cualquier sensor que informe el precio de la electricidad (p. ej. Octopus Agile, NordPool, Tibber). Dejar en blanco para desactivar la gestión de tarifas.",
+          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
           "cheap_threshold": "Cuando el precio ≤ este valor, cargar la batería. Dejar en blanco para desactivar la carga con tarifa barata.",
           "cheap_charge_current": "Corriente de carga de la batería durante el período barato (p. ej. 100 A).",
           "normal_charge_current": "Corriente de carga restaurada al finalizar el período barato.",
@@ -91,6 +95,10 @@
     "inverter_offline": {
       "title": "El inversor {serial} está desconectado",
       "description": "No se pudieron obtener los datos del inversor **{serial}**. Compruebe que el dongle está conectado y que la aplicación Sunsynk muestra datos en tiempo real."
+    },
+    "setting_write_mismatch": {
+      "title": "Setting {setting_key} did not apply on {serial}",
+      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
     }
   }
 }

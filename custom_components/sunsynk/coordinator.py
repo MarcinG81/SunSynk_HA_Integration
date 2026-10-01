@@ -1,10 +1,12 @@
 """DataUpdateCoordinator for Sunsynk integration."""
+
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import aiohttp
@@ -14,7 +16,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api.auth import SunsynkAuth, SunsynkAuthError
-from .api.client import SunsynkApiError, SunsynkClient
+from .api.client import SunsynkApiError, SunsynkAuthenticationError, SunsynkClient
 from .calibration import PerformanceRatioCalibrator
 from .const import (
     BATTERY_SETTING_KEYS,
@@ -23,18 +25,23 @@ from .const import (
     SOLAR_FORECAST_UPDATE_INTERVAL,
     SYSTEM_MODE_SETTING_KEYS,
 )
+from .write_validation import (
+    WRITABLE_SETTING_KEYS,
+    SunsynkSettingValidationError,
+    validate_plant_price,
+    validate_setting_batch,
+    validate_setting_value,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 # Some accounts (observed on a parallel/multi-inverter setup, #21) apparently
 # relay a settings write to the physical inverter asynchronously — the write
-# endpoint acknowledges immediately ("send command success:{}") before the
-# command has actually propagated. Reading straight back with no delay raced
-# ahead of that propagation and flagged every single write as a mismatch,
-# even ones that had genuinely succeeded moments later. This is a pragmatic
-# fixed wait, not a guarantee — accounts with slower relays may still see
-# occasional false positives.
-_VERIFY_WRITE_DELAY_SECONDS = 2
+# The write endpoint acknowledges before a command has necessarily propagated.
+# Verify adaptively instead of blocking every per-inverter write queue for a
+# fixed two seconds: most writes settle after the first short delay, while
+# slower relays still get the same two-second propagation window.
+_VERIFY_WRITE_RETRY_DELAYS = (0.25, 0.5, 1.25)
 
 
 class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
@@ -58,6 +65,13 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self.serials = serials
         self._entry_id = entry_id
         self._session: aiohttp.ClientSession | None = None
+        self._write_locks: dict[str, asyncio.Lock] = {}
+        self._pending_setting_writes: dict[str, dict[str, Any]] = {}
+        self._pending_setting_waiters: dict[
+            str, list[tuple[asyncio.Future[None], frozenset[str]]]
+        ] = {}
+        self._write_drain_scheduled: set[str] = set()
+        self._write_drain_tasks: dict[str, asyncio.Task[None]] = {}
 
     async def _async_get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -81,6 +95,7 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         write loop; keep using `self.serials` for reads (fetching data
         still needs every configured serial).
         """
+
         def _info(serial: str) -> dict[str, Any]:
             return (self.data or {}).get(serial, {}).get("inverter", {})
 
@@ -94,8 +109,11 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             return list(self.serials)
 
         return [
-            serial for serial in self.serials
-            if not (_info(serial).get("parallel") and _info(serial).get("equipMode") == 0)
+            serial
+            for serial in self.serials
+            if not (
+                _info(serial).get("parallel") and _info(serial).get("equipMode") == 0
+            )
         ]
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
@@ -120,14 +138,32 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         client = SunsynkClient(self._auth._api_server, token)
 
         result: dict[str, dict[str, Any]] = {}
+        inverter_failures: list[tuple[str, Exception]] = []
         for serial in self.serials:
             try:
                 result[serial] = await client.async_fetch_all(session, serial)
                 _LOGGER.debug("Data updated for inverter %s", serial)
                 ir.async_delete_issue(self.hass, DOMAIN, f"inverter_offline_{serial}")
+            except SunsynkAuthenticationError as err:
+                self._auth.invalidate_token()
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    f"auth_failed_{self._entry_id}",
+                    is_fixable=False,
+                    severity=ir.IssueSeverity.ERROR,
+                    translation_key="auth_failed",
+                )
+                raise UpdateFailed(f"Authentication failed: {err}") from err
             except Exception as err:  # noqa: BLE001
                 _LOGGER.error("Failed to fetch data for inverter %s: %s", serial, err)
-                result[serial] = self.data.get(serial, {}) if self.data else {}
+                inverter_failures.append((serial, err))
+                # Retain non-safety-critical cached values for continuity, but
+                # never carry a stale SOC into the tariff state machine.  An
+                # empty battery payload deliberately triggers its fail-closed
+                # path for this inverter.
+                result[serial] = dict(self.data.get(serial, {})) if self.data else {}
+                result[serial]["battery"] = {}
                 ir.async_create_issue(
                     self.hass,
                     DOMAIN,
@@ -145,10 +181,23 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                     result[serial]["plant"] = await client.async_get_plant_info(
                         session, str(plant_id)
                     )
+                except SunsynkAuthenticationError as err:
+                    self._auth.invalidate_token()
+                    ir.async_create_issue(
+                        self.hass,
+                        DOMAIN,
+                        f"auth_failed_{self._entry_id}",
+                        is_fixable=False,
+                        severity=ir.IssueSeverity.ERROR,
+                        translation_key="auth_failed",
+                    )
+                    raise UpdateFailed(f"Authentication failed: {err}") from err
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.debug(
                         "Could not fetch plant info for %s (plant %s): %s",
-                        serial, plant_id, err,
+                        serial,
+                        plant_id,
+                        err,
                     )
                     result[serial]["plant"] = (
                         (self.data or {}).get(serial, {}).get("plant", {})
@@ -156,11 +205,20 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             else:
                 result[serial]["plant"] = {}
 
+        if self.serials and len(inverter_failures) == len(self.serials):
+            serial, err = inverter_failures[0]
+            raise UpdateFailed(
+                f"All inverter updates failed; first failure for {serial}: {err}"
+            ) from err
+
         return result
 
-    def _resolve_parallel_write_target(self, serial: str, setting_key: str) -> str:
-        """For a parallel-group slave, all settings should be written to the
-        master's serial instead.
+    def resolve_write_target(self, serial: str) -> str:
+        """Return the physical inverter that owns writes for ``serial``.
+
+        Independent inverters resolve to themselves.  A parallel-group slave
+        resolves to the group's master, because settings written to the slave
+        are synchronised back from the master and do not persist.
 
         #21: a parallel/multi-inverter account showed chargeCurrent and
         dischargeCurrent corrupted on BOTH units (0 on the slave, a wildly
@@ -197,67 +255,214 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
         return serial
 
-    async def async_write_setting(
-        self, serial: str, setting_key: str, value: Any
-    ) -> None:
-        """Write a single setting to the inverter."""
-        serial = SunsynkCoordinator._resolve_parallel_write_target(self, serial, setting_key)
-        session = await self._async_get_session()
+    def _resolve_parallel_write_target(self, serial: str, setting_key: str) -> str:
+        """Backward-compatible internal wrapper for write routing."""
+        return SunsynkCoordinator.resolve_write_target(self, serial)
 
-        try:
-            token = await self._auth.async_get_token(session)
-        except SunsynkAuthError as err:
-            raise UpdateFailed(f"Authentication failed: {err}") from err
+    def _ensure_write_state(self) -> None:
+        """Initialise write coordination lazily for lightweight test doubles."""
+        if not hasattr(self, "_write_locks"):
+            self._write_locks = {}
+        if not hasattr(self, "_pending_setting_writes"):
+            self._pending_setting_writes = {}
+        if not hasattr(self, "_pending_setting_waiters"):
+            self._pending_setting_waiters = {}
+        if not hasattr(self, "_write_drain_scheduled"):
+            self._write_drain_scheduled = set()
+        if not hasattr(self, "_write_drain_tasks"):
+            self._write_drain_tasks = {}
 
-        client = SunsynkClient(self._auth._api_server, token)
+    def _write_lock_for(self, serial: str) -> asyncio.Lock:
+        SunsynkCoordinator._ensure_write_state(self)
+        return self._write_locks.setdefault(serial, asyncio.Lock())
 
-        current_settings = (self.data or {}).get(serial, {}).get("settings", {})
-        if not current_settings:
-            try:
-                current_settings = await client.async_get_settings(session, serial)
-            except SunsynkApiError as err:
-                raise UpdateFailed(f"Cannot read settings for {serial}: {err}") from err
-
+    @staticmethod
+    def _allowed_setting_group(setting_key: str) -> frozenset[str]:
+        """Return the API payload group that owns one setting."""
+        if setting_key in BATTERY_SETTING_KEYS:
+            return BATTERY_SETTING_KEYS
         slot_keys = next(
             (keys for keys in SLOT_SETTING_KEY_GROUPS.values() if setting_key in keys),
             None,
         )
-        if setting_key in BATTERY_SETTING_KEYS:
-            allowed_keys = BATTERY_SETTING_KEYS
-        elif slot_keys is not None:
-            allowed_keys = slot_keys
-        elif setting_key in SYSTEM_MODE_SETTING_KEYS:
-            allowed_keys = SYSTEM_MODE_SETTING_KEYS
-        else:
-            allowed_keys = frozenset([setting_key])
+        if slot_keys is not None:
+            return slot_keys
+        if setting_key in SYSTEM_MODE_SETTING_KEYS:
+            return SYSTEM_MODE_SETTING_KEYS
+        return frozenset([setting_key])
 
-        payload: dict[str, Any] = {
-            k: v for k, v in current_settings.items() if k in allowed_keys
-        }
-        payload[setting_key] = value
-        payload["sn"] = serial
-
-        try:
-            await client.async_write_settings(session, serial, payload)
-        except SunsynkApiError as err:
-            raise UpdateFailed(f"Failed to write setting {setting_key}: {err}") from err
-
-        # Update our own cache immediately with what we just told the API,
-        # rather than waiting for async_request_refresh() below — that call
-        # is debounced (10s cooldown), so a second write_setting() landing
-        # within that window would otherwise build its "preserve the other
-        # fields" payload from data that predates this write, resending
-        # stale values for whatever this write just changed and reverting
-        # it. This keeps same-burst writes (e.g. writing on/cap/pac/start
-        # for one virtual slot back to back) correct regardless of timing.
-        if self.data is not None and serial in self.data:
-            self.data[serial].setdefault("settings", {}).update(payload)
-
-        await SunsynkCoordinator._async_verify_write(
-            self, client, session, serial, setting_key, value
+    async def async_write_setting(
+        self, serial: str, setting_key: str, value: Any
+    ) -> None:
+        """Queue one setting write through the shared coalescing pipeline."""
+        await SunsynkCoordinator.async_write_settings(
+            self, serial, {setting_key: value}
         )
 
-        await self.async_request_refresh()
+    async def async_write_settings(self, serial: str, settings: dict[str, Any]) -> None:
+        """Coalesce and serialize setting writes for one physical inverter.
+
+        Calls made during the same event-loop turn are merged. Settings from
+        the same API group (notably all fields of one timer slot) are emitted
+        in one payload. A per-target lock prevents services, entities, tariff
+        evaluation and virtual-slot ticks from racing each other.
+        """
+        if not settings:
+            return
+        # Validate the complete caller-supplied batch before mutating queue
+        # state. A bad field must not allow valid siblings to leak to the API.
+        settings = validate_setting_batch(settings)
+        serial = SunsynkCoordinator.resolve_write_target(self, serial)
+        SunsynkCoordinator._ensure_write_state(self)
+
+        loop = asyncio.get_running_loop()
+        waiter: asyncio.Future[None] = loop.create_future()
+        pending = self._pending_setting_writes.setdefault(serial, {})
+        pending.update(settings)
+        self._pending_setting_waiters.setdefault(serial, []).append(
+            (waiter, frozenset(settings))
+        )
+
+        if serial not in self._write_drain_scheduled:
+            self._write_drain_scheduled.add(serial)
+            loop.call_soon(
+                SunsynkCoordinator._launch_write_drain,
+                self,
+                serial,
+            )
+
+        await waiter
+
+    def _launch_write_drain(self, serial: str) -> None:
+        """Launch a queued drain after same-turn callers have coalesced."""
+        task = asyncio.get_running_loop().create_task(
+            SunsynkCoordinator._async_drain_write_queue(self, serial)
+        )
+        self._write_drain_tasks[serial] = task
+
+    async def _async_drain_write_queue(self, serial: str) -> None:
+        """Drain all queued batches for one target under its write lock."""
+        current_waiters: list[tuple[asyncio.Future[None], frozenset[str]]] = []
+        try:
+            while updates := self._pending_setting_writes.pop(serial, None):
+                current_waiters = self._pending_setting_waiters.pop(serial, [])
+                async with SunsynkCoordinator._write_lock_for(self, serial):
+                    failures = await SunsynkCoordinator._async_execute_setting_batch(
+                        self, serial, updates
+                    )
+
+                for waiter, keys in current_waiters:
+                    if waiter.done():
+                        continue
+                    error = next(
+                        (failures[key] for key in keys if key in failures),
+                        None,
+                    )
+                    if error is None:
+                        waiter.set_result(None)
+                    else:
+                        waiter.set_exception(error)
+                current_waiters = []
+        except Exception as err:
+            # A coordinator-internal failure must never strand callers.
+            pending_waiters = self._pending_setting_waiters.pop(serial, [])
+            for waiter, _keys in [*current_waiters, *pending_waiters]:
+                if not waiter.done():
+                    waiter.set_exception(err)
+            _LOGGER.exception("Setting write queue failed for inverter %s", serial)
+        finally:
+            self._write_drain_tasks.pop(serial, None)
+            self._write_drain_scheduled.discard(serial)
+            if self._pending_setting_writes.get(serial):
+                self._write_drain_scheduled.add(serial)
+                asyncio.get_running_loop().call_soon(
+                    SunsynkCoordinator._launch_write_drain,
+                    self,
+                    serial,
+                )
+
+    async def _async_execute_setting_batch(
+        self, serial: str, updates: dict[str, Any]
+    ) -> dict[str, Exception]:
+        """Write one coalesced batch and return failures keyed by setting."""
+        session = await self._async_get_session()
+        try:
+            token = await self._auth.async_get_token(session)
+        except SunsynkAuthError as err:
+            error = UpdateFailed(f"Authentication failed: {err}")
+            return {key: error for key in updates}
+
+        client = SunsynkClient(self._auth._api_server, token)
+        # Never put an optimistic value in the coordinator cache: the write
+        # endpoint can acknowledge a command which the inverter then rejects.
+        current_settings = dict((self.data or {}).get(serial, {}).get("settings", {}))
+        if not current_settings:
+            try:
+                current_settings = dict(
+                    await client.async_get_settings(session, serial)
+                )
+            except SunsynkAuthenticationError as err:
+                self._auth.invalidate_token()
+                error = UpdateFailed(f"Authentication failed: {err}")
+                return {key: error for key in updates}
+            except SunsynkApiError as err:
+                error = UpdateFailed(f"Cannot read settings for {serial}: {err}")
+                return {key: error for key in updates}
+
+        grouped_updates: dict[frozenset[str], dict[str, Any]] = {}
+        for key, value in updates.items():
+            allowed_keys = SunsynkCoordinator._allowed_setting_group(key)
+            grouped_updates.setdefault(allowed_keys, {})[key] = value
+
+        failures: dict[str, Exception] = {}
+        written: dict[str, Any] = {}
+        for allowed_keys, group_updates in grouped_updates.items():
+            payload: dict[str, Any] = {
+                key: value
+                for key, value in current_settings.items()
+                if key in allowed_keys and value is not None
+            }
+            payload.update(group_updates)
+            payload["sn"] = serial
+            try:
+                # Group writes also resend cached sibling values. Validate all
+                # writable siblings, not just the caller's changed fields, so
+                # a corrupt cached current/SOC/power cannot hitch a ride.
+                for key in payload.keys() & WRITABLE_SETTING_KEYS:
+                    payload[key] = validate_setting_value(key, payload[key])
+            except SunsynkSettingValidationError as err:
+                error = UpdateFailed(
+                    f"Unsafe cached setting blocks write of "
+                    f"{', '.join(group_updates)}: {err}"
+                )
+                failures.update({key: error for key in group_updates})
+                continue
+            try:
+                await client.async_write_settings(session, serial, payload)
+            except SunsynkAuthenticationError as err:
+                self._auth.invalidate_token()
+                error = UpdateFailed(f"Authentication failed: {err}")
+                return {key: error for key in updates}
+            except SunsynkApiError as err:
+                error = UpdateFailed(
+                    f"Failed to write settings {', '.join(group_updates)}: {err}"
+                )
+                failures.update({key: error for key in group_updates})
+                continue
+
+            written.update(group_updates)
+            current_settings.update(payload)
+
+        if written:
+            try:
+                await SunsynkCoordinator._async_verify_writes(
+                    self, client, session, serial, written
+                )
+            except UpdateFailed as err:
+                failures.update({key: err for key in written})
+            else:
+                await self.async_request_refresh()
+        return failures
 
     async def _async_verify_write(
         self,
@@ -267,53 +472,94 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         setting_key: str,
         value: Any,
     ) -> None:
-        """Fail-safe: re-read the setting we just wrote straight from the API.
+        """Backward-compatible single-setting verification wrapper."""
+        await SunsynkCoordinator._async_verify_writes(
+            self, client, session, serial, {setting_key: value}
+        )
+
+    async def _async_verify_writes(
+        self,
+        client: SunsynkClient,
+        session: aiohttp.ClientSession,
+        serial: str,
+        expected: dict[str, Any],
+    ) -> None:
+        """Fail-safe: verify a whole batch with adaptive delayed API reads.
 
         The write endpoint returns success even when the inverter silently
         ignores a value (out-of-range, conflicting with another setting,
         dongle briefly offline), so a 200 response alone doesn't prove the
-        change actually took. Re-reading confirms it, and raises a Repair
-        so the mismatch isn't just a debug-log line nobody sees.
-
-        Waits briefly first — see _VERIFY_WRITE_DELAY_SECONDS.
+        change actually took. Re-reading once confirms every field in the
+        coalesced batch and raises a Repair for each mismatch. Verification
+        starts after a short delay and retries only while propagation is still
+        pending, avoiding a fixed two-second delay on every successful write.
         """
-        issue_id = f"setting_write_mismatch_{serial}_{setting_key}"
-        await asyncio.sleep(_VERIFY_WRITE_DELAY_SECONDS)
-        try:
-            fresh_settings = await client.async_get_settings(session, serial)
-        except SunsynkApiError as err:
-            _LOGGER.debug(
-                "Could not verify write of %s for %s: %s", setting_key, serial, err
+        fresh_settings: dict[str, Any] = {}
+        for delay in _VERIFY_WRITE_RETRY_DELAYS:
+            await asyncio.sleep(delay)
+            try:
+                fresh_settings = await client.async_get_settings(session, serial)
+            except SunsynkAuthenticationError as err:
+                self._auth.invalidate_token()
+                raise UpdateFailed(f"Authentication failed: {err}") from err
+            except SunsynkApiError as err:
+                raise UpdateFailed(
+                    f"Could not verify writes of {', '.join(expected)} for "
+                    f"{serial}: {err}"
+                ) from err
+
+            if all(
+                SunsynkCoordinator._values_match(value, fresh_settings.get(key))
+                for key, value in expected.items()
+            ):
+                break
+
+        # Replace any assumptions with the authoritative read-back before
+        # notifying consumers. This also rolls the cache back when the device
+        # silently ignored one or more values.
+        if self.data is not None and serial in self.data:
+            self.data[serial].setdefault("settings", {}).update(fresh_settings)
+
+        mismatches: list[str] = []
+        for setting_key, value in expected.items():
+            issue_id = f"setting_write_mismatch_{serial}_{setting_key}"
+            actual = fresh_settings.get(setting_key)
+            if SunsynkCoordinator._values_match(value, actual):
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+                continue
+
+            _LOGGER.warning(
+                "Write verification failed for %s on inverter %s: sent %r, "
+                "inverter reports %r",
+                setting_key,
+                serial,
+                value,
+                actual,
             )
-            return
+            mismatches.append(f"{setting_key}: expected {value!r}, actual {actual!r}")
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="setting_write_mismatch",
+                translation_placeholders={
+                    "serial": serial,
+                    "setting_key": setting_key,
+                    "expected": str(value),
+                    "actual": str(actual),
+                },
+            )
 
-        actual = fresh_settings.get(setting_key)
-        if SunsynkCoordinator._values_match(value, actual):
-            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
-            return
-
-        _LOGGER.warning(
-            "Write verification failed for %s on inverter %s: sent %r, "
-            "inverter reports %r",
-            setting_key, serial, value, actual,
-        )
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            issue_id,
-            is_fixable=False,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key="setting_write_mismatch",
-            translation_placeholders={
-                "serial": serial,
-                "setting_key": setting_key,
-                "expected": str(value),
-                "actual": str(actual),
-            },
-        )
+        if mismatches:
+            raise UpdateFailed(
+                f"Inverter {serial} rejected setting write(s): " + "; ".join(mismatches)
+            )
 
     _TRUE_STRINGS = frozenset({"true", "1"})
     _FALSE_STRINGS = frozenset({"false", "0"})
+    _TIME_RE = re.compile(r"([01]?\d|2[0-3]):([0-5]\d)")
 
     @classmethod
     def _values_match(cls, sent: Any, actual: Any) -> bool:
@@ -335,21 +581,36 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             return True
         if sent_str in cls._FALSE_STRINGS and actual_str in cls._FALSE_STRINGS:
             return True
+
+        sent_time = cls._TIME_RE.fullmatch(sent_str)
+        actual_time = cls._TIME_RE.fullmatch(actual_str)
+        if sent_time is not None and actual_time is not None:
+            sent_minutes = int(sent_time[1]) * 60 + int(sent_time[2])
+            actual_minutes = int(actual_time[1]) * 60 + int(actual_time[2])
+            return sent_minutes == actual_minutes
+
         try:
             return float(sent_str) == float(actual_str)
         except (TypeError, ValueError):
             return False
 
     async def async_write_plant_price(self, serial: str, price: float) -> None:
+        """Serialize a plant-price write with every inverter setting write."""
+        price = validate_plant_price(price)
+        serial = SunsynkCoordinator.resolve_write_target(self, serial)
+        async with SunsynkCoordinator._write_lock_for(self, serial):
+            await SunsynkCoordinator._async_write_plant_price_locked(
+                self, serial, price
+            )
+
+    async def _async_write_plant_price_locked(self, serial: str, price: float) -> None:
         """Set a manual constant electricity price for the inverter's plant.
 
-        This is a plant-level (not inverter-level) setting, reached via a
-        different API endpoint than async_write_setting. It replaces the
-        plant's *entire* pricing configuration with a single Constant
-        Price (type 1) entry covering the full day — any existing
-        Time-of-Use or Live Price configuration on the Sunsynk portal for
-        this plant is overwritten. Currency and investment figures are
-        read fresh and passed straight through unchanged.
+        This is a plant-level (not inverter-level) setting. For safety it
+        only edits an already-existing single Constant Price entry. A
+        Time-of-Use, live-price or multi-entry configuration is rejected
+        rather than destructively replaced. Currency and investment figures
+        are read fresh and passed through unchanged.
         """
         session = await self._async_get_session()
 
@@ -368,8 +629,13 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             # concluding there's genuinely no plant linked to this inverter.
             try:
                 inverter_info = await client.async_get_inverter_info(session, serial)
+            except SunsynkAuthenticationError as err:
+                self._auth.invalidate_token()
+                raise UpdateFailed(f"Authentication failed: {err}") from err
             except SunsynkApiError as err:
-                raise UpdateFailed(f"Cannot read inverter info for {serial}: {err}") from err
+                raise UpdateFailed(
+                    f"Cannot read inverter info for {serial}: {err}"
+                ) from err
             plant_id = (inverter_info.get("plant") or {}).get("id")
             if not plant_id:
                 raise UpdateFailed(
@@ -379,27 +645,64 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
         try:
             plant = await client.async_get_plant_info(session, str(plant_id))
+        except SunsynkAuthenticationError as err:
+            self._auth.invalidate_token()
+            raise UpdateFailed(f"Authentication failed: {err}") from err
         except SunsynkApiError as err:
             raise UpdateFailed(f"Cannot read plant info for {plant_id}: {err}") from err
 
+        charges = plant.get("charges")
+        only_charge = (
+            charges[0] if isinstance(charges, list) and len(charges) == 1 else None
+        )
+        if not isinstance(only_charge, dict) or str(only_charge.get("type")) != "1":
+            raise UpdateFailed(
+                "Plant price can only be changed when the Sunsynk plant already "
+                "uses exactly one Constant Price entry. The existing Time-of-Use, "
+                "live-price or multi-entry tariff was left unchanged."
+            )
+
+        plant_response_id = plant.get("id")
+        currency_id = (plant.get("currency") or {}).get("id")
+        if (
+            plant_response_id is None
+            or str(plant_response_id) != str(plant_id)
+            or currency_id is None
+            or "invest" not in plant
+        ):
+            raise UpdateFailed(
+                f"Plant {plant_id} pricing metadata is incomplete; no changes were made"
+            )
+
+        updated_charge = dict(only_charge)
+        updated_charge["price"] = price
+
         payload = {
-            "id": plant.get("id"),
-            "currency": (plant.get("currency") or {}).get("id"),
+            "id": plant_response_id,
+            "currency": currency_id,
             "invest": plant.get("invest"),
-            "charges": [
-                {"price": price, "type": 1, "startRange": "00:00", "endRange": "24:00"}
-            ],
+            "charges": [updated_charge],
         }
 
         try:
             await client.async_set_plant_income(session, str(plant_id), payload)
+        except SunsynkAuthenticationError as err:
+            self._auth.invalidate_token()
+            raise UpdateFailed(f"Authentication failed: {err}") from err
         except SunsynkApiError as err:
-            raise UpdateFailed(f"Failed to write plant price for {plant_id}: {err}") from err
+            raise UpdateFailed(
+                f"Failed to write plant price for {plant_id}: {err}"
+            ) from err
 
         await self.async_request_refresh()
 
     async def async_close(self) -> None:
-        """Close the aiohttp session."""
+        """Flush active write drains, then close the aiohttp session."""
+        SunsynkCoordinator._ensure_write_state(self)
+        await asyncio.sleep(0)
+        tasks = list(self._write_drain_tasks.values())
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         if self._session and not self._session.closed:
             await self._session.close()
 
@@ -419,6 +722,13 @@ class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         calibrator: PerformanceRatioCalibrator | None = None,
         actual_energy_fn: Callable[[], float | None] | None = None,
     ) -> None:
+        if not (
+            -90 <= latitude <= 90
+            and -180 <= longitude <= 180
+            and panel_kwp > 0
+            and 0 < performance_ratio <= 1
+        ):
+            raise ValueError("Invalid solar forecast configuration")
         super().__init__(
             hass,
             _LOGGER,
@@ -469,6 +779,13 @@ class SolarForecastCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         precip: list[Any] = hourly.get("precipitation", [])
 
         now = dt_util.now()
+        offset = raw.get("utc_offset_seconds")
+        if isinstance(offset, (int, float)) and -86400 < offset < 86400:
+            # Open-Meteo's hourly timestamps are naive wall-clock values in
+            # the requested location. Compare them against that location's
+            # date/hour rather than Home Assistant's potentially different
+            # timezone.
+            now = now.astimezone(timezone(timedelta(seconds=offset)))
         today = now.date()
         tomorrow = today + timedelta(days=1)
 

@@ -14,6 +14,29 @@ A native Home Assistant **integration** (not an add-on) for monitoring and contr
 
 ---
 
+## Why this project exists
+
+SunSynk HA Integration began as a small project with one practical idea: an
+inverter should behave like a native Home Assistant device. Monitoring, entities,
+services and automations should live in Home Assistant itself, without requiring
+a separate add-on, virtual machine, container, MQTT bridge or second automation
+platform to maintain.
+
+What looked simple at first became a much deeper engineering problem as the
+community tested the integration on real systems. Inverter models and firmware do
+not always behave alike; writes can be acknowledged before they reach the device;
+timer settings interact in groups; and parallel installations have master/slave
+rules that the public API does not explain. In some cases a slave even accepts a
+setting and only reverts it to the master's value several seconds later.
+
+The project has grown around those discoveries while keeping the original goal:
+a safe, understandable and genuinely native Home Assistant experience. Thank you
+to everyone who has reported bugs, supplied diagnostics and portal comparisons,
+and tested fixes on real single-, multi- and parallel-inverter installations.
+The difficult reports are what made the integration better.
+
+---
+
 ## Features
 
 - **Real-time monitoring** — PV generation, battery state, grid import/export, load consumption
@@ -116,9 +139,21 @@ Any inverter accessible through the Sunsynk cloud API, including:
 A ready-made Lovelace dashboard is included in [`dashboards/sunsynk-dashboard.yaml`](dashboards/sunsynk-dashboard.yaml).  
 It provides four views: **Overview** (Power Flow Card), **Charts**, **Settings**, and **Diagnostics**.
 
-> **Note:** The **Sunsynk Power Flow Card** (v7.3.3 by slipx06) is **bundled with this integration** — it loads automatically. No separate HACS installation needed.
+Automatic dashboard creation is **disabled by default**. To opt in, open
+**Settings → Devices & Services → Sunsynk → Configure**, enable **Create and
+maintain Sunsynk dashboard**, and submit. Only then will the integration
+register its bundled Power Flow Card resource and create/update its Lovelace
+dashboard. With this option disabled, the integration does not modify Lovelace.
 
-### Import steps
+> **Note:** The **Sunsynk Power Flow Card** (v7.3.3 by slipx06) is bundled with
+> this integration. No separate HACS installation is needed when the dashboard
+> option is enabled.
+
+### Manual import alternative
+
+If you prefer to manage Lovelace yourself, leave the automatic option disabled,
+add `/sunsynk/sunsynk-power-flow-card.js` as a JavaScript module resource, and
+import the supplied YAML:
 
 1. **Find your entity prefix**  
    Settings → Devices & Services → Sunsynk → click your device → click any sensor (e.g. Battery SOC)  
@@ -300,7 +335,7 @@ Download a full diagnostic snapshot of the integration:
 
 **Settings → Devices & Services → Sunsynk → (⋮) → Download diagnostics**
 
-The file includes coordinator state, inverter data, forecast readings and Tariff Manager state. Sensitive fields (password, serial numbers) are automatically redacted before download. Useful when reporting bugs — attach the file to your GitHub issue.
+The file includes coordinator state, inverter data, forecast readings and Tariff Manager state. Account details, locations, entity IDs, plant identifiers and serial numbers are automatically redacted before download. Useful when reporting bugs — attach the file to your GitHub issue.
 
 ---
 
@@ -319,15 +354,35 @@ To view current issues: **Settings → System → Repairs**.
 
 ## HA Services / Actions
 
-Three services are available for use in automations and scripts (**Developer Tools → Actions → sunsynk**):
+Five services are available for use in automations and scripts (**Developer Tools → Actions → sunsynk**):
 
 | Service | Description |
 |---|---|
-| `sunsynk.force_charge` | Set battery charge current to any value (A). Call again with your normal value to restore. |
-| `sunsynk.force_discharge` | Set battery discharge current to any value (A). |
-| `sunsynk.set_work_mode` | Set inverter work mode: 0 = Sell First, 1 = Zero Export, 2 = Time-of-Use, 3 = Self-Use, 4 = Peak-Shaving. |
+| `sunsynk.force_charge` | Set battery charge current from 0–300 A. Call again with your normal value to restore. |
+| `sunsynk.force_discharge` | Set battery discharge current from 0–300 A. |
+| `sunsynk.set_work_mode` | Set inverter work mode: 0 = Selling First, 1 = Zero Export (Limit to Load), 2 = Limited to Home, 3 = Self Use, 4 = Time of Use. |
+| `sunsynk.set_virtual_slot` | Define or replace one of 10 virtual charge/discharge slots for one inverter. |
+| `sunsynk.clear_virtual_slot` | Remove one virtual slot from one inverter. |
 
-All services require a `serial` parameter (your inverter serial number) and the value to set.
+Every service call targets exactly one logical inverter selected by `serial`.
+Independent inverters have independent virtual-slot schedules and tariff runtime
+state. In a parallel group, a slave serial is deliberately routed to the master,
+because the master owns persistent setting writes; the slave and master therefore
+share one virtual-slot schedule.
+
+During an integration unload or options reload, automation listeners are
+stopped first. Active tariff currents are restored to their configured normal
+values, and Virtual Slot Scheduler restores the physical timer settings it
+captured before taking ownership. The API session is closed only after those
+restore attempts finish.
+
+All setting writes share a per-inverter queue. Concurrent writes are
+serialized and coalesced, while all fields belonging to one physical timer
+slot are sent in a single API payload and verified with one read-back.
+Before entering that queue, every requested value is validated centrally:
+currents are limited to 0–300 A, powers to 0–30,000 W, SOC values to 0–100%,
+and modes, booleans and timer strings must use their documented formats.
+Invalid batches are rejected atomically without making an API request.
 
 Example automation:
 ```yaml
@@ -342,7 +397,7 @@ action:
 
 ## Tariff Manager Setup
 
-The Tariff Manager automatically charges the battery when electricity is cheap and discharges (sells to grid) when it's expensive. It works with any HA sensor that provides a numeric price.
+The Tariff Manager automatically charges the battery when electricity is cheap and discharges (sells to grid) when it's expensive. It works with any HA sensor that provides a numeric price. Price thresholds are shared by the config entry, while the active charging/discharging decision is tracked separately for each independent inverter from its own SOC.
 
 1. Go to **Settings → Devices & Services → Sunsynk → Configure**
 2. Fill in the tariff fields:

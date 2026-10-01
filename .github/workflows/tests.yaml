@@ -9,14 +9,25 @@ permissions: {}
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: minimum-ha
+            python: "3.11"
+            requirements: requirements_test_min.txt
+          - name: current-ha
+            python: "3.14"
+            requirements: requirements_test.txt
+    name: pytest (${{ matrix.name }})
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
           cache: pip
-          cache-dependency-path: requirements_test.txt
+          cache-dependency-path: ${{ matrix.requirements }}
       - name: Install dependencies
-        run: pip install -r requirements_test.txt
+        run: pip install -r "${{ matrix.requirements }}"
       - name: Run tests
         run: pytest --tb=short

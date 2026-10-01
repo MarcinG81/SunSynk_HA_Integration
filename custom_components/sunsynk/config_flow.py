@@ -1,10 +1,13 @@
 """Config flow for Sunsynk integration."""
+
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 import aiohttp
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
@@ -19,6 +22,7 @@ from .const import (
     CONF_CHEAP_CHARGE_CURRENT,
     CONF_CHEAP_TARGET_SOC,
     CONF_CHEAP_THRESHOLD,
+    CONF_CREATE_DASHBOARD,
     CONF_DISCHARGE_MIN_SOC,
     CONF_EXPENSIVE_THRESHOLD,
     CONF_EXPORT_PRICE_ENTITY,
@@ -44,6 +48,7 @@ from .const import (
     MAX_REFRESH_INTERVAL,
     MIN_REFRESH_INTERVAL,
 )
+from .write_validation import MAX_CURRENT_A
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,7 +94,9 @@ class SunsynkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            serials = [s.strip() for s in user_input[CONF_SERIALS].split(";") if s.strip()]
+            serials = [
+                s.strip() for s in user_input[CONF_SERIALS].split(";") if s.strip()
+            ]
             if not serials:
                 errors[CONF_SERIALS] = "invalid_serials"
             else:
@@ -105,7 +112,9 @@ class SunsynkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.exception("Unexpected error during config flow")
                     errors["base"] = "cannot_connect"
                 else:
-                    unique_id = f"{user_input[CONF_API_SERVER]}_{user_input[CONF_USERNAME]}"
+                    unique_id = (
+                        f"{user_input[CONF_API_SERVER]}_{user_input[CONF_USERNAME]}"
+                    )
                     await self.async_set_unique_id(unique_id)
                     self._abort_if_unique_id_configured()
 
@@ -173,15 +182,37 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                 if kwp_raw:
                     try:
                         kwp = float(kwp_raw)
-                        if not (kwp > 0):
+                        if not math.isfinite(kwp) or kwp <= 0:
                             raise ValueError
                         forecast_fields[CONF_PANEL_KWP] = kwp
                         lat_raw = str(user_input.get(CONF_LATITUDE, "")).strip()
                         lon_raw = str(user_input.get(CONF_LONGITUDE, "")).strip()
-                        forecast_fields[CONF_LATITUDE] = float(lat_raw) if lat_raw else self.hass.config.latitude
-                        forecast_fields[CONF_LONGITUDE] = float(lon_raw) if lon_raw else self.hass.config.longitude
+                        latitude = (
+                            float(lat_raw)
+                            if lat_raw
+                            else float(self.hass.config.latitude)
+                        )
+                        longitude = (
+                            float(lon_raw)
+                            if lon_raw
+                            else float(self.hass.config.longitude)
+                        )
                         pr_raw = str(user_input.get(CONF_PERFORMANCE_RATIO, "")).strip()
-                        forecast_fields[CONF_PERFORMANCE_RATIO] = float(pr_raw) if pr_raw else DEFAULT_PERFORMANCE_RATIO
+                        performance_ratio = (
+                            float(pr_raw) if pr_raw else DEFAULT_PERFORMANCE_RATIO
+                        )
+                        if not (
+                            math.isfinite(latitude)
+                            and -90 <= latitude <= 90
+                            and math.isfinite(longitude)
+                            and -180 <= longitude <= 180
+                            and math.isfinite(performance_ratio)
+                            and 0 < performance_ratio <= 1
+                        ):
+                            raise ValueError
+                        forecast_fields[CONF_LATITUDE] = latitude
+                        forecast_fields[CONF_LONGITUDE] = longitude
+                        forecast_fields[CONF_PERFORMANCE_RATIO] = performance_ratio
                     except (ValueError, TypeError):
                         errors["base"] = "invalid_forecast_config"
 
@@ -193,9 +224,7 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     if export_price_entity:
                         tariff_fields[CONF_EXPORT_PRICE_ENTITY] = export_price_entity
                     try:
-                        tariff_fields.update(
-                            self._parse_tariff_fields(user_input)
-                        )
+                        tariff_fields.update(self._parse_tariff_fields(user_input))
                     except (ValueError, TypeError):
                         errors["base"] = "invalid_tariff_config"
 
@@ -251,6 +280,9 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                         data={
                             CONF_REFRESH_INTERVAL: user_input[CONF_REFRESH_INTERVAL],
                             CONF_SERIALS: serials,
+                            CONF_CREATE_DASHBOARD: user_input.get(
+                                CONF_CREATE_DASHBOARD, False
+                            ),
                             **forecast_fields,
                             **tariff_fields,
                         },
@@ -261,10 +293,16 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
             CONF_REFRESH_INTERVAL,
             data.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL),
         )
-        current_lat = opts.get(CONF_LATITUDE, data.get(CONF_LATITUDE, self.hass.config.latitude))
-        current_lon = opts.get(CONF_LONGITUDE, data.get(CONF_LONGITUDE, self.hass.config.longitude))
+        current_lat = opts.get(
+            CONF_LATITUDE, data.get(CONF_LATITUDE, self.hass.config.latitude)
+        )
+        current_lon = opts.get(
+            CONF_LONGITUDE, data.get(CONF_LONGITUDE, self.hass.config.longitude)
+        )
         current_kwp = opts.get(CONF_PANEL_KWP, data.get(CONF_PANEL_KWP, ""))
-        current_pr = opts.get(CONF_PERFORMANCE_RATIO, data.get(CONF_PERFORMANCE_RATIO, ""))
+        current_pr = opts.get(
+            CONF_PERFORMANCE_RATIO, data.get(CONF_PERFORMANCE_RATIO, "")
+        )
 
         def _opt(key: str, default: Any = "") -> Any:
             return opts.get(key, data.get(key, default))
@@ -288,58 +326,80 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     default=data.get(CONF_USERNAME, ""),
                 ): str,
                 vol.Optional(CONF_PASSWORD, default=""): str,
-                vol.Required(
-                    CONF_SERIALS, default=";".join(current_serials)
-                ): str,
-                vol.Optional(
-                    CONF_REFRESH_INTERVAL, default=current_refresh
-                ): vol.All(
+                vol.Required(CONF_SERIALS, default=";".join(current_serials)): str,
+                vol.Optional(CONF_REFRESH_INTERVAL, default=current_refresh): vol.All(
                     vol.Coerce(int),
                     vol.Range(min=MIN_REFRESH_INTERVAL, max=MAX_REFRESH_INTERVAL),
                 ),
+                vol.Optional(
+                    CONF_CREATE_DASHBOARD,
+                    default=bool(_opt(CONF_CREATE_DASHBOARD, False)),
+                ): cv.boolean,
                 # Solar Forecast
-                vol.Optional(CONF_LATITUDE, default=str(current_lat) if current_lat != "" else ""): str,
-                vol.Optional(CONF_LONGITUDE, default=str(current_lon) if current_lon != "" else ""): str,
-                vol.Optional(CONF_PANEL_KWP, default=str(current_kwp) if current_kwp != "" else ""): str,
+                vol.Optional(
+                    CONF_LATITUDE, default=str(current_lat) if current_lat != "" else ""
+                ): str,
+                vol.Optional(
+                    CONF_LONGITUDE,
+                    default=str(current_lon) if current_lon != "" else "",
+                ): str,
+                vol.Optional(
+                    CONF_PANEL_KWP,
+                    default=str(current_kwp) if current_kwp != "" else "",
+                ): str,
                 vol.Optional(
                     CONF_PERFORMANCE_RATIO,
-                    default=str(current_pr) if current_pr != "" else str(DEFAULT_PERFORMANCE_RATIO),
+                    default=str(current_pr)
+                    if current_pr != ""
+                    else str(DEFAULT_PERFORMANCE_RATIO),
                 ): str,
                 # Tariff — price sensor(s). Export defaults to the same entity as
                 # import when left blank, so single-price setups are unaffected.
                 vol.Optional(
                     CONF_PRICE_ENTITY,
                     description={"suggested_value": _opt(CONF_PRICE_ENTITY) or None},
-                ): EntitySelector(EntitySelectorConfig(domain=["sensor", "input_number"])),
+                ): EntitySelector(
+                    EntitySelectorConfig(domain=["sensor", "input_number"])
+                ),
                 vol.Optional(
                     CONF_EXPORT_PRICE_ENTITY,
-                    description={"suggested_value": _opt(CONF_EXPORT_PRICE_ENTITY) or None},
-                ): EntitySelector(EntitySelectorConfig(domain=["sensor", "input_number"])),
+                    description={
+                        "suggested_value": _opt(CONF_EXPORT_PRICE_ENTITY) or None
+                    },
+                ): EntitySelector(
+                    EntitySelectorConfig(domain=["sensor", "input_number"])
+                ),
                 # Cheap-rate charging
                 vol.Optional(
                     CONF_CHEAP_THRESHOLD, default=_opt_str(CONF_CHEAP_THRESHOLD)
                 ): str,
                 vol.Optional(
-                    CONF_CHEAP_CHARGE_CURRENT, default=_opt_str(CONF_CHEAP_CHARGE_CURRENT)
+                    CONF_CHEAP_CHARGE_CURRENT,
+                    default=_opt_str(CONF_CHEAP_CHARGE_CURRENT),
                 ): str,
                 vol.Optional(
-                    CONF_NORMAL_CHARGE_CURRENT, default=_opt_str(CONF_NORMAL_CHARGE_CURRENT)
+                    CONF_NORMAL_CHARGE_CURRENT,
+                    default=_opt_str(CONF_NORMAL_CHARGE_CURRENT),
                 ): str,
                 vol.Optional(
-                    CONF_CHEAP_TARGET_SOC, default=_opt(CONF_CHEAP_TARGET_SOC, DEFAULT_CHEAP_TARGET_SOC)
+                    CONF_CHEAP_TARGET_SOC,
+                    default=_opt(CONF_CHEAP_TARGET_SOC, DEFAULT_CHEAP_TARGET_SOC),
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=100)),
                 # Expensive-rate discharging
                 vol.Optional(
                     CONF_EXPENSIVE_THRESHOLD, default=_opt_str(CONF_EXPENSIVE_THRESHOLD)
                 ): str,
                 vol.Optional(
-                    CONF_PEAK_DISCHARGE_CURRENT, default=_opt_str(CONF_PEAK_DISCHARGE_CURRENT)
+                    CONF_PEAK_DISCHARGE_CURRENT,
+                    default=_opt_str(CONF_PEAK_DISCHARGE_CURRENT),
                 ): str,
                 vol.Optional(
-                    CONF_NORMAL_DISCHARGE_CURRENT, default=_opt_str(CONF_NORMAL_DISCHARGE_CURRENT)
+                    CONF_NORMAL_DISCHARGE_CURRENT,
+                    default=_opt_str(CONF_NORMAL_DISCHARGE_CURRENT),
                 ): str,
                 vol.Optional(
-                    CONF_DISCHARGE_MIN_SOC, default=_opt(CONF_DISCHARGE_MIN_SOC, DEFAULT_DISCHARGE_MIN_SOC)
+                    CONF_DISCHARGE_MIN_SOC,
+                    default=_opt(CONF_DISCHARGE_MIN_SOC, DEFAULT_DISCHARGE_MIN_SOC),
                 ): vol.All(vol.Coerce(int), vol.Range(min=0, max=90)),
                 # Scheduler (both blank = always active)
                 vol.Optional(
@@ -350,7 +410,8 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                 ): str,
                 # Price quality
                 vol.Optional(
-                    CONF_PRICE_MAX_AGE, default=_opt(CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE)
+                    CONF_PRICE_MAX_AGE,
+                    default=_opt(CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE),
                 ): vol.All(vol.Coerce(int), vol.Range(min=5, max=1440)),
             }
         )
@@ -368,7 +429,12 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
 
         def _parse_float(key: str) -> float | None:
             raw = str(user_input.get(key, "")).strip()
-            return float(raw) if raw else None
+            if not raw:
+                return None
+            value = float(raw)
+            if not math.isfinite(value):
+                raise ValueError(f"{key} must be finite")
+            return value
 
         def _parse_int(key: str) -> int | None:
             raw = str(user_input.get(key, "")).strip()
@@ -380,13 +446,22 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
 
         if any(v is not None for v in (cheap_thr, cheap_amp, normal_amp)):
             if not all(v is not None for v in (cheap_thr, cheap_amp, normal_amp)):
-                raise ValueError("Cheap charging requires threshold, charge current, and normal current")
-            if cheap_amp <= 0 or normal_amp <= 0:  # type: ignore[operator]
-                raise ValueError("Charge currents must be positive")
+                raise ValueError(
+                    "Cheap charging requires threshold, charge current, and normal current"
+                )
+            if (
+                not 1 <= cheap_amp <= MAX_CURRENT_A
+                or not 1 <= normal_amp <= MAX_CURRENT_A
+            ):  # type: ignore[operator]
+                raise ValueError(
+                    f"Charge currents must be positive and no greater than {MAX_CURRENT_A} A"
+                )
             result[CONF_CHEAP_THRESHOLD] = cheap_thr
             result[CONF_CHEAP_CHARGE_CURRENT] = cheap_amp
             result[CONF_NORMAL_CHARGE_CURRENT] = normal_amp
-            result[CONF_CHEAP_TARGET_SOC] = user_input.get(CONF_CHEAP_TARGET_SOC, DEFAULT_CHEAP_TARGET_SOC)
+            result[CONF_CHEAP_TARGET_SOC] = user_input.get(
+                CONF_CHEAP_TARGET_SOC, DEFAULT_CHEAP_TARGET_SOC
+            )
 
         exp_thr = _parse_float(CONF_EXPENSIVE_THRESHOLD)
         peak_amp = _parse_int(CONF_PEAK_DISCHARGE_CURRENT)
@@ -394,13 +469,23 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
 
         if any(v is not None for v in (exp_thr, peak_amp, normal_dis_amp)):
             if not all(v is not None for v in (exp_thr, peak_amp, normal_dis_amp)):
-                raise ValueError("Discharge requires threshold, peak discharge current, and normal discharge current")
-            if peak_amp <= 0 or normal_dis_amp <= 0:  # type: ignore[operator]
-                raise ValueError("Discharge currents must be positive")
+                raise ValueError(
+                    "Discharge requires threshold, peak discharge current, and normal discharge current"
+                )
+            if (
+                not 1 <= peak_amp <= MAX_CURRENT_A
+                or not 1 <= normal_dis_amp <= MAX_CURRENT_A
+            ):  # type: ignore[operator]
+                raise ValueError(
+                    "Discharge currents must be positive and no greater than "
+                    f"{MAX_CURRENT_A} A"
+                )
             result[CONF_EXPENSIVE_THRESHOLD] = exp_thr
             result[CONF_PEAK_DISCHARGE_CURRENT] = peak_amp
             result[CONF_NORMAL_DISCHARGE_CURRENT] = normal_dis_amp
-            result[CONF_DISCHARGE_MIN_SOC] = user_input.get(CONF_DISCHARGE_MIN_SOC, DEFAULT_DISCHARGE_MIN_SOC)
+            result[CONF_DISCHARGE_MIN_SOC] = user_input.get(
+                CONF_DISCHARGE_MIN_SOC, DEFAULT_DISCHARGE_MIN_SOC
+            )
 
         start_raw = str(user_input.get(CONF_TARIFF_START_HOUR, "")).strip()
         end_raw = str(user_input.get(CONF_TARIFF_END_HOUR, "")).strip()
@@ -413,5 +498,7 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
             result[CONF_TARIFF_START_HOUR] = start_h
             result[CONF_TARIFF_END_HOUR] = end_h
 
-        result[CONF_PRICE_MAX_AGE] = user_input.get(CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE)
+        result[CONF_PRICE_MAX_AGE] = user_input.get(
+            CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE
+        )
         return result

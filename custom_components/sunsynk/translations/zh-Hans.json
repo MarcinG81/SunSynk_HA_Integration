@@ -36,11 +36,13 @@
           "password": "New Sunsynk Account Password",
           "serials": "逆变器序列号",
           "refresh_interval": "刷新间隔（秒）",
+          "create_dashboard": "Create and maintain Sunsynk dashboard",
           "latitude": "纬度（光伏发电预测）",
           "longitude": "经度（光伏发电预测）",
           "panel_kwp": "组件峰值功率（kWp）",
           "performance_ratio": "性能比（0–1）",
           "price_entity": "电价传感器",
+          "export_price_entity": "Export/Sell Price Sensor (optional)",
           "cheap_threshold": "低于此价格时充电（谷电阈值）",
           "cheap_charge_current": "谷电充电电流（A）",
           "normal_charge_current": "恢复正常充电电流（A）",
@@ -55,11 +57,13 @@
         },
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
+          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
           "latitude": "可选，默认使用 HA 家庭位置",
           "longitude": "可选，默认使用 HA 家庭位置",
           "panel_kwp": "已安装组件的总峰值功率（kWp）。留空则禁用光伏发电预测。",
           "performance_ratio": "系统效率系数，默认 0.80",
           "price_entity": "任意报告电价的传感器（如 Octopus Agile、NordPool、Tibber）。留空则禁用电价管理。",
+          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
           "cheap_threshold": "当电价 ≤ 此值时为电池充电。留空则禁用谷电充电。",
           "cheap_charge_current": "谷电时段的电池充电电流（如 100 A）。",
           "normal_charge_current": "谷电时段结束后恢复的充电电流。",
@@ -91,6 +95,10 @@
     "inverter_offline": {
       "title": "逆变器 {serial} 离线",
       "description": "无法获取逆变器 **{serial}** 的数据。请检查数据采集器是否已连接，并确认 Sunsynk 应用可显示实时数据。"
+    },
+    "setting_write_mismatch": {
+      "title": "Setting {setting_key} did not apply on {serial}",
+      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
     }
   }
 }

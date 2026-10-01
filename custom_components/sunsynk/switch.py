@@ -1,4 +1,5 @@
 """Switch platform for writable boolean Sunsynk inverter settings."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -228,12 +229,16 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities: list[SunsynkSwitchEntity | TariffManagerSwitch | VirtualSlotSchedulerSwitch] = []
+    entities: list[
+        SunsynkSwitchEntity | TariffManagerSwitch | VirtualSlotSchedulerSwitch
+    ] = []
 
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
         for description in WRITABLE_SWITCHES:
-            entities.append(SunsynkSwitchEntity(coordinator, serial, description, device_info))
+            entities.append(
+                SunsynkSwitchEntity(coordinator, serial, description, device_info)
+            )
 
     tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
         f"{entry.entry_id}_tariff"
@@ -245,15 +250,12 @@ async def async_setup_entry(
             TariffManagerSwitch(entry.entry_id, tariff_manager, device_info)
         )
 
-    vslot_scheduler: VirtualSlotScheduler | None = hass.data[DOMAIN].get(
-        f"{entry.entry_id}_vslots"
+    vslot_schedulers: dict[str, VirtualSlotScheduler] = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_vslots", {}
     )
-    if vslot_scheduler is not None:
-        first_serial = coordinator.serials[0]
-        device_info = build_device_info(coordinator, first_serial)
-        entities.append(
-            VirtualSlotSchedulerSwitch(entry.entry_id, vslot_scheduler, device_info)
-        )
+    for serial, scheduler in vslot_schedulers.items():
+        device_info = build_device_info(coordinator, serial)
+        entities.append(VirtualSlotSchedulerSwitch(serial, scheduler, device_info))
 
     async_add_entities(entities)
 
@@ -279,7 +281,9 @@ class SunsynkSwitchEntity(CoordinatorEntity[SunsynkCoordinator], SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
-        settings = (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        settings = (
+            (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        )
         value = settings.get(self.entity_description.setting_key)
         if value is None:
             return None
@@ -344,7 +348,7 @@ class TariffManagerSwitch(SwitchEntity):
 
 
 class VirtualSlotSchedulerSwitch(SwitchEntity):
-    """Enable / disable the virtual slot scheduler (owns physical slots 1 & 2)."""
+    """Enable / disable the virtual slot scheduler (owns physical slots 1 & 6)."""
 
     _attr_has_entity_name = True
     _attr_name = "Virtual Slot Scheduler"
@@ -354,13 +358,13 @@ class VirtualSlotSchedulerSwitch(SwitchEntity):
 
     def __init__(
         self,
-        entry_id: str,
+        serial: str,
         scheduler: VirtualSlotScheduler,
         device_info: DeviceInfo,
     ) -> None:
         self._scheduler = scheduler
         self._unsub: Any = None
-        self._attr_unique_id = f"{entry_id}_vslots_enabled"
+        self._attr_unique_id = f"{serial}_vslots_enabled"
         self._attr_device_info = device_info
 
     async def async_added_to_hass(self) -> None:

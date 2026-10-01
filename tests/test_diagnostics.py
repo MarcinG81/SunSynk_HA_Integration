@@ -8,9 +8,17 @@ import pytest
 
 from custom_components.sunsynk.const import DOMAIN
 from custom_components.sunsynk.diagnostics import (
+    _replace_sensitive_values,
     _safe_data,
     async_get_config_entry_diagnostics,
 )
+
+
+def test_replace_sensitive_values_handles_lists_and_scalars():
+    assert _replace_sensitive_values(["SN1", 7], {"SN1": "inverter_1"}) == [
+        "inverter_1",
+        7,
+    ]
 
 
 class TestSafeData:
@@ -50,7 +58,17 @@ def hass_with_entry():
     coordinator = MagicMock()
     coordinator.last_update_success = True
     coordinator.last_update_success_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    coordinator.data = {"SN1": {"battery": {"soc": 50}}}
+    coordinator.serials = ["SN1"]
+    coordinator.data = {
+        "SN1": {
+            "battery": {"soc": 50},
+            "inverter": {
+                "sn": "SN1",
+                "alias": "Alice's garage",
+                "plant": {"id": 123, "name": "Alice Home"},
+            },
+        }
+    }
 
     hass.data = {DOMAIN: {"entry1": coordinator}}
     return hass, entry, coordinator
@@ -62,7 +80,7 @@ class TestAsyncGetConfigEntryDiagnostics:
         hass, entry, _coordinator = hass_with_entry
         result = await async_get_config_entry_diagnostics(hass, entry)
         assert result["entry_data"]["password"] == "**REDACTED**"
-        assert result["entry_data"]["username"] == "me@example.com"
+        assert result["entry_data"]["username"] == "**REDACTED**"
 
     @pytest.mark.asyncio
     async def test_includes_coordinator_status(self, hass_with_entry):
@@ -77,7 +95,33 @@ class TestAsyncGetConfigEntryDiagnostics:
     async def test_includes_inverter_data(self, hass_with_entry):
         hass, entry, _coordinator = hass_with_entry
         result = await async_get_config_entry_diagnostics(hass, entry)
-        assert result["inverter_data"] == {"SN1": {"battery": {"soc": 50}}}
+        assert set(result["inverter_data"]) == {"inverter_1"}
+        inverter = result["inverter_data"]["inverter_1"]
+        assert inverter["battery"] == {"soc": 50}
+        assert inverter["inverter"]["sn"] == "**REDACTED**"
+        assert inverter["inverter"]["alias"] == "**REDACTED**"
+        assert inverter["inverter"]["plant"]["id"] == "**REDACTED**"
+        assert inverter["inverter"]["plant"]["name"] == "**REDACTED**"
+
+    @pytest.mark.asyncio
+    async def test_adds_serial_found_only_in_raw_data(self, hass_with_entry):
+        hass, entry, coordinator = hass_with_entry
+        coordinator.data["SN2"] = {"battery": {"soc": 20}}
+        result = await async_get_config_entry_diagnostics(hass, entry)
+        assert "inverter_2" in result["inverter_data"]
+
+    @pytest.mark.asyncio
+    async def test_serial_embedded_in_an_unexpected_string_is_replaced(
+        self, hass_with_entry
+    ):
+        hass, entry, coordinator = hass_with_entry
+        coordinator.data["SN1"]["debug_url"] = "https://example.test/inverter/SN1"
+
+        result = await async_get_config_entry_diagnostics(hass, entry)
+
+        assert result["inverter_data"]["inverter_1"]["debug_url"].endswith(
+            "/inverter/inverter_1"
+        )
 
     @pytest.mark.asyncio
     async def test_no_forecast_or_tariff_keys_when_not_configured(self, hass_with_entry):
@@ -115,9 +159,9 @@ class TestAsyncGetConfigEntryDiagnostics:
             "enabled": True,
             "mode": "charging",
             "price_quality": "ok",
-            "price_entity": "sensor.price",
+            "price_entity": "**REDACTED**",
             "export_price_quality": "ok",
-            "export_price_entity": "sensor.price",
+            "export_price_entity": "**REDACTED**",
         }
 
     @pytest.mark.asyncio

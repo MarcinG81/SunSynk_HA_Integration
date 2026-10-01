@@ -3,6 +3,163 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.0.0-beta.1] - 2026-10-01
+
+### The road to 2.0 beta
+
+This project started with a deliberately small goal: make Sunsynk and Deye
+inverters feel like native Home Assistant devices. Monitoring and basic control
+should not require a separate add-on, virtual machine, container, MQTT bridge or
+second automation system running beside Home Assistant.
+
+The cloud API made the first version look deceptively simple. Real installations
+quickly showed how much complexity sits behind that API: different inverter and
+firmware behaviour, delayed command propagation, settings that must be submitted
+as groups, tariff automations, timer boundaries across midnight, independent
+multi-inverter plants, and parallel master/slave systems where a slave may accept
+a write before silently reverting to its master's value. Supporting those systems
+safely turned a small integration into a much larger reliability project.
+
+The work below is the result of a full code, lifecycle and operational-safety
+audit. It was collected into one substantial 2.0 beta rather than shipped as
+a chain of small releases.
+
+### Before you upgrade
+
+This is a **beta**. In HACS, enable *Show beta versions* for this integration
+to see it.
+
+- **The auto-maintained dashboard is now opt-in.** If you rely on it, enable
+  **Create and maintain Sunsynk dashboard** in the integration's options after
+  upgrading.
+- **Take a Home Assistant backup first.** Virtual slot schedules move to
+  per-inverter storage and the old shared record is removed, and virtual slot
+  entities get new unique IDs (entity IDs are preserved). Going back to 1.9.x
+  without restoring a backup leaves an empty virtual slot schedule and may
+  create duplicate virtual slot entities with a `_2` suffix.
+
+### Added
+
+- **Per-inverter automation state.** Tariff Manager state and Virtual Slot
+  Scheduler storage are isolated per physical write target. Independent
+  inverters no longer suppress or overwrite one another, while a parallel
+  slave is deliberately mapped to its master.
+- **Lifecycle restoration.** Tariff automation restores normal charge/discharge
+  currents, and Virtual Slot Scheduler snapshots and restores the inverter's
+  timer configuration when stopped or unloaded. Reload and shutdown wait for
+  cleanup instead of leaving automation-owned settings active on the inverter.
+- **Exact virtual-slot boundary callbacks.** The scheduler now registers a Home
+  Assistant point-in-time callback for the next boundary instead of depending
+  solely on coordinator refreshes. Callbacks are cancelled and rescheduled
+  safely across changes, disable, reload and unload.
+- **Serialized and coalesced writes.** All setting writers share a per-inverter
+  lock and same-event-loop writes are coalesced. Every physical timer slot is
+  submitted as one grouped payload, eliminating the previous burst of separate
+  writes and the stale-cache races between them.
+- **Comprehensive regression coverage.** The suite now exercises setup/unload,
+  restoration, two independent inverters, parallel master/slave routing,
+  concurrent writes, coalescing, API/authentication failures, services and every
+  Home Assistant platform. Coverage is enforced at 100% in CI.
+- **Minimum and current Home Assistant CI lanes.** Tests run against the declared
+  minimum environment on Python 3.11 as well as the current environment, with
+  separately pinned test requirements.
+
+### Changed
+
+- **Automatic dashboard creation is now opt-in and disabled by default.** The integration no longer creates or updates a Lovelace dashboard, or registers the Power Flow Card as a Lovelace resource, unless you enable **Create and maintain Sunsynk dashboard** in the integration's options. Previously both happened on every startup. **If you upgrade and want the auto-maintained dashboard to keep updating, enable that option.** Dashboards and resources already created stay in place; they are just no longer touched.
+- **Virtual slot schedules are now per inverter.** Each physical write target (an independent inverter, or a parallel group's master) has its own schedule, so the `serial` field of `sunsynk.set_virtual_slot` / `sunsynk.clear_virtual_slot` applies only to that inverter. A parallel slave's serial selects its master's schedule. On upgrade, the previous shared schedule is copied to every existing inverter, then the shared record is removed, so an inverter added later starts with an empty schedule. Existing virtual slot entity IDs are preserved.
+- **Service targeting is now unambiguous.** Services resolve one explicit serial
+  to one independent inverter or parallel-group master instead of treating a
+  serial only as a way to find a config entry and then modifying every inverter.
+- **Write verification is authoritative and adaptive.** A write is not reported
+  as successful until fresh API data matches it. Read-back errors and mismatches
+  propagate to the caller, authoritative values replace assumptions in the
+  coordinator cache, and Repairs are created or cleared accordingly. Verification
+  normally begins after 250 ms and only retries up to the existing two-second
+  propagation window when required, rather than blocking every write for a fixed
+  two seconds.
+- **Tariff decisions are mutually exclusive and fail closed.** Charge and
+  discharge can no longer become active at the same time. Missing, malformed or
+  unavailable battery SOC stops automatic action instead of being interpreted as
+  0% and starting a charge.
+- **Plant pricing writes preserve the plant tariff.** Manual Energy Price can
+  update only an existing, single Constant Price entry. Time-of-Use, live-price
+  and multi-entry configurations are rejected unchanged; currency, investment
+  and other plant metadata are read fresh and preserved.
+- **Solar forecast uses the forecast location's timezone.** Open-Meteo's UTC
+  offset now determines the current hour and local forecast date, rather than
+  assuming the Home Assistant installation and forecast coordinates share a
+  timezone.
+- **Solar calibration survives restarts.** The tracked date and latest modeled
+  and actual production samples are persisted and validated, avoiding a lost
+  daily sample when Home Assistant restarts around midnight.
+- **Battery health is labelled as an estimate.** The entity display name is now
+  **Battery SOH Estimate**, reflecting that it is derived from lifetime energy
+  counters rather than a certified BMS health value.
+- **All translation catalogs have key parity.** New options, Repairs and entity
+  labels are present in every bundled locale, with English fallback text where a
+  translated string is not yet available.
+
+### Fixed
+
+- **Reload/unload could leave high currents or active timer slots behind.** The
+  integration now restores the captured pre-automation state even when setup is
+  interrupted or Home Assistant reloads the config entry.
+- **Only the first independent inverter could receive a tariff action.** Runtime
+  flags are now maintained per write target, so a state change on one inverter
+  cannot make another inverter look already handled.
+- **Complete endpoint outages looked like successful empty refreshes.** Partial
+  data remains usable, but a poll where every endpoint fails now raises an update
+  failure and retains the previous coordinator data. HTTP 401 invalidates the
+  cached token and is propagated instead of being hidden as `{}`.
+- **Write acknowledgements could be false positives.** Success parsing accepts
+  only the API's known exact success responses; messages such as `unsuccessful`
+  and `not success` are rejected.
+- **Time read-back formatting could false-positive as a mismatch.** Verification
+  normalizes valid `H:MM` and `HH:MM` values to minutes, so an API echo of `0:30`
+  correctly matches a submitted `00:30`.
+- **Unsafe values could reach the inverter.** Every writable current, SOC,
+  percentage, power, enum, boolean, timer and plant-price value is validated and
+  normalized before queueing. Options-flow currents use the same limits as
+  entities and services; price and forecast values reject NaN/infinity; latitude,
+  longitude, panel size and performance ratio enforce their documented ranges.
+- **A corrupt cached sibling could hitchhike in a grouped payload.** Values copied
+  from the settings cache are revalidated before the group is sent, while a valid
+  caller replacement can repair its own bad cached value.
+- **Diagnostics exposed identifying and location data.** Usernames, inverter and
+  plant identifiers, coordinates, entity IDs and sensitive raw API fields are now
+  recursively redacted without mutating live coordinator data.
+- **The house ran from the grid while Virtual Slot Scheduler was waiting for a slot to start.** Any window that wasn't a discharge (the idle time before a slot, or a charge window) was written to its physical slot with a power of 0 W. With Use Timer on and Sell unticked, that power is also the most the inverter may draw from the battery for the house, so the whole house load went to the grid. For example, creating a 20:30 discharge slot at 20:10 meant grid import until 20:30. Idle and charge windows now use the inverter's rated power (`ratePower`), and discharge windows keep the virtual slot's own `sell_power`. (#21)
+- **Virtual Slot Scheduler could write a 0% SOC to a time slot.** A window without a target SOC was written as `cap` = 0, relying on the inverter's own protection to stop the discharge. Every SOC the scheduler writes, including a virtual slot's own `target_soc`, is now raised to at least the inverter's **Battery Low Capacity** (`batteryLowCap`), or 20% until that setting has been read. (#21)
+- **Services were not registered if the Power Flow Card's static file could not be served.** A failure registering the card's static path ended setup early, so `sunsynk.force_charge`, `sunsynk.set_virtual_slot` and the other services were missing. The failure is now only logged.
+
+### Security and maintenance
+
+- GitHub Actions are pinned to immutable commit SHAs instead of floating branches
+  or major-version tags.
+- Test dependencies are pinned, cache/build artifacts are ignored, and the test
+  workflow enforces 100% coverage.
+- Ruff now targets Python 3.11 and checks formatting, imports, modernization,
+  Bugbear, simplifications, blind exceptions, timezone safety and unused `noqa`
+  directives in CI.
+- Protocol-required MD5 calls are explicitly marked `usedforsecurity=False`.
+  The unusual Inteless authentication rule is documented and regression-tested:
+  its payload uses `source=elinter`, while the token signature must retain the
+  literal `source=sunsynk` expected by the upstream API.
+- Removed the bundled frontend's reference to a source-map file that is not
+  distributed with the integration.
+
+### Thank you
+
+Thank you to everyone who opened an issue, shared diagnostics, tested a beta,
+compared Home Assistant with the Sunsynk portal, or patiently repeated a test on
+real hardware. Many of the hardest bugs could not be reproduced on a simple
+single-inverter development setup. Reports from independent multi-inverter and
+especially parallel master/slave installations exposed API and firmware behaviour
+that is neither documented nor obvious from a successful HTTP response. Those
+reports did not merely fix isolated bugs; they shaped the safer write pipeline,
+restoration lifecycle and per-inverter architecture delivered in this 2.0 beta.
+
 ## [1.9.8] - 2026-10-01
 
 ### Changed

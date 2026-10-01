@@ -30,7 +30,12 @@ async def test_no_calibration_on_first_day_seen(mock_hass):
     await calibrator.async_update(date(2026, 7, 1), raw_kwh_today=10.0, actual_kwh_today=8.0)
     # First call only seeds tracking; no prior day to calibrate against yet.
     assert calibrator.get_ratio(month=7) == 0.80
-    calibrator._store.async_save.assert_not_awaited()
+    calibrator._store.async_save.assert_awaited_once_with({
+        "monthly": {},
+        "tracked_date": "2026-07-01",
+        "last_raw_kwh": 10.0,
+        "last_actual_kwh": 8.0,
+    })
 
 
 @pytest.mark.asyncio
@@ -42,7 +47,7 @@ async def test_calibrates_on_day_rollover(mock_hass):
 
     # First-ever sample for the month is seeded directly at the observed ratio (0.8).
     assert calibrator.get_ratio(month=7) == pytest.approx(0.8)
-    calibrator._store.async_save.assert_awaited_once()
+    assert calibrator._store.async_save.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -66,7 +71,7 @@ async def test_skips_calibration_on_negligible_sun_day(mock_hass):
 
     # raw_kwh (0.1) is below the noise-floor threshold, so December stays uncalibrated.
     assert calibrator.get_ratio(month=12) == 0.80
-    calibrator._store.async_save.assert_not_awaited()
+    assert calibrator._store.async_save.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -86,3 +91,38 @@ async def test_skips_calibration_when_actual_energy_unavailable(mock_hass):
 
     # Both calls were skipped (actual_kwh_today was None first, so tracking never started).
     assert calibrator.get_ratio(month=7) == 0.80
+
+
+@pytest.mark.asyncio
+async def test_load_restores_in_progress_day(mock_hass):
+    calibrator = _make_calibrator(mock_hass)
+    calibrator._store.async_load.return_value = {
+        "monthly": {"7": {"ratio": 0.75, "samples": 2}},
+        "tracked_date": "2026-07-01",
+        "last_raw_kwh": 10,
+        "last_actual_kwh": 7.5,
+    }
+
+    await calibrator.async_load()
+    await calibrator.async_update(
+        date(2026, 7, 2), raw_kwh_today=1.0, actual_kwh_today=0.8
+    )
+
+    assert calibrator.get_ratio(7) == pytest.approx(0.75)
+    saved = calibrator._store.async_save.await_args.args[0]
+    assert saved["tracked_date"] == "2026-07-02"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stored",
+    [
+        {"monthly": {}, "tracked_date": "bad", "last_raw_kwh": 1, "last_actual_kwh": 1},
+        {"monthly": {}, "tracked_date": "2026-07-01", "last_raw_kwh": float("nan"), "last_actual_kwh": 1},
+    ],
+)
+async def test_load_ignores_invalid_runtime_state(mock_hass, stored):
+    calibrator = _make_calibrator(mock_hass)
+    calibrator._store.async_load.return_value = stored
+    await calibrator.async_load()
+    assert calibrator._tracked_date is None

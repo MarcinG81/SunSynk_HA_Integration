@@ -36,11 +36,13 @@
           "password": "New Sunsynk Account Password",
           "serials": "Omvormer reeksnommer(s)",
           "refresh_interval": "Verfrissinginterval (sekondes)",
+          "create_dashboard": "Create and maintain Sunsynk dashboard",
           "latitude": "Breedtegraad (Sonsenergie-voorspelling)",
           "longitude": "Lengtegraad (Sonsenergie-voorspelling)",
           "panel_kwp": "Paneel piekdrywing (kWp)",
           "performance_ratio": "Prestasie-verhouding (0–1)",
           "price_entity": "Elektrisite-pryssensor",
+          "export_price_entity": "Export/Sell Price Sensor (optional)",
           "cheap_threshold": "Laai onder prys (goedkoop-tarief drempel)",
           "cheap_charge_current": "Laaistroomsterkte by goedkoop tarief (A)",
           "normal_charge_current": "Normale laaistroomsterkte om te herstel (A)",
@@ -55,11 +57,13 @@
         },
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
+          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
           "latitude": "Opsioneel — verstekwaarde is HA-tuisligging",
           "longitude": "Opsioneel — verstekwaarde is HA-tuisligging",
           "panel_kwp": "Totale geïnstalleerde paneelkapasiteit in kilowatt-piek. Los leeg om sonsenergie-voorspelling te deaktiveer.",
           "performance_ratio": "Stelsel-doeltreffendheidsfaktor, verstek 0.80",
           "price_entity": "Enige sensor wat die elektrisite-prys rapporteer (bv. Octopus Agile, NordPool, Tibber). Los leeg om tariefbestuur te deaktiveer.",
+          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
           "cheap_threshold": "Wanneer prys ≤ hierdie waarde, laai die battery. Los leeg om goedkoop-tarieflaaing te deaktiveer.",
           "cheap_charge_current": "Battery laaistroomsterkte tydens goedkoop periode (bv. 100 A).",
           "normal_charge_current": "Laaistroomsterkte herstel wanneer goedkoop periode eindig.",
@@ -91,6 +95,10 @@
     "inverter_offline": {
       "title": "Omvormer {serial} is vanlyn",
       "description": "Data vir omvormer **{serial}** kon nie opgeslaan word nie. Kontroleer of die dongle gekoppel is en die Sunsynk-program lewende data wys."
+    },
+    "setting_write_mismatch": {
+      "title": "Setting {setting_key} did not apply on {serial}",
+      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
     }
   }
 }

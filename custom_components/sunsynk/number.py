@@ -1,4 +1,5 @@
 """Number platform for writable Sunsynk inverter settings."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,6 +26,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .helpers import build_device_info
+from .write_validation import MAX_CURRENT_A
 
 if TYPE_CHECKING:
     from .tariff import TariffChargingManager
@@ -398,7 +400,7 @@ TARIFF_NUMBERS: tuple[TariffNumberEntityDescription, ...] = (
         key="cheap_charge_current",
         name="Tariff Cheap Charge Current",
         native_min_value=0,
-        native_max_value=500,
+        native_max_value=MAX_CURRENT_A,
         native_step=1,
         manager_attr="_cheap_current",
         manager_setter="set_cheap_current",
@@ -410,7 +412,7 @@ TARIFF_NUMBERS: tuple[TariffNumberEntityDescription, ...] = (
         key="normal_charge_current",
         name="Tariff Normal Charge Current",
         native_min_value=0,
-        native_max_value=500,
+        native_max_value=MAX_CURRENT_A,
         native_step=1,
         manager_attr="_normal_charge_current",
         manager_setter="set_normal_charge_current",
@@ -444,7 +446,7 @@ TARIFF_NUMBERS: tuple[TariffNumberEntityDescription, ...] = (
         key="peak_discharge_current",
         name="Tariff Peak Discharge Current",
         native_min_value=0,
-        native_max_value=500,
+        native_max_value=MAX_CURRENT_A,
         native_step=1,
         manager_attr="_peak_discharge_current",
         manager_setter="set_peak_discharge_current",
@@ -456,7 +458,7 @@ TARIFF_NUMBERS: tuple[TariffNumberEntityDescription, ...] = (
         key="normal_discharge_current",
         name="Tariff Normal Discharge Current",
         native_min_value=0,
-        native_max_value=500,
+        native_max_value=MAX_CURRENT_A,
         native_step=1,
         manager_attr="_normal_discharge_current",
         manager_setter="set_normal_discharge_current",
@@ -490,7 +492,9 @@ async def async_setup_entry(
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
         for description in WRITABLE_NUMBERS:
-            entities.append(SunsynkNumberEntity(coordinator, serial, description, device_info))
+            entities.append(
+                SunsynkNumberEntity(coordinator, serial, description, device_info)
+            )
         entities.append(PlantEnergyPriceNumberEntity(coordinator, serial, device_info))
 
     tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
@@ -501,7 +505,9 @@ async def async_setup_entry(
         device_info = build_device_info(coordinator, first_serial)
         for description in TARIFF_NUMBERS:
             entities.append(
-                TariffNumberEntity(entry.entry_id, tariff_manager, description, device_info)
+                TariffNumberEntity(
+                    entry.entry_id, tariff_manager, description, device_info
+                )
             )
 
     async_add_entities(entities)
@@ -528,7 +534,9 @@ class SunsynkNumberEntity(CoordinatorEntity[SunsynkCoordinator], NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        settings = (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        settings = (
+            (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        )
         value = settings.get(self.entity_description.setting_key)
         if value is None:
             return None
@@ -540,17 +548,40 @@ class SunsynkNumberEntity(CoordinatorEntity[SunsynkCoordinator], NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         setting_key = self.entity_description.setting_key
         int_fields = {
-            "batteryShutdownCap", "batteryRestartCap", "batteryLowCap",
-            "batteryMaxCurrentCharge", "batteryMaxCurrentDischarge",
-            "chargeCurrent", "dischargeCurrent", "sdBatteryCurrent", "zeroExportPower",
-            "solarMaxSellPower", "pvMaxLimit", "generatorStartCap",
-            "genOnCap", "genOffCap", "sellTime1Pac", "sellTime2Pac",
-            "sellTime3Pac", "sellTime4Pac", "sellTime5Pac", "sellTime6Pac",
-            "cap1", "cap2", "cap3", "cap4", "cap5", "cap6",
-            "battMode", "sysWorkMode", "energyMode",
+            "batteryShutdownCap",
+            "batteryRestartCap",
+            "batteryLowCap",
+            "batteryMaxCurrentCharge",
+            "batteryMaxCurrentDischarge",
+            "chargeCurrent",
+            "dischargeCurrent",
+            "sdBatteryCurrent",
+            "zeroExportPower",
+            "solarMaxSellPower",
+            "pvMaxLimit",
+            "generatorStartCap",
+            "genOnCap",
+            "genOffCap",
+            "sellTime1Pac",
+            "sellTime2Pac",
+            "sellTime3Pac",
+            "sellTime4Pac",
+            "sellTime5Pac",
+            "sellTime6Pac",
+            "cap1",
+            "cap2",
+            "cap3",
+            "cap4",
+            "cap5",
+            "cap6",
+            "battMode",
+            "sysWorkMode",
+            "energyMode",
         }
         write_value: Any = int(value) if setting_key in int_fields else value
-        await self.coordinator.async_write_setting(self._serial, setting_key, write_value)
+        await self.coordinator.async_write_setting(
+            self._serial, setting_key, write_value
+        )
 
 
 class TariffNumberEntity(NumberEntity):
@@ -608,13 +639,7 @@ class TariffNumberEntity(NumberEntity):
 
 
 class PlantEnergyPriceNumberEntity(CoordinatorEntity[SunsynkCoordinator], NumberEntity):
-    """Manually set a constant electricity price for the inverter's plant.
-
-    Plant-level (not inverter-level) setting. Writing this REPLACES the
-    plant's entire pricing configuration on the Sunsynk portal with a
-    single Constant Price entry — any existing Time-of-Use or Live Price
-    setup for that plant is overwritten. See coordinator.async_write_plant_price.
-    """
+    """Edit an existing single constant electricity price for the plant."""
 
     _attr_has_entity_name = True
     _attr_name = "Manual Energy Price"

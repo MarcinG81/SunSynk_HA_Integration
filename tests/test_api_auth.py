@@ -1,7 +1,9 @@
 """Tests for SunsynkAuth (custom_components/sunsynk/api/auth.py)."""
 from __future__ import annotations
 
+import hashlib
 import time
+from unittest.mock import patch
 
 import aiohttp
 import pytest
@@ -65,6 +67,17 @@ class TestTokenValidity:
         auth._token_expires_at = time.time() - 1
         assert auth._is_token_valid() is False
 
+    def test_invalidate_token_discards_cached_credentials(self):
+        auth = SunsynkAuth("api.sunsynk.net", "user", "pass")
+        auth._token = "rejected-token"
+        auth._token_expires_at = time.time() + 3600
+
+        auth.invalidate_token()
+
+        assert auth.token == ""
+        assert auth._token_expires_at == 0.0
+        assert auth._is_token_valid() is False
+
 
 class TestEncryptPassword:
     def test_encrypted_password_decrypts_back_to_original(self):
@@ -115,6 +128,29 @@ class TestAsyncGetToken:
 
 
 class TestAsyncAuthenticate:
+    @pytest.mark.asyncio
+    async def test_inteless_payload_uses_elinter_but_signature_uses_sunsynk(self):
+        _, public_body = _public_key_body()
+        auth = SunsynkAuth("pv.inteless.com", "user", "pass")
+        session = fake_session(
+            get=FakeResponse({"msg": "Success", "data": public_body}),
+            post=FakeResponse({
+                "msg": "Success",
+                "data": {"access_token": "token", "expires_in": 3600},
+            }),
+        )
+
+        with patch("custom_components.sunsynk.api.auth._get_nonce", return_value=123):
+            await auth._async_authenticate(session)
+
+        payload = session.post.call_args.kwargs["json"]
+        expected_sign = hashlib.md5(
+            f"nonce=123&source=sunsynk{public_body[:10]}".encode(),
+            usedforsecurity=False,
+        ).hexdigest()
+        assert payload["source"] == "elinter"
+        assert payload["sign"] == expected_sign
+
     @pytest.mark.asyncio
     async def test_full_flow_sets_token_and_expiry(self):
         _private_key, public_body = _public_key_body()

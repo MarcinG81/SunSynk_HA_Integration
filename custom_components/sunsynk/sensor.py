@@ -1,4 +1,5 @@
 """Sensor platform for Sunsynk integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -124,7 +125,9 @@ async def async_setup_entry(
         for description in ALL_STATIC_SENSORS:
             uid = f"{serial}_{description.key}"
             registered_uids.add(uid)
-            entities.append(SunsynkSensor(coordinator, serial, description, device_info))
+            entities.append(
+                SunsynkSensor(coordinator, serial, description, device_info)
+            )
         entities.append(InverterInternalPowerSensor(coordinator, serial, device_info))
         entities.append(PlantEnergyPriceSensor(coordinator, serial, device_info))
 
@@ -140,7 +143,9 @@ async def async_setup_entry(
                 uid = f"{serial}_{desc.key}"
                 if uid not in registered_uids:
                     registered_uids.add(uid)
-                    new_entities.append(SunsynkSensor(coordinator, serial, desc, device_info))
+                    new_entities.append(
+                        SunsynkSensor(coordinator, serial, desc, device_info)
+                    )
         if new_entities:
             async_add_entities(new_entities)
 
@@ -157,10 +162,14 @@ async def async_setup_entry(
             manufacturer="Open-Meteo",
             model="Weather Forecast",
         )
-        async_add_entities([
-            SolarForecastSensor(forecast_coordinator, entry.entry_id, desc, forecast_device)
-            for desc in FORECAST_SENSOR_DESCRIPTIONS
-        ])
+        async_add_entities(
+            [
+                SolarForecastSensor(
+                    forecast_coordinator, entry.entry_id, desc, forecast_device
+                )
+                for desc in FORECAST_SENSOR_DESCRIPTIONS
+            ]
+        )
 
     tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
         f"{entry.entry_id}_tariff"
@@ -168,21 +177,23 @@ async def async_setup_entry(
     if tariff_manager is not None:
         first_serial = coordinator.serials[0]
         device_info = build_device_info(coordinator, first_serial)
-        async_add_entities([
-            TariffStateSensor(entry.entry_id, tariff_manager, device_info),
-            TariffPriceQualitySensor(entry.entry_id, tariff_manager, device_info),
-        ])
+        async_add_entities(
+            [
+                TariffStateSensor(entry.entry_id, tariff_manager, device_info),
+                TariffPriceQualitySensor(entry.entry_id, tariff_manager, device_info),
+            ]
+        )
 
-    vslot_scheduler: VirtualSlotScheduler | None = hass.data[DOMAIN].get(
-        f"{entry.entry_id}_vslots"
+    vslot_schedulers: dict[str, VirtualSlotScheduler] = hass.data[DOMAIN].get(
+        f"{entry.entry_id}_vslots", {}
     )
-    if vslot_scheduler is not None:
-        first_serial = coordinator.serials[0]
-        device_info = build_device_info(coordinator, first_serial)
-        async_add_entities([
-            VirtualSlotStateSensor(entry.entry_id, vslot_scheduler, device_info),
-        ])
-
+    for serial, scheduler in vslot_schedulers.items():
+        device_info = build_device_info(coordinator, serial)
+        async_add_entities(
+            [
+                VirtualSlotStateSensor(serial, scheduler, device_info),
+            ]
+        )
 
 
 def _build_dynamic_descriptions(
@@ -199,15 +210,17 @@ def _build_dynamic_descriptions(
             ("vpv", "Voltage", UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE),
             ("ipv", "Current", UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT),
         ]:
-            descriptions.append(SunsynkSensorEntityDescription(
-                key=f"pv_mppt{idx}_{field_key}",
-                name=f"PV MPPT {idx + 1} {name_suffix}",
-                endpoint="pv",
-                data_key=f"pvIV.{idx}.{field_key}",
-                native_unit_of_measurement=unit,
-                device_class=dev_class,
-                state_class=SensorStateClass.MEASUREMENT,
-            ))
+            descriptions.append(
+                SunsynkSensorEntityDescription(
+                    key=f"pv_mppt{idx}_{field_key}",
+                    name=f"PV MPPT {idx + 1} {name_suffix}",
+                    endpoint="pv",
+                    data_key=f"pvIV.{idx}.{field_key}",
+                    native_unit_of_measurement=unit,
+                    device_class=dev_class,
+                    state_class=SensorStateClass.MEASUREMENT,
+                )
+            )
 
     for endpoint, prefix, label in [
         ("grid", "grid_phase", "Grid Phase"),
@@ -217,19 +230,31 @@ def _build_dynamic_descriptions(
         phases = serial_data.get(endpoint, {}).get("vip", [])
         for idx in range(len(phases)):
             for field_key, name_suffix, unit, dev_class in [
-                ("volt", "Voltage", UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE),
-                ("current", "Current", UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT),
+                (
+                    "volt",
+                    "Voltage",
+                    UnitOfElectricPotential.VOLT,
+                    SensorDeviceClass.VOLTAGE,
+                ),
+                (
+                    "current",
+                    "Current",
+                    UnitOfElectricCurrent.AMPERE,
+                    SensorDeviceClass.CURRENT,
+                ),
                 ("power", "Power", UnitOfPower.WATT, SensorDeviceClass.POWER),
             ]:
-                descriptions.append(SunsynkSensorEntityDescription(
-                    key=f"{prefix}{idx}_{field_key}",
-                    name=f"{label} {idx + 1} {name_suffix}",
-                    endpoint=endpoint,
-                    data_key=f"vip.{idx}.{field_key}",
-                    native_unit_of_measurement=unit,
-                    device_class=dev_class,
-                    state_class=SensorStateClass.MEASUREMENT,
-                ))
+                descriptions.append(
+                    SunsynkSensorEntityDescription(
+                        key=f"{prefix}{idx}_{field_key}",
+                        name=f"{label} {idx + 1} {name_suffix}",
+                        endpoint=endpoint,
+                        data_key=f"vip.{idx}.{field_key}",
+                        native_unit_of_measurement=unit,
+                        device_class=dev_class,
+                        state_class=SensorStateClass.MEASUREMENT,
+                    )
+                )
 
     # Individual battery pack sensors — only added when the slot reports a non-zero voltage,
     # meaning a physical battery is present and communicating at that slot.
@@ -238,21 +263,53 @@ def _build_dynamic_descriptions(
         volt_key = f"batteryVolt{slot}"
         if (battery_data.get(volt_key) or 0) > 0:
             for field_key, name_suffix, api_key, unit, dev_class in [
-                ("soc", "SOC", f"batterySoc{slot}", PERCENTAGE, SensorDeviceClass.BATTERY),
-                ("voltage", "Voltage", f"batteryVolt{slot}", UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE),
-                ("current", "Current", f"batteryCurrent{slot}", UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT),
-                ("power", "Power", f"batteryPower{slot}", UnitOfPower.WATT, SensorDeviceClass.POWER),
-                ("temp", "Temperature", f"batteryTemp{slot}", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE),
+                (
+                    "soc",
+                    "SOC",
+                    f"batterySoc{slot}",
+                    PERCENTAGE,
+                    SensorDeviceClass.BATTERY,
+                ),
+                (
+                    "voltage",
+                    "Voltage",
+                    f"batteryVolt{slot}",
+                    UnitOfElectricPotential.VOLT,
+                    SensorDeviceClass.VOLTAGE,
+                ),
+                (
+                    "current",
+                    "Current",
+                    f"batteryCurrent{slot}",
+                    UnitOfElectricCurrent.AMPERE,
+                    SensorDeviceClass.CURRENT,
+                ),
+                (
+                    "power",
+                    "Power",
+                    f"batteryPower{slot}",
+                    UnitOfPower.WATT,
+                    SensorDeviceClass.POWER,
+                ),
+                (
+                    "temp",
+                    "Temperature",
+                    f"batteryTemp{slot}",
+                    UnitOfTemperature.CELSIUS,
+                    SensorDeviceClass.TEMPERATURE,
+                ),
             ]:
-                descriptions.append(SunsynkSensorEntityDescription(
-                    key=f"battery_slot{slot}_{field_key}",
-                    name=f"Battery {slot} {name_suffix}",
-                    endpoint="battery",
-                    data_key=api_key,
-                    native_unit_of_measurement=unit,
-                    device_class=dev_class,
-                    state_class=SensorStateClass.MEASUREMENT,
-                ))
+                descriptions.append(
+                    SunsynkSensorEntityDescription(
+                        key=f"battery_slot{slot}_{field_key}",
+                        name=f"Battery {slot} {name_suffix}",
+                        endpoint="battery",
+                        data_key=api_key,
+                        native_unit_of_measurement=unit,
+                        device_class=dev_class,
+                        state_class=SensorStateClass.MEASUREMENT,
+                    )
+                )
 
     # Generator/micro-inverter power — only the /flow endpoint reports these, and
     # only when that port is actually wired up (existsGen/existsMin flags). A
@@ -261,25 +318,29 @@ def _build_dynamic_descriptions(
     # exposed independently rather than guessing which one applies.
     flow_data = serial_data.get("flow", {})
     if flow_data.get("existsGen"):
-        descriptions.append(SunsynkSensorEntityDescription(
-            key="generator_power",
-            name="Generator Power",
-            endpoint="flow",
-            data_key="genPower",
-            native_unit_of_measurement=UnitOfPower.WATT,
-            device_class=SensorDeviceClass.POWER,
-            state_class=SensorStateClass.MEASUREMENT,
-        ))
+        descriptions.append(
+            SunsynkSensorEntityDescription(
+                key="generator_power",
+                name="Generator Power",
+                endpoint="flow",
+                data_key="genPower",
+                native_unit_of_measurement=UnitOfPower.WATT,
+                device_class=SensorDeviceClass.POWER,
+                state_class=SensorStateClass.MEASUREMENT,
+            )
+        )
     if flow_data.get("existsMin"):
-        descriptions.append(SunsynkSensorEntityDescription(
-            key="micro_inverter_power",
-            name="Micro Inverter Power",
-            endpoint="flow",
-            data_key="minPower",
-            native_unit_of_measurement=UnitOfPower.WATT,
-            device_class=SensorDeviceClass.POWER,
-            state_class=SensorStateClass.MEASUREMENT,
-        ))
+        descriptions.append(
+            SunsynkSensorEntityDescription(
+                key="micro_inverter_power",
+                name="Micro Inverter Power",
+                endpoint="flow",
+                data_key="minPower",
+                native_unit_of_measurement=UnitOfPower.WATT,
+                device_class=SensorDeviceClass.POWER,
+                state_class=SensorStateClass.MEASUREMENT,
+            )
+        )
 
     return descriptions
 
@@ -334,7 +395,9 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
 
         value = _resolve_value(endpoint_data, self.entity_description.data_key)
         if (value is None or value == "") and self.entity_description.fallback_data_key:
-            value = _resolve_value(endpoint_data, self.entity_description.fallback_data_key)
+            value = _resolve_value(
+                endpoint_data, self.entity_description.fallback_data_key
+            )
         if value is None:
             return None
 
@@ -460,7 +523,9 @@ class PlantEnergyPriceSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity
         charge = self._charge()
         attrs: dict[str, Any] = {"plant_id": plant.get("id")}
         if charge is not None:
-            attrs["type"] = _CHARGE_TYPE_LABELS.get(charge.get("type"), charge.get("type"))
+            attrs["type"] = _CHARGE_TYPE_LABELS.get(
+                charge.get("type"), charge.get("type")
+            )
             attrs["start_range"] = charge.get("startRange")
             attrs["end_range"] = charge.get("endRange")
         return attrs
@@ -536,7 +601,11 @@ class TariffStateSensor(SensorEntity):
         if self._manager.expensive_threshold is not None:
             attrs["expensive_threshold"] = self._manager.expensive_threshold
         if self._manager.start_hour is not None:
-            attrs["active_hours"] = f"{self._manager.start_hour:02d}:00–{self._manager.end_hour:02d}:00"
+            attrs["active_hours"] = (
+                f"{self._manager.start_hour:02d}:00–{self._manager.end_hour:02d}:00"
+            )
+        attrs["per_inverter_mode"] = self._manager.per_inverter_modes
+        attrs["soc_quality_by_inverter"] = self._manager.soc_quality_by_inverter
         return attrs
 
 
@@ -573,7 +642,10 @@ class TariffPriceQualitySensor(SensorEntity):
 
     @callback
     def _handle_update(self) -> None:
-        ok = self._manager.price_quality == "ok" and self._manager.export_price_quality == "ok"
+        ok = (
+            self._manager.price_quality == "ok"
+            and self._manager.export_price_quality == "ok"
+        )
         self._attr_icon = "mdi:check-circle" if ok else "mdi:alert-circle"
         self.async_write_ha_state()
 
@@ -601,7 +673,11 @@ class TariffPriceQualitySensor(SensorEntity):
         if self._manager.export_price_entity != self._manager.price_entity:
             attrs["export_price_entity"] = self._manager.export_price_entity
             attrs["export_price_quality"] = self._manager.export_price_quality
-            export_state = self.hass.states.get(self._manager.export_price_entity) if self.hass else None
+            export_state = (
+                self.hass.states.get(self._manager.export_price_entity)
+                if self.hass
+                else None
+            )
             if export_state is not None:
                 attrs["export_last_updated"] = export_state.last_updated.isoformat()
                 attrs["export_current_state"] = export_state.state
@@ -622,12 +698,12 @@ class VirtualSlotStateSensor(SensorEntity):
 
     def __init__(
         self,
-        entry_id: str,
+        serial: str,
         scheduler: VirtualSlotScheduler,
         device_info: DeviceInfo,
     ) -> None:
         self._scheduler = scheduler
-        self._attr_unique_id = f"{entry_id}_vslots_state"
+        self._attr_unique_id = f"{serial}_vslots_state"
         self._attr_device_info = device_info
         self._unsub: Any = None
 

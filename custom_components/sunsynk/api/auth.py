@@ -1,4 +1,5 @@
 """Sunsynk authentication - async version using aiohttp."""
+
 from __future__ import annotations
 
 import base64
@@ -37,6 +38,11 @@ class SunsynkAuth:
     def _is_token_valid(self) -> bool:
         return bool(self._token) and time.time() < self._token_expires_at
 
+    def invalidate_token(self) -> None:
+        """Discard a token rejected by an authenticated API endpoint."""
+        self._token = ""
+        self._token_expires_at = 0.0
+
     async def async_get_token(self, session: aiohttp.ClientSession) -> str:
         """Return cached token or authenticate to get a new one."""
         if self._is_token_valid():
@@ -52,8 +58,13 @@ class SunsynkAuth:
         encrypted_password = self._encrypt_password(public_key_string)
 
         token_nonce = _get_nonce()
+        # The upstream OAuth protocol always signs the literal Sunsynk source,
+        # including for Inteless accounts. Only the public-key request and
+        # token payload switch to ``elinter``; using ``self._source`` here
+        # produces a valid-looking signature that the Inteless API rejects.
         token_sign = hashlib.md5(
-            f"nonce={token_nonce}&source=sunsynk{public_key_string[:10]}".encode()
+            f"nonce={token_nonce}&source=sunsynk{public_key_string[:10]}".encode(),
+            usedforsecurity=False,
         ).hexdigest()
 
         payload = {
@@ -82,7 +93,9 @@ class SunsynkAuth:
                 self._token = token_data["access_token"]
                 expires_in = int(token_data.get("expires_in", 3600))
                 self._token_expires_at = time.time() + expires_in - _TOKEN_MARGIN
-                _LOGGER.debug("Sunsynk authentication successful, token valid for %ds", expires_in)
+                _LOGGER.debug(
+                    "Sunsynk authentication successful, token valid for %ds", expires_in
+                )
                 return self._token
 
             msg = data.get("msg", "Unknown error")
@@ -90,12 +103,15 @@ class SunsynkAuth:
             raise SunsynkAuthError(f"Login failed: {msg}")
 
         except aiohttp.ClientError as err:
-            raise SunsynkAuthError(f"Connection error during authentication: {err}") from err
+            raise SunsynkAuthError(
+                f"Connection error during authentication: {err}"
+            ) from err
 
     async def _async_get_public_key(self, session: aiohttp.ClientSession) -> str:
         nonce = _get_nonce()
         sign = hashlib.md5(
-            f"nonce={nonce}&source={self._source}POWER_VIEW".encode()
+            f"nonce={nonce}&source={self._source}POWER_VIEW".encode(),
+            usedforsecurity=False,
         ).hexdigest()
 
         url = f"https://{self._api_server}/anonymous/publicKey"

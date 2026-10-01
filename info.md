@@ -2,7 +2,15 @@
 
 Native Home Assistant integration for **Sunsynk** and **Deye / Inteless** solar inverters via the cloud API.
 
-No add-on, no extra YAML — configure everything through the HA UI.
+No add-on, virtual machine, container, MQTT bridge or extra YAML — configure
+everything through the Home Assistant UI.
+
+This began as a small project to make an inverter behave like a native Home
+Assistant device. Real-world reports revealed a much more complex landscape:
+different firmware behaviour, delayed cloud writes, grouped timer settings,
+independent multi-inverter plants and parallel master/slave systems. Thank you to
+everyone who shared bugs, diagnostics and hardware test results — those reports
+continue to shape a safer integration.
 
 ---
 
@@ -28,8 +36,8 @@ Works with any price sensor — Octopus Agile, NordPool, Tibber, G12:
 - **Expensive rate** → discharge battery (sell to grid)
 - Scheduler, price quality check, HA notifications
 
-### Auto-generated dashboard
-Power flow card + charts + settings — created automatically on first setup.
+### Optional generated dashboard
+Power flow card + charts + settings — opt in through the integration options.
 
 ---
 
@@ -40,7 +48,8 @@ Power flow card + charts + settings — created automatically on first setup.
 | Sunsynk | `api.sunsynk.net` |
 | Deye / Inteless | `pv.inteless.com` |
 
-Multi-inverter supported (multiple serial numbers per account).
+Independent and parallel multi-inverter systems are supported (multiple serial
+numbers per account).
 
 ---
 

@@ -1,4 +1,5 @@
 """Repair flows for Sunsynk integration."""
+
 from __future__ import annotations
 
 from homeassistant.components.repairs import RepairsFlow

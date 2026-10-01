@@ -36,11 +36,13 @@
           "password": "New Sunsynk Account Password",
           "serials": "Numéro(s) de série de l'onduleur",
           "refresh_interval": "Intervalle de rafraîchissement (secondes)",
+          "create_dashboard": "Create and maintain Sunsynk dashboard",
           "latitude": "Latitude (prévision solaire)",
           "longitude": "Longitude (prévision solaire)",
           "panel_kwp": "Puissance crête des panneaux (kWc)",
           "performance_ratio": "Coefficient de performance (0–1)",
           "price_entity": "Capteur de prix de l'électricité",
+          "export_price_entity": "Export/Sell Price Sensor (optional)",
           "cheap_threshold": "Charger en dessous du prix (seuil tarif bas)",
           "cheap_charge_current": "Courant de charge au tarif bas (A)",
           "normal_charge_current": "Courant de charge normal à restaurer (A)",
@@ -55,11 +57,13 @@
         },
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
+          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
           "latitude": "Optionnel — par défaut : localisation HA",
           "longitude": "Optionnel — par défaut : localisation HA",
           "panel_kwp": "Puissance totale installée en kilowatt-crête. Laisser vide pour désactiver la prévision solaire.",
           "performance_ratio": "Facteur d'efficacité du système, défaut 0,80",
           "price_entity": "Tout capteur indiquant le prix de l'électricité (ex. Octopus Agile, NordPool, Tibber). Laisser vide pour désactiver la gestion tarifaire.",
+          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
           "cheap_threshold": "Quand le prix ≤ cette valeur, charger la batterie. Laisser vide pour désactiver la charge au tarif bas.",
           "cheap_charge_current": "Courant de charge pendant la période creuse (ex. 100 A).",
           "normal_charge_current": "Courant de charge restauré à la fin de la période creuse.",
@@ -91,6 +95,10 @@
     "inverter_offline": {
       "title": "L'onduleur {serial} est hors ligne",
       "description": "Impossible de récupérer les données de l'onduleur **{serial}**. Vérifiez que la clé USB est connectée et que l'application Sunsynk affiche des données en direct."
+    },
+    "setting_write_mismatch": {
+      "title": "Setting {setting_key} did not apply on {serial}",
+      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
     }
   }
 }

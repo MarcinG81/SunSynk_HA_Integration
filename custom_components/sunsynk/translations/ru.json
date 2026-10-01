@@ -36,11 +36,13 @@
           "password": "New Sunsynk Account Password",
           "serials": "Серийный номер(а) инвертора",
           "refresh_interval": "Интервал обновления (секунды)",
+          "create_dashboard": "Create and maintain Sunsynk dashboard",
           "latitude": "Широта (прогноз солнечной генерации)",
           "longitude": "Долгота (прогноз солнечной генерации)",
           "panel_kwp": "Пиковая мощность панелей (кВп)",
           "performance_ratio": "Коэффициент производительности (0–1)",
           "price_entity": "Датчик цены электроэнергии",
+          "export_price_entity": "Export/Sell Price Sensor (optional)",
           "cheap_threshold": "Заряжать ниже цены (порог дешёвого тарифа)",
           "cheap_charge_current": "Ток заряда при дешёвом тарифе (А)",
           "normal_charge_current": "Нормальный ток заряда для восстановления (А)",
@@ -55,11 +57,13 @@
         },
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
+          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
           "latitude": "Необязательно — по умолчанию используется местоположение HA",
           "longitude": "Необязательно — по умолчанию используется местоположение HA",
           "panel_kwp": "Общая установленная мощность панелей в кВп. Оставьте пустым, чтобы отключить прогноз солнечной генерации.",
           "performance_ratio": "Коэффициент эффективности системы, по умолчанию 0,80",
           "price_entity": "Любой датчик, сообщающий цену электроэнергии (например, Octopus Agile, NordPool, Tibber). Оставьте пустым, чтобы отключить управление тарифами.",
+          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
           "cheap_threshold": "Когда цена ≤ этого значения, заряжать аккумулятор. Оставьте пустым, чтобы отключить зарядку по дешёвому тарифу.",
           "cheap_charge_current": "Ток заряда аккумулятора в период дешёвого тарифа (например, 100 А).",
           "normal_charge_current": "Ток заряда, восстанавливаемый по окончании дешёвого тарифа.",
@@ -91,6 +95,10 @@
     "inverter_offline": {
       "title": "Инвертор {serial} не в сети",
       "description": "Не удалось получить данные для инвертора **{serial}**. Убедитесь, что донгл подключён, а приложение Sunsynk отображает текущие данные."
+    },
+    "setting_write_mismatch": {
+      "title": "Setting {setting_key} did not apply on {serial}",
+      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
     }
   }
 }

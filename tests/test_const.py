@@ -1,7 +1,23 @@
 """Tests for computed sensor value functions in const.py."""
 from __future__ import annotations
 
-from custom_components.sunsynk.const import _battery_soh_value
+import pytest
+
+from custom_components.sunsynk.const import _battery_soh_value, _model_value
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({"model": "M1", "equipType": "E1"}, "M1"),
+        ({"equipType": "E1"}, "E1"),
+        ({"brand": "Deye", "ratePower": "8000"}, "Deye 8kW"),
+        ({"ratePower": 5000}, "5kW"),
+        ({"brand": "Deye", "ratePower": "bad"}, "Deye"),
+    ],
+)
+def test_model_value_variants(data, expected):
+    assert _model_value(data) == expected
 
 
 def test_soh_none_when_fields_missing():

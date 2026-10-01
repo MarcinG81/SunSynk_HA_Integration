@@ -7,8 +7,10 @@ calibrator compares each finished day's actual `pv.etoday` reading against what 
 irradiance model would have predicted with a ratio of 1, and folds the observed ratio
 into an exponential moving average per calendar month.
 """
+
 from __future__ import annotations
 
+import math
 from datetime import date
 
 from homeassistant.core import HomeAssistant
@@ -16,7 +18,9 @@ from homeassistant.helpers.storage import Store
 
 _STORAGE_VERSION = 1
 _EMA_ALPHA = 0.2
-_MIN_RAW_KWH = 0.5  # below this, a day's irradiance total is too small for a stable ratio
+_MIN_RAW_KWH = (
+    0.5  # below this, a day's irradiance total is too small for a stable ratio
+)
 _RATIO_MIN = 0.3
 _RATIO_MAX = 1.1
 
@@ -24,8 +28,12 @@ _RATIO_MAX = 1.1
 class PerformanceRatioCalibrator:
     """Tracks and persists a learned performance ratio for each calendar month."""
 
-    def __init__(self, hass: HomeAssistant, entry_id: str, default_ratio: float) -> None:
-        self._store: Store = Store(hass, _STORAGE_VERSION, f"sunsynk_performance_{entry_id}")
+    def __init__(
+        self, hass: HomeAssistant, entry_id: str, default_ratio: float
+    ) -> None:
+        self._store: Store = Store(
+            hass, _STORAGE_VERSION, f"sunsynk_performance_{entry_id}"
+        )
         self._default_ratio = default_ratio
         self._monthly: dict[str, dict[str, float]] = {}
         self._tracked_date: date | None = None
@@ -33,10 +41,41 @@ class PerformanceRatioCalibrator:
         self._last_actual_kwh = 0.0
 
     async def async_load(self) -> None:
-        """Load persisted monthly ratios, if any."""
+        """Load persisted monthly ratios and the in-progress day, if any."""
         data = await self._store.async_load()
         if data:
             self._monthly = data.get("monthly", {})
+            try:
+                tracked_date = date.fromisoformat(data["tracked_date"])
+                raw_kwh = float(data["last_raw_kwh"])
+                actual_kwh = float(data["last_actual_kwh"])
+                if not (
+                    math.isfinite(raw_kwh)
+                    and raw_kwh >= 0
+                    and math.isfinite(actual_kwh)
+                    and actual_kwh >= 0
+                ):
+                    raise ValueError
+            except (KeyError, TypeError, ValueError):
+                return
+            self._tracked_date = tracked_date
+            self._last_raw_kwh = raw_kwh
+            self._last_actual_kwh = actual_kwh
+
+    async def _async_save(self) -> None:
+        """Atomically persist learned ratios and the in-progress day."""
+        await self._store.async_save(
+            {
+                "monthly": self._monthly,
+                "tracked_date": (
+                    self._tracked_date.isoformat()
+                    if self._tracked_date is not None
+                    else None
+                ),
+                "last_raw_kwh": self._last_raw_kwh,
+                "last_actual_kwh": self._last_actual_kwh,
+            }
+        )
 
     def get_ratio(self, month: int) -> float:
         """Return the learned ratio for `month`, or the configured default if no data yet."""
@@ -66,16 +105,20 @@ class PerformanceRatioCalibrator:
 
         self._last_raw_kwh = raw_kwh_today
         self._last_actual_kwh = actual_kwh_today
+        await self._async_save()
 
-    async def _async_calibrate_day(self, month: int, raw_kwh: float, actual_kwh: float) -> None:
+    async def _async_calibrate_day(
+        self, month: int, raw_kwh: float, actual_kwh: float
+    ) -> None:
         if raw_kwh < _MIN_RAW_KWH:
             return
 
         observed = max(_RATIO_MIN, min(_RATIO_MAX, actual_kwh / raw_kwh))
         key = str(month)
-        entry: dict[str, float] = self._monthly.get(key, {"ratio": observed, "samples": 0})
+        entry: dict[str, float] = self._monthly.get(
+            key, {"ratio": observed, "samples": 0}
+        )
         if entry["samples"] > 0:
             entry["ratio"] = _EMA_ALPHA * observed + (1 - _EMA_ALPHA) * entry["ratio"]
         entry["samples"] = entry.get("samples", 0) + 1
         self._monthly[key] = entry
-        await self._store.async_save({"monthly": self._monthly})

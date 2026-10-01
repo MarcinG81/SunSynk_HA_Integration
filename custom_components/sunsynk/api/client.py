@@ -1,8 +1,10 @@
 """Sunsynk API client - async, fetches all inverter data endpoints."""
+
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import date
 from typing import Any
 
@@ -24,11 +26,40 @@ def _is_success(msg: Any) -> bool:
     case-insensitive substring instead, since this API's success message
     isn't documented anywhere and apparently isn't fully consistent.
     """
-    return isinstance(msg, str) and "success" in msg.lower()
+    if not isinstance(msg, str):
+        return False
+    # Anchor the complete reply so explicit failures such as ``not success``
+    # and ``unsuccessful`` can never be mistaken for acknowledgements.
+    return (
+        re.fullmatch(
+            r"(?:success|send\s+command\s+success(?:\s*:\s*\{\s*\})?)",
+            msg.strip(),
+            flags=re.IGNORECASE,
+        )
+        is not None
+    )
 
 
 class SunsynkApiError(Exception):
     """Raised when an API call fails."""
+
+
+class SunsynkAuthenticationError(SunsynkApiError):
+    """Raised when the API rejects an access token."""
+
+
+def _api_error(message: str, url: str) -> SunsynkApiError:
+    """Classify authentication responses separately from other API errors."""
+    lowered = message.lower()
+    if (
+        "invalid token" in lowered
+        or "token expired" in lowered
+        or "unauthorized" in lowered
+    ):
+        return SunsynkAuthenticationError(
+            f"API authentication error: {message} for {url}"
+        )
+    return SunsynkApiError(f"API error: {message} for {url}")
 
 
 class SunsynkClient:
@@ -58,11 +89,13 @@ class SunsynkClient:
                 data = await resp.json()
 
             if not _is_success(data.get("msg")):
-                raise SunsynkApiError(f"API error: {data.get('msg')} for {url}")
+                raise _api_error(str(data.get("msg")), url)
 
             return data.get("data", {})
 
         except aiohttp.ClientResponseError as err:
+            if err.status == 401:
+                raise SunsynkAuthenticationError(f"HTTP 401 for {url}") from err
             raise SunsynkApiError(f"HTTP {err.status} for {url}") from err
         except aiohttp.ClientError as err:
             raise SunsynkApiError(f"Connection error for {url}: {err}") from err
@@ -86,11 +119,13 @@ class SunsynkClient:
                 data = await resp.json()
 
             if not _is_success(data.get("msg")):
-                raise SunsynkApiError(f"API error: {data.get('msg')} for {url}")
+                raise _api_error(str(data.get("msg")), url)
 
             return data.get("data", {})
 
         except aiohttp.ClientResponseError as err:
+            if err.status == 401:
+                raise SunsynkAuthenticationError(f"HTTP 401 for {url}") from err
             raise SunsynkApiError(f"HTTP {err.status} for {url}") from err
         except aiohttp.ClientError as err:
             raise SunsynkApiError(f"Connection error for {url}: {err}") from err
@@ -137,7 +172,9 @@ class SunsynkClient:
         today = date.today().strftime("%Y-%m-%d")  # noqa: DTZ011 — intentionally local calendar date
         url = f"{self._base}/api/v1/inverter/{serial}/output/day"
         raw = await self._get(
-            session, url, params={"lan": "en", "date": today, "column": "dc_temp,igbt_temp"}
+            session,
+            url,
+            params={"lan": "en", "date": today, "column": "dc_temp,igbt_temp"},
         )
         result: dict[str, Any] = {}
         infos = raw.get("infos", [])
@@ -214,12 +251,44 @@ class SunsynkClient:
             return_exceptions=True,
         )
 
-        keys = ["inverter", "pv", "grid", "battery", "load", "output", "temp", "settings", "flow"]
+        keys = [
+            "inverter",
+            "pv",
+            "grid",
+            "battery",
+            "load",
+            "output",
+            "temp",
+            "settings",
+            "flow",
+        ]
         data: dict[str, Any] = {}
 
-        for key, result in zip(keys, results):
+        # Never turn an expired/revoked token into nine innocent-looking empty
+        # payloads.  The coordinator needs the original signal so it can mark
+        # the update failed and force a fresh authentication attempt.
+        auth_error = next(
+            (
+                result
+                for result in results
+                if isinstance(result, SunsynkAuthenticationError)
+            ),
+            None,
+        )
+        if auth_error is not None:
+            raise auth_error
+
+        failures = [result for result in results if isinstance(result, Exception)]
+        if len(failures) == len(results):
+            # Partial endpoint outages remain usable, but a completely failed
+            # poll must not be published as a successful empty update.
+            raise failures[0]
+
+        for key, result in zip(keys, results, strict=True):
             if isinstance(result, Exception):
-                _LOGGER.warning("Failed to fetch %s data for %s: %s", key, serial, result)
+                _LOGGER.warning(
+                    "Failed to fetch %s data for %s: %s", key, serial, result
+                )
                 data[key] = {}
             else:
                 data[key] = result
@@ -228,7 +297,9 @@ class SunsynkClient:
             for key in ("inverter", "battery"):
                 _LOGGER.debug(
                     "Sunsynk %s %s fields: %s",
-                    serial, key, sorted(data.get(key, {}).keys()),
+                    serial,
+                    key,
+                    sorted(data.get(key, {}).keys()),
                 )
 
         return data

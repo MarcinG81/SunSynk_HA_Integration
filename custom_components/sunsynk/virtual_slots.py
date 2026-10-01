@@ -12,9 +12,10 @@ than a higher-numbered slot is exactly the "conflict" that article warns
 about: the inverter will not reliably act on the out-of-order slot.
 
 This module takes exclusive ownership of physical slots **1 and 6** (2-5
-are turned off and left untouched) — the only pair the firmware actually
-supports wrapping past midnight — and enforces the invariant that slot 1
-always holds the earlier time-of-day boundary and slot 6 the later one,
+are disabled; slot 2's start is pinned as slot 1's boundary) — the only
+pair the firmware actually supports wrapping past midnight — and enforces
+the invariant that slot 1 always holds the earlier time-of-day boundary and
+slot 6 the later one,
 recomputed fresh on every tick. Which one is "currently active" flips
 between them as the day progresses (e.g. slot 1 governs the daytime arc,
 slot 6 governs the overnight arc that wraps into the next day), but their
@@ -25,15 +26,20 @@ breakpoint of their own — they always take priority and are applied by
 live-patching whichever of slot 1 / slot 6 is currently active (cap /
 sell power / on), without touching its start time or the other slot.
 """
+
 from __future__ import annotations
 
 import logging
+from asyncio import Lock
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
+from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -55,23 +61,57 @@ MODE_CHARGE = "charge"
 MODE_DISCHARGE = "discharge"
 MODE_IDLE = "idle"
 
+
+class _CurrentState(Enum):
+    """Named non-write states tracked by current-setting deduplication."""
+
+    IDLE = "idle"
+
+
 WEEKDAY_NAMES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 ALL_WEEKDAYS: frozenset[int] = frozenset(range(7))
 
 # setting_key names for each owned physical slot
 _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
     1: {
-        "on": "time1on", "cap": "cap1", "pac": "sellTime1Pac",
-        "start": "sellTime1", "en": "sellTime1on",
+        "on": "time1on",
+        "cap": "cap1",
+        "pac": "sellTime1Pac",
+        "start": "sellTime1",
+        "en": "sellTime1on",
     },
     6: {
-        "on": "time6on", "cap": "cap6", "pac": "sellTime6Pac",
-        "start": "sellTime6", "en": "sellTime6on",
+        "on": "time6on",
+        "cap": "cap6",
+        "pac": "sellTime6Pac",
+        "start": "sellTime6",
+        "en": "sellTime6on",
     },
 }
-# Slots 2-5 are turned off once when the scheduler takes ownership, and
-# otherwise left alone.
+# Slots 2-5 are turned off once when the scheduler takes ownership. Slot 2's
+# start is also maintained as slot 1's end boundary; slots 3-5 stay untouched.
 _UNUSED_SLOT_ON_KEYS = ("time2on", "time3on", "time4on", "time5on")
+
+# Restore slot data fields before enable flags so the inverter never briefly
+# activates a partially restored window. Currents return to configured normal
+# values separately; snapshotting a live tariff override would be unsafe.
+_MANAGED_SETTING_KEYS = (
+    "cap1",
+    "sellTime1Pac",
+    "sellTime1",
+    "sellTime1on",
+    "sellTime2",
+    "cap6",
+    "sellTime6Pac",
+    "sellTime6",
+    "sellTime6on",
+    "time1on",
+    "time2on",
+    "time3on",
+    "time4on",
+    "time5on",
+    "time6on",
+)
 
 
 def _parse_hhmm(value: str) -> tuple[int, int]:
@@ -88,7 +128,9 @@ def _duration_minutes(start: str, end: str) -> int:
     return minutes
 
 
-def _most_recent_occurrence(ref: datetime, weekday: int, hour: int, minute: int) -> datetime:
+def _most_recent_occurrence(
+    ref: datetime, weekday: int, hour: int, minute: int
+) -> datetime:
     """Latest datetime <= ref matching the given weekday (0=Mon) and time."""
     candidate = ref.replace(hour=hour, minute=minute, second=0, microsecond=0)
     days_back = (ref.weekday() - weekday) % 7
@@ -184,7 +226,9 @@ class Resolution:
     source: str  # "price_override" | "virtual_slot:<id>" | "none"
 
 
-_IDLE = Resolution(mode=MODE_IDLE, current=None, target_soc=None, sell_power=0, source="none")
+_IDLE = Resolution(
+    mode=MODE_IDLE, current=None, target_soc=None, sell_power=0, source="none"
+)
 
 
 @dataclass
@@ -208,6 +252,7 @@ class VirtualSlotScheduler:
         hass: HomeAssistant,
         coordinator: SunsynkCoordinator,
         entry_id: str,
+        serial: str,
         tariff_manager: TariffChargingManager | None = None,
         normal_charge_current: int | None = None,
         normal_discharge_current: int | None = None,
@@ -215,11 +260,17 @@ class VirtualSlotScheduler:
         self._hass = hass
         self._coordinator = coordinator
         self._entry_id = entry_id
+        self._serial = serial
         self._tariff_manager = tariff_manager
         self._normal_charge_current = normal_charge_current
         self._normal_discharge_current = normal_discharge_current
 
-        self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_virtual_slots_{entry_id}")
+        serial_key = sha256(serial.encode("utf-8")).hexdigest()[:16]
+        self._store: Store = Store(
+            hass,
+            STORAGE_VERSION,
+            f"{DOMAIN}_virtual_slots_{entry_id}_{serial_key}",
+        )
         self._slots: dict[int, VirtualSlot] = {}
 
         self._enabled = False
@@ -227,12 +278,15 @@ class VirtualSlotScheduler:
         self._current_source = "none"
         self._next_boundary: datetime | None = None
         self._last_written: dict[int, tuple] = {}
-        self._last_current_key: tuple | None = None
+        self._last_current_key: tuple[str, int] | _CurrentState | None = None
         self._last_written_slot2_boundary: str | None = None
+        self._original_settings: dict[str, Any] | None = None
+        self._operation_lock = Lock()
 
         self._listeners: list[Callable[[], None]] = []
         self._unsub_coordinator: Any = None
         self._unsub_tariff: Any = None
+        self._unsub_boundary: Callable[[], None] | None = None
 
     # ── Listener registry ───────────────────────────────────────────────
 
@@ -250,11 +304,25 @@ class VirtualSlotScheduler:
 
     # ── Persistence ──────────────────────────────────────────────────────
 
-    async def async_load(self) -> None:
-        data = await self._store.async_load() or {}
+    async def async_load(
+        self, legacy_slots: list[dict[str, Any]] | None = None
+    ) -> None:
+        """Load this inverter's slots, optionally seeding old shared slots.
+
+        Before schedules became per-inverter, one storage record applied to
+        every inverter in the config entry.  On first load of the new key we
+        copy that record so existing behaviour is preserved independently for
+        every physical target.
+        """
+        data = await self._store.async_load()
+        migrated = data is None and legacy_slots is not None
+        if data is None:
+            data = {"slots": legacy_slots or []}
         self._slots = {
             int(s["slot_id"]): VirtualSlot.from_dict(s) for s in data.get("slots", [])
         }
+        if migrated:
+            await self._async_persist()
 
     async def _async_persist(self) -> None:
         await self._store.async_save(
@@ -275,37 +343,158 @@ class VirtualSlotScheduler:
         if self._unsub_tariff:
             self._unsub_tariff()
             self._unsub_tariff = None
+        self._cancel_boundary_timer()
 
     @callback
     def _on_tick(self) -> None:
         self._hass.async_create_task(self._async_tick())
 
+    @callback
+    def _on_boundary(self, _now: datetime) -> None:
+        """Re-evaluate exactly when a virtual window starts or ends."""
+        self._unsub_boundary = None
+        self._on_tick()
+
+    def _cancel_boundary_timer(self) -> None:
+        if self._unsub_boundary is not None:
+            self._unsub_boundary()
+            self._unsub_boundary = None
+
+    def _schedule_boundary_timer(self, boundary: datetime | None) -> None:
+        """Keep exactly one callback for the scheduler's next transition."""
+        self._cancel_boundary_timer()
+        if boundary is not None and self._enabled:
+            self._unsub_boundary = async_track_point_in_time(
+                self._hass, self._on_boundary, boundary
+            )
+
     # ── Enable / disable ─────────────────────────────────────────────────
 
     def set_enabled(self, enabled: bool) -> None:
+        was_enabled = self._enabled
         self._enabled = enabled
         if enabled:
             self._hass.async_create_task(self._async_bootstrap())
         else:
-            self._hass.async_create_task(self._async_shutdown())
+            self._hass.async_create_task(
+                self._async_shutdown(force_disable=was_enabled)
+            )
         self._notify_listeners()
 
     async def _async_bootstrap(self) -> None:
         """Take ownership: disable slots 2-5, then compute 1 & 6 from scratch."""
-        for serial in self._coordinator.write_target_serials:
-            for key in _UNUSED_SLOT_ON_KEYS:
-                await self._coordinator.async_write_setting(serial, key, 0)
-        self._last_written = {}
-        self._last_current_key = None
-        self._last_written_slot2_boundary = None
-        await self._async_tick()
+        async with self._operation_lock:
+            # The enable task may still be queued when an unload/disable wins
+            # the race. Never take ownership after shutdown has begun.
+            if not self._enabled:
+                return
+            if self._original_settings is None:
+                settings = (
+                    (self._coordinator.data or {})
+                    .get(self._serial, {})
+                    .get("settings", {})
+                )
+                self._original_settings = {
+                    key: settings[key]
+                    for key in _MANAGED_SETTING_KEYS
+                    if key in settings
+                }
+                missing = set(_MANAGED_SETTING_KEYS) - self._original_settings.keys()
+                if missing:
+                    _LOGGER.warning(
+                        "Virtual slots [%s]: cannot snapshot missing settings: %s",
+                        self._serial,
+                        ", ".join(sorted(missing)),
+                    )
 
-    async def _async_shutdown(self) -> None:
-        for serial in self._coordinator.write_target_serials:
-            await self._coordinator.async_write_setting(serial, _PHYSICAL_KEYS[1]["on"], 0)
-            await self._coordinator.async_write_setting(serial, _PHYSICAL_KEYS[6]["on"], 0)
-        self._last_written = {}
-        self._last_current_key = None
+            await self._coordinator.async_write_settings(
+                self._serial,
+                {key: 0 for key in _UNUSED_SLOT_ON_KEYS},
+            )
+            self._last_written = {}
+            self._last_current_key = None
+            self._last_written_slot2_boundary = None
+            await self._async_tick_locked()
+
+    async def _async_shutdown(self, force_disable: bool = True) -> bool:
+        """Restore the exact settings captured before taking ownership."""
+        success = True
+        async with self._operation_lock:
+            had_ownership = self._original_settings is not None or force_disable
+            pending: dict[str, Any] = {}
+            if self._original_settings:
+                try:
+                    await self._coordinator.async_write_settings(
+                        self._serial, self._original_settings
+                    )
+                except Exception as err:  # noqa: BLE001
+                    success = False
+                    pending.update(self._original_settings)
+                    _LOGGER.error(
+                        "Virtual slots shutdown [%s]: could not restore slot settings: %s",
+                        self._serial,
+                        err,
+                    )
+            elif force_disable:
+                try:
+                    await self._coordinator.async_write_settings(
+                        self._serial,
+                        {
+                            _PHYSICAL_KEYS[1]["on"]: 0,
+                            _PHYSICAL_KEYS[6]["on"]: 0,
+                        },
+                    )
+                except Exception as err:  # noqa: BLE001
+                    success = False
+                    _LOGGER.error(
+                        "Virtual slots shutdown [%s]: could not disable owned slots: %s",
+                        self._serial,
+                        err,
+                    )
+
+            if had_ownership:
+                normal_charge_current = self._normal_charge_current
+                normal_discharge_current = self._normal_discharge_current
+                if self._tariff_manager is not None:
+                    normal_charge_current = self._tariff_manager.normal_charge_current
+                    normal_discharge_current = (
+                        self._tariff_manager.normal_discharge_current
+                    )
+                current_restores = {
+                    key: value
+                    for key, value in (
+                        ("chargeCurrent", normal_charge_current),
+                        ("dischargeCurrent", normal_discharge_current),
+                    )
+                    if value is not None
+                }
+                if current_restores:
+                    try:
+                        await self._coordinator.async_write_settings(
+                            self._serial, current_restores
+                        )
+                    except Exception as err:  # noqa: BLE001
+                        success = False
+                        _LOGGER.error(
+                            "Virtual slots shutdown [%s]: could not restore currents: %s",
+                            self._serial,
+                            err,
+                        )
+
+            self._original_settings = pending or None
+            self._last_written = {}
+            self._last_current_key = None
+            self._last_written_slot2_boundary = None
+
+        self._notify_listeners()
+        return success
+
+    async def async_shutdown(self) -> bool:
+        """Stop callbacks and restore settings before unload/reload."""
+        self.stop()
+        was_enabled = self._enabled
+        self._enabled = False
+        return await self._async_shutdown(force_disable=was_enabled)
 
     # ── Slot management (called by services) ───────────────────────────
 
@@ -326,7 +515,9 @@ class VirtualSlotScheduler:
             await self._async_tick()
 
     def list_slots(self) -> list[dict[str, Any]]:
-        return [s.to_dict() for s in sorted(self._slots.values(), key=lambda s: s.slot_id)]
+        return [
+            s.to_dict() for s in sorted(self._slots.values(), key=lambda s: s.slot_id)
+        ]
 
     # ── Resolution ───────────────────────────────────────────────────────
 
@@ -382,7 +573,7 @@ class VirtualSlotScheduler:
         tm = self._tariff_manager
         if tm is None:
             return None
-        if tm.is_charging_active:
+        if tm.is_charging_active_for(self._serial):
             return Resolution(
                 mode=MODE_CHARGE,
                 current=None,  # tariff manager owns chargeCurrent
@@ -390,7 +581,7 @@ class VirtualSlotScheduler:
                 sell_power=0,
                 source="price_override",
             )
-        if tm.is_discharging_active:
+        if tm.is_discharging_active_for(self._serial):
             return Resolution(
                 mode=MODE_DISCHARGE,
                 current=None,  # tariff manager owns dischargeCurrent
@@ -419,15 +610,35 @@ class VirtualSlotScheduler:
         to a generous default if rated power isn't known yet (e.g. right
         after startup, before the first successful poll).
         """
-        for serial in self._coordinator.write_target_serials:
-            inverter_info = (self._coordinator.data or {}).get(serial, {}).get("inverter", {})
-            rate = inverter_info.get("ratePower")
-            try:
-                if rate:
-                    return int(rate)
-            except (TypeError, ValueError):
-                continue
+        inverter_info = (
+            (self._coordinator.data or {}).get(self._serial, {}).get("inverter", {})
+        )
+        rate = inverter_info.get("ratePower")
+        try:
+            if rate:
+                return int(rate)
+        except (TypeError, ValueError):
+            pass
         return self._DEFAULT_UNCAPPED_SELL_POWER
+
+    _DEFAULT_SOC_FLOOR = 20
+
+    def _soc_floor(self) -> int:
+        """Lowest `cap{n}` this scheduler may write: the inverter's own
+        Battery Low Capacity.
+
+        A window without a target SOC used to be written as `cap{n}` = 0
+        (#21). The inverter should still stop at its own low capacity, but a
+        slot value must not rely on that. Falls back to a conservative
+        default until settings have been polled.
+        """
+        settings = (
+            (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        )
+        try:
+            return max(0, min(100, int(settings["batteryLowCap"])))
+        except (KeyError, TypeError, ValueError):
+            return self._DEFAULT_SOC_FLOOR
 
     def _plan(self, now: datetime) -> _TickPlan:
         """Decide what belongs on physical slot 1 vs slot 6.
@@ -441,7 +652,9 @@ class VirtualSlotScheduler:
         override = self._resolve_override()
 
         active_resolution = override if override is not None else virt_resolution
-        active_hhmm = window_start.strftime("%H:%M") if window_start is not None else "00:00"
+        active_hhmm = (
+            window_start.strftime("%H:%M") if window_start is not None else "00:00"
+        )
 
         if next_boundary is not None:
             upcoming_resolution, _, _ = self._resolve_virtual(next_boundary)
@@ -475,6 +688,10 @@ class VirtualSlotScheduler:
     # ── Tick ─────────────────────────────────────────────────────────────
 
     async def _async_tick(self) -> None:
+        async with self._operation_lock:
+            await self._async_tick_locked()
+
+    async def _async_tick_locked(self) -> None:
         if not self._enabled:
             return
 
@@ -493,9 +710,14 @@ class VirtualSlotScheduler:
         if plan.active_physical != self._current_physical_slot:
             self._current_physical_slot = plan.active_physical
             changed = True
-        if plan.next_boundary != self._next_boundary:
+        boundary_changed = plan.next_boundary != self._next_boundary
+        if boundary_changed:
             self._next_boundary = plan.next_boundary
             changed = True
+        if boundary_changed or (
+            plan.next_boundary is not None and self._unsub_boundary is None
+        ):
+            self._schedule_boundary_timer(plan.next_boundary)
 
         if changed:
             self._notify_listeners()
@@ -516,20 +738,33 @@ class VirtualSlotScheduler:
         Zero-Export/Limited to Home.
         """
         on = resolution.mode != MODE_IDLE
-        cap = resolution.target_soc if resolution.target_soc is not None else 0
-        pac = resolution.sell_power if resolution.mode == MODE_DISCHARGE else 0
+        floor = self._soc_floor()
+        cap = max(resolution.target_soc or 0, floor)
+        # With Use Timer on and Sell unticked, a slot's power is also the
+        # most the inverter may draw from the battery for the house load.
+        # 0 W pushed the whole house onto the grid while VSS was holding an
+        # idle window (#21), so only a discharge window carries a real cap.
+        pac = (
+            resolution.sell_power
+            if resolution.mode == MODE_DISCHARGE
+            else self._uncapped_sell_power()
+        )
         sell_en = resolution.mode == MODE_DISCHARGE
         cache_key = (on, cap, pac, start, sell_en)
         if self._last_written.get(index) == cache_key:
             return False
 
         keys = _PHYSICAL_KEYS[index]
-        for serial in self._coordinator.write_target_serials:
-            await self._coordinator.async_write_setting(serial, keys["on"], 1 if on else 0)
-            await self._coordinator.async_write_setting(serial, keys["cap"], cap)
-            await self._coordinator.async_write_setting(serial, keys["pac"], pac)
-            await self._coordinator.async_write_setting(serial, keys["start"], start)
-            await self._coordinator.async_write_setting(serial, keys["en"], 1 if sell_en else 0)
+        await self._coordinator.async_write_settings(
+            self._serial,
+            {
+                keys["on"]: 1 if on else 0,
+                keys["cap"]: cap,
+                keys["pac"]: pac,
+                keys["start"]: start,
+                keys["en"]: 1 if sell_en else 0,
+            },
+        )
 
         self._last_written[index] = cache_key
         return True
@@ -555,8 +790,9 @@ class VirtualSlotScheduler:
         if self._last_written_slot2_boundary == slot6_start:
             return False
 
-        for serial in self._coordinator.write_target_serials:
-            await self._coordinator.async_write_setting(serial, "sellTime2", slot6_start)
+        await self._coordinator.async_write_setting(
+            self._serial, "sellTime2", slot6_start
+        )
 
         self._last_written_slot2_boundary = slot6_start
         return True
@@ -576,21 +812,21 @@ class VirtualSlotScheduler:
         elif resolution.mode == MODE_IDLE:
             # Best-effort restore; nothing to do if no normal current configured.
             wrote = False
-            current_key = ("idle",)
-            if current_key == self._last_current_key:
+            if self._last_current_key is _CurrentState.IDLE:
                 return False
-            for serial in self._coordinator.write_target_serials:
-                if self._normal_charge_current is not None:
-                    await self._coordinator.async_write_setting(
-                        serial, "chargeCurrent", self._normal_charge_current
-                    )
-                    wrote = True
-                if self._normal_discharge_current is not None:
-                    await self._coordinator.async_write_setting(
-                        serial, "dischargeCurrent", self._normal_discharge_current
-                    )
-                    wrote = True
-            self._last_current_key = current_key
+            if self._normal_charge_current is not None:
+                await self._coordinator.async_write_setting(
+                    self._serial, "chargeCurrent", self._normal_charge_current
+                )
+                wrote = True
+            if self._normal_discharge_current is not None:
+                await self._coordinator.async_write_setting(
+                    self._serial,
+                    "dischargeCurrent",
+                    self._normal_discharge_current,
+                )
+                wrote = True
+            self._last_current_key = _CurrentState.IDLE
             return wrote
         else:
             return False
@@ -598,8 +834,7 @@ class VirtualSlotScheduler:
         current_key = (key, value)
         if current_key == self._last_current_key:
             return False
-        for serial in self._coordinator.write_target_serials:
-            await self._coordinator.async_write_setting(serial, key, value)
+        await self._coordinator.async_write_setting(self._serial, key, value)
         self._last_current_key = current_key
         return True
 
@@ -608,6 +843,10 @@ class VirtualSlotScheduler:
     @property
     def is_enabled(self) -> bool:
         return self._enabled
+
+    @property
+    def serial(self) -> str:
+        return self._serial
 
     @property
     def active_source(self) -> str:

@@ -1,0 +1,4 @@
+# First available harness patch for the declared HA 2024.1 support line.
+# It pins its own pytest, pytest-asyncio and pytest-cov versions; pinning them
+# here as well makes the install unresolvable.
+pytest-homeassistant-custom-component==0.13.88

@@ -1,4 +1,5 @@
 """Text platform for writable time-string Sunsynk inverter settings."""
+
 from __future__ import annotations
 
 import re
@@ -60,7 +61,9 @@ async def async_setup_entry(
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
         for description in WRITABLE_TEXTS:
-            entities.append(SunsynkTextEntity(coordinator, serial, description, device_info))
+            entities.append(
+                SunsynkTextEntity(coordinator, serial, description, device_info)
+            )
 
     async_add_entities(entities)
 
@@ -86,7 +89,9 @@ class SunsynkTextEntity(CoordinatorEntity[SunsynkCoordinator], TextEntity):
 
     @property
     def native_value(self) -> str | None:
-        settings = (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        settings = (
+            (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        )
         value = settings.get(self.entity_description.setting_key)
         if value is None:
             return None

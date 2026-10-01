@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import aiohttp
 import pytest
+from unittest.mock import patch
 
 from custom_components.sunsynk.api.client import (
     SunsynkApiError,
+    SunsynkAuthenticationError,
     SunsynkClient,
     _is_success,
 )
@@ -37,6 +39,10 @@ class TestIsSuccess:
     def test_genuine_failure_messages_are_not_success(self):
         assert _is_success("Invalid token") is False
         assert _is_success("Failed") is False
+        assert _is_success("unsuccessful") is False
+        assert _is_success("not success") is False
+        assert _is_success("command success but rejected") is False
+        assert _is_success("send command success:not really") is False
         assert _is_success(None) is False
         assert _is_success("") is False
 
@@ -63,7 +69,13 @@ class TestGet:
     @pytest.mark.asyncio
     async def test_raises_on_non_success_msg(self, client: SunsynkClient):
         session = fake_session(get=FakeResponse({"msg": "Invalid token", "data": {}}))
-        with pytest.raises(SunsynkApiError, match="Invalid token"):
+        with pytest.raises(SunsynkAuthenticationError, match="Invalid token"):
+            await client._get(session, "https://api.sunsynk.net/x")
+
+    @pytest.mark.asyncio
+    async def test_raises_authentication_error_on_http_401(self, client: SunsynkClient):
+        session = fake_session(get=FakeResponse({}, status=401))
+        with pytest.raises(SunsynkAuthenticationError, match="HTTP 401"):
             await client._get(session, "https://api.sunsynk.net/x")
 
     @pytest.mark.asyncio
@@ -88,6 +100,19 @@ class TestPost:
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
+    async def test_raises_sunsynk_error_on_non_auth_http_error(self, client):
+        session = fake_session(post=FakeResponse({}, status=503))
+        with pytest.raises(SunsynkApiError, match="HTTP 503"):
+            await client._post(session, "https://api.sunsynk.net/x", {})
+
+    @pytest.mark.asyncio
+    async def test_raises_sunsynk_error_on_post_connection_error(self, client):
+        session = fake_session()
+        session.post.side_effect = aiohttp.ClientConnectionError("boom")
+        with pytest.raises(SunsynkApiError, match="Connection error"):
+            await client._post(session, "https://api.sunsynk.net/x", {})
+
+    @pytest.mark.asyncio
     async def test_accepts_parallel_inverter_success_variant(self, client: SunsynkClient):
         session = fake_session(
             post=FakeResponse({"msg": "send command success:{}", "data": {}})
@@ -99,6 +124,12 @@ class TestPost:
     async def test_raises_on_non_success_msg(self, client: SunsynkClient):
         session = fake_session(post=FakeResponse({"msg": "Failed", "data": {}}))
         with pytest.raises(SunsynkApiError, match="Failed"):
+            await client._post(session, "https://api.sunsynk.net/x", {})
+
+    @pytest.mark.asyncio
+    async def test_raises_authentication_error_on_http_401(self, client: SunsynkClient):
+        session = fake_session(post=FakeResponse({}, status=401))
+        with pytest.raises(SunsynkAuthenticationError, match="HTTP 401"):
             await client._post(session, "https://api.sunsynk.net/x", {})
 
 
@@ -222,6 +253,17 @@ class TestFetchAll:
         }
 
     @pytest.mark.asyncio
+    async def test_debug_logging_lists_core_fields(self, client):
+        ok = FakeResponse({"msg": "Success", "data": {"x": 1}})
+        session = fake_session(get=[ok, ok, ok, ok, ok, ok, ok, ok, ok])
+        with patch(
+            "custom_components.sunsynk.api.client._LOGGER.isEnabledFor",
+            return_value=True,
+        ), patch("custom_components.sunsynk.api.client._LOGGER.debug") as debug:
+            await client.async_fetch_all(session, "SN1")
+        assert debug.call_count >= 2
+
+    @pytest.mark.asyncio
     async def test_one_endpoint_failing_yields_empty_dict_for_it_only(
         self, client: SunsynkClient
     ):
@@ -234,3 +276,24 @@ class TestFetchAll:
         assert result["grid"] == {}
         assert result["inverter"] == {"x": 1}
         assert result["pv"] == {"x": 1}
+
+    @pytest.mark.asyncio
+    async def test_auth_failure_is_propagated_even_when_other_endpoints_succeed(
+        self, client: SunsynkClient
+    ):
+        ok = FakeResponse({"msg": "Success", "data": {"x": 1}})
+        unauthorized = FakeResponse({}, status=401)
+        session = fake_session(
+            get=[ok, ok, unauthorized, ok, ok, ok, ok, ok, ok]
+        )
+
+        with pytest.raises(SunsynkAuthenticationError, match="HTTP 401"):
+            await client.async_fetch_all(session, "SN1")
+
+    @pytest.mark.asyncio
+    async def test_complete_api_outage_is_propagated(self, client: SunsynkClient):
+        failures = [FakeResponse({}, status=500) for _ in range(9)]
+        session = fake_session(get=failures)
+
+        with pytest.raises(SunsynkApiError, match="HTTP 500"):
+            await client.async_fetch_all(session, "SN1")
