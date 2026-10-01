@@ -531,6 +531,6 @@ Rewritten as a native Home Assistant integration with async support, proper enti
 
 ## License
 
-GNU General Public License v3.0 — Copyright (c) 2026 Marcin Gaszewski
+GNU General Public License v3.0
 
 See [LICENSE](custom_components/sunsynk/LICENSE) for full text.
