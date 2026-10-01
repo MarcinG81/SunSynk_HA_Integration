@@ -16,12 +16,17 @@ from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .helpers import build_device_info
 
-# Sunsynk time slots only accept :00/:30 minute values — confirmed both via
-# the Sunsynk portal itself (rejects e.g. 22:45) and chattersley/
-# sunsynk-home-assistant's own docs (#21). A finer-grained value isn't
-# rejected outright by the settings-write API, it's just silently ignored
-# by the inverter, which is far more confusing to debug.
-_TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):(00|30)$")
+# Sunsynk's portal UI only ever offers :00/:30 options, and 1.9.1 assumed
+# that was a hard inverter-side requirement after one reporter's portal
+# test rejected 22:45 (#21). A later reporter's real-world use of Predbat
+# — which writes 5-minute-granularity schedules straight through this same
+# settings-write API — showed their inverter accepts and executes
+# non-:00/:30 values without issue (#25). The portal's dropdown is
+# evidently a UI convention, not a universal API/firmware constraint, and
+# apparently varies by inverter model/firmware. Validation here only
+# enforces a well-formed HH:MM; if your specific inverter silently
+# ignores a non-:00/:30 value, fall back to :00/:30.
+_TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 
 @dataclass(frozen=True)
@@ -34,7 +39,7 @@ WRITABLE_TEXTS: tuple[SunsynkTextEntityDescription, ...] = tuple(
         key=f"setting_sell_time{i}",
         name=f"Time Slot {i} Start",
         setting_key=f"sellTime{i}",
-        pattern=r"^([01]\d|2[0-3]):(00|30)$",
+        pattern=r"^([01]\d|2[0-3]):([0-5]\d)$",
         native_min=5,
         native_max=5,
         mode=TextMode.TEXT,
