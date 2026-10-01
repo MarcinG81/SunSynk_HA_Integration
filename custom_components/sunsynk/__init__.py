@@ -72,12 +72,15 @@ _SERVICE_SET_WORK_MODE_SCHEMA = vol.Schema({
     vol.Required("serial"): str,
     vol.Required("mode"): vol.All(vol.Coerce(int), vol.Range(min=0, max=4)),
 })
-# Sunsynk time slots only accept :00/:30 minute values — confirmed both via
-# the Sunsynk portal itself (rejects e.g. 22:45) and chattersley/
-# sunsynk-home-assistant's own docs (#21). A finer-grained value isn't
-# rejected outright by the settings-write API, it's just silently ignored
-# by the inverter, so validating it here beats a confusing no-op later.
-_TIME_HH_MM_PATTERN = r"^([01]\d|2[0-3]):(00|30)$"
+# Sunsynk's portal UI only ever offers :00/:30 options; 1.9.1 assumed that
+# was a hard inverter-side requirement after one reporter's portal test
+# rejected 22:45 (#21). A later reporter's real-world use of Predbat —
+# which writes 5-minute-granularity schedules straight through this same
+# settings-write API — showed their inverter accepts and executes
+# non-:00/:30 values without issue (#25), so this only validates a
+# well-formed HH:MM now, not a specific minute granularity. If your
+# inverter silently ignores a non-:00/:30 value, stick to :00/:30.
+_TIME_HH_MM_PATTERN = r"^([01]\d|2[0-3]):([0-5]\d)$"
 _SERVICE_SET_VIRTUAL_SLOT_SCHEMA = vol.Schema({
     vol.Required("serial"): str,
     vol.Required("slot_id"): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_VIRTUAL_SLOTS)),
