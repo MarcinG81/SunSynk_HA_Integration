@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.8] - 2026-10-01
+
+### Changed
+- **Relaxed the 30-minute-only slot-time restriction added in 1.9.1.** That restriction assumed, from one reporter's Sunsynk portal test, that the inverter hard-requires `:00`/`:30` minute values. A later reporter's real-world use of [Predbat](https://github.com/springfall2008/batpred) — writing 5-minute-granularity schedules straight through this same settings-write API — showed their inverter accepts and executes non-`:00`/`:30` values without issue. The portal's dropdown turned out to be a UI convention, not a universal API/firmware constraint, and apparently varies by inverter model/firmware. `sunsynk.set_virtual_slot` and the manual "Time Slot N Start" text entities now only validate a well-formed `HH:MM`; if your inverter silently ignores a non-`:00`/`:30` value, stick to `:00`/`:30` on yours. (#25)
+
 ## [1.9.7] - 2026-10-01
 
 ### Fixed
