@@ -395,10 +395,39 @@ class VirtualSlotScheduler:
                 mode=MODE_DISCHARGE,
                 current=None,  # tariff manager owns dischargeCurrent
                 target_soc=tm.discharge_min_soc,
-                sell_power=0,
+                sell_power=self._uncapped_sell_power(),
                 source="price_override",
             )
         return None
+
+    _DEFAULT_UNCAPPED_SELL_POWER = 30000
+
+    def _uncapped_sell_power(self) -> int:
+        """Best-effort "no artificial cap" sell power for a price-override
+        discharge.
+
+        Tariff Manager has no config option of its own for max export
+        power — unlike a virtual slot's `sell_power` field, which the user
+        sets explicitly. Previously this resolved to a hardcoded 0, which
+        wrote `sellTime{n}Pac` = 0 W onto the active physical slot — a
+        price-driven discharge would correctly raise `dischargeCurrent`
+        and still export nothing, since the slot's own power cap silently
+        overrode it (#21). Uses the inverter's own rated power
+        (`ratePower`, already polled every refresh) so the only thing
+        actually limiting export during a price override is Tariff
+        Manager's own `dischargeCurrent`, not a forgotten cap. Falls back
+        to a generous default if rated power isn't known yet (e.g. right
+        after startup, before the first successful poll).
+        """
+        for serial in self._coordinator.write_target_serials:
+            inverter_info = (self._coordinator.data or {}).get(serial, {}).get("inverter", {})
+            rate = inverter_info.get("ratePower")
+            try:
+                if rate:
+                    return int(rate)
+            except (TypeError, ValueError):
+                continue
+        return self._DEFAULT_UNCAPPED_SELL_POWER
 
     def _plan(self, now: datetime) -> _TickPlan:
         """Decide what belongs on physical slot 1 vs slot 6.

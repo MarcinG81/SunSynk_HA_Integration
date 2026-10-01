@@ -443,6 +443,54 @@ async def test_price_override_discharge_enables_sell_permission(mock_hass, mock_
     assert ("time6on", 0) in written
 
 
+# ── Price-override discharge must not cap export at 0 W (#21) ───────────────
+#
+# Resolution.sell_power used to be hardcoded to 0 for a price-override
+# discharge, since Tariff Manager has no config option of its own for max
+# export power. That meant a price-driven discharge correctly raised
+# dischargeCurrent and still exported nothing — the active physical slot's
+# own sellTime{n}Pac silently capped it at zero. Now uses the inverter's
+# own rated power so only Tariff Manager's dischargeCurrent actually
+# limits export.
+
+
+@pytest.mark.asyncio
+async def test_price_override_discharge_uses_inverter_rated_power_as_sell_cap(
+    mock_hass, mock_coordinator
+):
+    mock_coordinator.data["TEST123"]["inverter"] = {"ratePower": 8000}
+    tariff_manager = MagicMock()
+    tariff_manager.is_charging_active = False
+    tariff_manager.is_discharging_active = True
+    tariff_manager.discharge_min_soc = 10
+    sched = _make_scheduler(mock_hass, mock_coordinator, tariff_manager=tariff_manager)
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    assert ("sellTime1Pac", 8000) in _written(mock_coordinator)
+
+
+@pytest.mark.asyncio
+async def test_price_override_discharge_falls_back_to_default_when_rate_power_unknown(
+    mock_hass, mock_coordinator
+):
+    tariff_manager = MagicMock()
+    tariff_manager.is_charging_active = False
+    tariff_manager.is_discharging_active = True
+    tariff_manager.discharge_min_soc = 10
+    sched = _make_scheduler(mock_hass, mock_coordinator, tariff_manager=tariff_manager)
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    written = dict(_written(mock_coordinator))
+    assert written["sellTime1Pac"] == VirtualSlotScheduler._DEFAULT_UNCAPPED_SELL_POWER
+    assert written["sellTime1Pac"] > 0
+
+
 # ── write_target_serials dedup: a parallel slave's writes are skipped ───────
 #
 # Regression coverage (#21): async_write_setting redirects a slave's write
