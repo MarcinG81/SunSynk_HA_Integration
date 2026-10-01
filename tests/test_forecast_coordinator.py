@@ -10,7 +10,7 @@ from tests.conftest import FakeResponse, fake_session
 
 
 def _coordinator(mock_hass, **kwargs):
-    with patch("homeassistant.helpers.frame.report_usage"):
+    with patch("homeassistant.helpers.frame.report_usage", create=True):
         return SolarForecastCoordinator(
             mock_hass,
             latitude=51.0,

@@ -16,6 +16,10 @@ jobs:
           - name: minimum-ha
             python: "3.11"
             requirements: requirements_test_min.txt
+            # Compatibility lane: newer-HA code paths can't run here and the
+            # pinned coverage.py doesn't exclude TYPE_CHECKING blocks. The
+            # 100% gate is enforced by current-ha.
+            pytest_args: --cov-fail-under=0
           - name: current-ha
             python: "3.14"
             requirements: requirements_test.txt
@@ -30,4 +34,4 @@ jobs:
       - name: Install dependencies
         run: pip install -r "${{ matrix.requirements }}"
       - name: Run tests
-        run: pytest --tb=short
+        run: pytest --tb=short ${{ matrix.pytest_args }}

@@ -32,7 +32,7 @@ def _bare(**updates):
 
 @pytest.mark.asyncio
 async def test_real_coordinator_initializes_session_and_closes(mock_hass):
-    with patch("homeassistant.helpers.frame.report_usage"):
+    with patch("homeassistant.helpers.frame.report_usage", create=True):
         coordinator = SunsynkCoordinator(
             mock_hass, MagicMock(), ["SN1"], 60, "entry"
         )
