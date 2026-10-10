@@ -13,7 +13,7 @@ import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 
@@ -268,6 +268,43 @@ def _migrate_virtual_slot_entity_unique_ids(
             )
 
 
+# HA suffixes an entity ID that clashes with an existing one: sensor.x_2.
+_NUMBERED_ENTITY_ID = re.compile(r"_\d+$")
+
+
+def _adopt_stray_virtual_slot_entities(
+    hass: HomeAssistant, coordinator: SunsynkCoordinator, targets: set[str]
+) -> None:
+    """Hand a parallel slave's scheduler entities over to its master's.
+
+    If a parallel group wasn't recognised at setup, the slave got its own
+    scheduler and entities, possibly including the entity IDs dashboards and
+    automations already use (#21). Keep those IDs on the master's scheduler.
+    """
+    registry = er.async_get(hass)
+    for serial in coordinator.serials:
+        target = coordinator.resolve_write_target(serial)
+        if target == serial or target not in targets:
+            continue
+        for platform, suffix in (("switch", "enabled"), ("sensor", "state")):
+            target_unique_id = f"{target}_vslots_{suffix}"
+            stray = registry.async_get_entity_id(
+                platform, DOMAIN, f"{serial}_vslots_{suffix}"
+            )
+            if stray is None:
+                continue
+            owned = registry.async_get_entity_id(platform, DOMAIN, target_unique_id)
+            if owned is not None:
+                if _NUMBERED_ENTITY_ID.search(owned) and not _NUMBERED_ENTITY_ID.search(
+                    stray
+                ):
+                    registry.async_remove(owned)
+                else:
+                    registry.async_remove(stray)
+                    continue
+            registry.async_update_entity(stray, new_unique_id=target_unique_id)
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Register the static card path without mutating Lovelace configuration."""
     card_path = str(Path(__file__).parent / "www" / _CARD_JS)
@@ -519,6 +556,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _migrate_virtual_slot_entity_unique_ids(
             hass, entry.entry_id, next(iter(vslot_schedulers))
         )
+        _adopt_stray_virtual_slot_entities(hass, coordinator, set(vslot_schedulers))
+
+    reload_requested = False
+
+    @callback
+    def _async_check_write_targets() -> None:
+        """Reload once a parallel group is recognised after setup (#21).
+
+        Schedulers are created per write target at setup. A slave that was
+        only recognised later still has its own scheduler; reloading merges
+        it into the master's.
+        """
+        nonlocal reload_requested
+        if reload_requested or not (
+            set(coordinator.write_target_serials) < set(vslot_schedulers)
+        ):
+            return
+        reload_requested = True
+        _LOGGER.info("Parallel inverter group recognised, reloading to merge schedules")
+        hass.async_create_task(hass.config_entries.async_reload(entry.entry_id))
+
+    entry.async_on_unload(coordinator.async_add_listener(_async_check_write_targets))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

@@ -108,6 +108,7 @@ async def test_setup_and_unload_two_independent_inverters_minimal_ha():
         patch("custom_components.sunsynk.VirtualSlotScheduler", side_effect=schedulers) as scheduler_cls,
         patch("custom_components.sunsynk.Store", return_value=store),
         patch("custom_components.sunsynk._migrate_virtual_slot_entity_unique_ids") as migrate,
+        patch("custom_components.sunsynk._adopt_stray_virtual_slot_entities"),
     ):
         assert await async_setup_entry(hass, entry) is True
 
@@ -175,6 +176,7 @@ async def test_setup_survives_initial_forecast_failure_and_starts_opt_in_dashboa
         patch("custom_components.sunsynk.VirtualSlotScheduler", return_value=scheduler),
         patch("custom_components.sunsynk.Store", return_value=MagicMock(async_load=AsyncMock(return_value=None))),
         patch("custom_components.sunsynk._migrate_virtual_slot_entity_unique_ids"),
+        patch("custom_components.sunsynk._adopt_stray_virtual_slot_entities"),
         patch("custom_components.sunsynk._async_enable_dashboard_frontend", new=AsyncMock()) as enable_frontend,
         patch("custom_components.sunsynk._async_setup_dashboard", new=AsyncMock()) as setup_dashboard,
     ):
@@ -226,6 +228,7 @@ async def test_setup_restores_remembered_tariff_and_scheduler_switches():
             return_value=MagicMock(async_load=AsyncMock(return_value=None)),
         ),
         patch("custom_components.sunsynk._migrate_virtual_slot_entity_unique_ids"),
+        patch("custom_components.sunsynk._adopt_stray_virtual_slot_entities"),
     ):
         assert await async_setup_entry(hass, entry) is True
 
@@ -233,3 +236,54 @@ async def test_setup_restores_remembered_tariff_and_scheduler_switches():
     tariff.set_enabled.assert_called_once_with(True)
     scheduler.set_enabled.assert_called_once_with(True)
     assert hass.data[DOMAIN]["entry-1_options"] == entry.options
+
+
+@pytest.mark.asyncio
+async def test_reloads_once_when_a_parallel_group_is_recognised_after_setup():
+    """#21: the slave got its own scheduler because the group wasn't known
+    at setup. Once it is, reload so the schedules merge."""
+    hass = _hass()
+    entry = _entry()
+    listeners = []
+    coordinator = MagicMock(
+        serials=["INV1", "INV2"],
+        write_target_serials=["INV1", "INV2"],
+        data={},
+        async_config_entry_first_refresh=AsyncMock(),
+    )
+    coordinator.async_add_listener.side_effect = lambda cb: listeners.append(cb)
+
+    with (
+        patch("custom_components.sunsynk.SunsynkCoordinator", return_value=coordinator),
+        patch(
+            "custom_components.sunsynk.PerformanceRatioCalibrator",
+            return_value=MagicMock(async_load=AsyncMock()),
+        ),
+        patch(
+            "custom_components.sunsynk.SolarForecastCoordinator",
+            return_value=MagicMock(async_config_entry_first_refresh=AsyncMock()),
+        ),
+        patch("custom_components.sunsynk.TariffChargingManager", return_value=MagicMock()),
+        patch(
+            "custom_components.sunsynk.VirtualSlotScheduler",
+            side_effect=lambda **_: MagicMock(async_load=AsyncMock(), wanted_enabled=False),
+        ),
+        patch(
+            "custom_components.sunsynk.Store",
+            return_value=MagicMock(async_load=AsyncMock(return_value=None)),
+        ),
+        patch("custom_components.sunsynk._migrate_virtual_slot_entity_unique_ids"),
+        patch("custom_components.sunsynk._adopt_stray_virtual_slot_entities"),
+    ):
+        assert await async_setup_entry(hass, entry) is True
+
+    (check_targets,) = listeners
+    check_targets()  # nothing changed yet
+    hass.async_create_task.assert_not_called()
+
+    coordinator.write_target_serials = ["INV2"]  # INV1 recognised as a slave
+    check_targets()
+    check_targets()
+    hass.async_create_task.assert_called_once()
+    await hass.async_create_task.call_args.args[0]
+    hass.config_entries.async_reload.assert_awaited_once_with("entry-1")
