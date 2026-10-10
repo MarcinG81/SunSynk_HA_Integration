@@ -8,6 +8,7 @@ import pytest
 
 from custom_components.sunsynk.const import DOMAIN
 from custom_components.sunsynk.diagnostics import (
+    _redacted_data,
     _replace_sensitive_values,
     _safe_data,
     async_get_config_entry_diagnostics,
@@ -204,3 +205,28 @@ async def test_includes_virtual_slot_schedulers_with_redacted_serials(hass_with_
         {"slot_id": 1, "start": "14:30"}
     ]
     assert vslots["schedulers"]["inverter_unknown"]["drives_inverter"] is False
+
+
+def test_real_api_payload_identifiers_are_redacted():
+    """Field names taken from a real 1.9.8 diagnostics file (#31)."""
+    payload = {
+        "inverter": {
+            "gsn": "E4701",
+            "custCode": 29,
+            "thumbUrl": "https://example.invalid/plant/1.jpg",
+            "user": {"nickname": "owner@example.com", "mobile": "0700"},
+            "plant": {"installer": "Solar Ltd", "email": "x@example.com"},
+        },
+        "plant": {
+            "lat": 51.08,
+            "lon": -0.72,
+            "principal": "Jane Doe",
+            "master": {"nickname": "installer@example.com"},
+        },
+    }
+
+    redacted = _redacted_data(payload, {})
+
+    text = str(redacted)
+    for secret in ("E4701", "owner@", "0700", "Solar Ltd", "51.08", "-0.72", "Jane Doe", "installer@", "example.invalid"):
+        assert secret not in text

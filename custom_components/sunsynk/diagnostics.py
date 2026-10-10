@@ -38,6 +38,17 @@ _TO_REDACT = {
     "alias",
     "name",
     "id",
+    # Seen in real API payloads (#31): plant coordinates, dongle serial,
+    # owner/installer names and contacts, account codes.
+    "lat",
+    "lon",
+    "gsn",
+    "nickname",
+    "mobile",
+    "installer",
+    "principal",
+    "thumbUrl",
+    "custCode",
 }
 
 

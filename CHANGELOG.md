@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **On a parallel system, a second Virtual Slot Scheduler could drive the master.** If the master/slave group wasn't recognised the moment Home Assistant started, the slave got its own scheduler, which then also drove the master's timer slots, and the VSS page could show a different schedule from the one `sunsynk.set_virtual_slot` updated. A scheduler that doesn't own its inverter's writes now never touches the timer. If the group is recognised later, the integration reloads once so the two schedules merge, keeping the entity IDs your dashboards and automations already use. Diagnostics now include a *virtual_slots* section showing which scheduler drives which inverter. (#21)
 - **The Virtual Slot Scheduler switch turned itself off after a restart**, leaving timer slots 1 and 6 as the scheduler had last set them with nothing managing them. The switch now remembers its state. The timer settings it captured before taking over are remembered too, so switching it off after a restart still puts back *your* original timer.
 
+### Security
+- **Diagnostics still exposed some personal details.** Checked against a real diagnostics file: the plant's latitude/longitude, the dongle serial number, and the plant owner's and installer's names and contact details were not hidden. They are now. The same fix is in 1.9.9 for the stable version.
+
 ## [2.0.0-beta.2] - 2026-10-10
 
 ### Fixed
@@ -173,6 +176,11 @@ especially parallel master/slave installations exposed API and firmware behaviou
 that is neither documented nor obvious from a successful HTTP response. Those
 reports did not merely fix isolated bugs; they shaped the safer write pipeline,
 restoration lifecycle and per-inverter architecture delivered in this 2.0 beta.
+
+## [1.9.9] - 2026-10-10
+
+### Security
+- **Diagnostics files no longer contain your personal details.** Backport of the 2.0 redaction to the stable version: login, owner and installer details, serial numbers, plant address and coordinates, and price sensor entity IDs are hidden automatically.
 
 ## [1.9.8] - 2026-10-01
 
