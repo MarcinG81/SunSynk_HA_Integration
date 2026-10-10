@@ -13,9 +13,9 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_TARIFF_ENABLED, DOMAIN
 from .coordinator import SunsynkCoordinator
-from .helpers import build_device_info
+from .helpers import build_device_info, persist_runtime_option
 
 if TYPE_CHECKING:
     from .tariff import TariffChargingManager
@@ -247,7 +247,7 @@ async def async_setup_entry(
         first_serial = coordinator.serials[0]
         device_info = build_device_info(coordinator, first_serial)
         entities.append(
-            TariffManagerSwitch(entry.entry_id, tariff_manager, device_info)
+            TariffManagerSwitch(entry.entry_id, tariff_manager, device_info, entry)
         )
 
     vslot_schedulers: dict[str, VirtualSlotScheduler] = hass.data[DOMAIN].get(
@@ -318,8 +318,10 @@ class TariffManagerSwitch(SwitchEntity):
         entry_id: str,
         manager: TariffChargingManager,
         device_info: DeviceInfo,
+        entry: ConfigEntry | None = None,
     ) -> None:
         self._manager = manager
+        self._entry = entry
         self._unsub: Any = None
         self._attr_unique_id = f"{entry_id}_tariff_enabled"
         self._attr_device_info = device_info
@@ -341,10 +343,15 @@ class TariffManagerSwitch(SwitchEntity):
         return self._manager.is_enabled
 
     async def async_turn_on(self, **kwargs) -> None:
-        self._manager.set_enabled(True)
+        self._set_enabled(True)
 
     async def async_turn_off(self, **kwargs) -> None:
-        self._manager.set_enabled(False)
+        self._set_enabled(False)
+
+    def _set_enabled(self, enabled: bool) -> None:
+        self._manager.set_enabled(enabled)
+        if self._entry is not None:
+            persist_runtime_option(self.hass, self._entry, CONF_TARIFF_ENABLED, enabled)
 
 
 class VirtualSlotSchedulerSwitch(SwitchEntity):

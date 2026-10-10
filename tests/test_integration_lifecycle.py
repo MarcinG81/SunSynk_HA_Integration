@@ -184,3 +184,44 @@ async def test_update_listener_reloads_entry():
     entry = _entry()
     await _async_update_listener(hass, entry)
     hass.config_entries.async_reload.assert_awaited_once_with("entry-1")
+
+
+@pytest.mark.asyncio
+async def test_setup_restores_remembered_tariff_manager_switch():
+    hass = _hass()
+    entry = _entry()
+    entry.options = {**entry.options, "tariff_enabled": True}
+    coordinator = MagicMock(
+        serials=["INV1"],
+        write_target_serials=["INV1"],
+        data={"INV1": {}},
+        async_config_entry_first_refresh=AsyncMock(),
+    )
+    tariff = MagicMock()
+
+    with (
+        patch("custom_components.sunsynk.SunsynkCoordinator", return_value=coordinator),
+        patch(
+            "custom_components.sunsynk.PerformanceRatioCalibrator",
+            return_value=MagicMock(async_load=AsyncMock()),
+        ),
+        patch(
+            "custom_components.sunsynk.SolarForecastCoordinator",
+            return_value=MagicMock(async_config_entry_first_refresh=AsyncMock()),
+        ),
+        patch("custom_components.sunsynk.TariffChargingManager", return_value=tariff),
+        patch(
+            "custom_components.sunsynk.VirtualSlotScheduler",
+            return_value=MagicMock(async_load=AsyncMock()),
+        ),
+        patch(
+            "custom_components.sunsynk.Store",
+            return_value=MagicMock(async_load=AsyncMock(return_value=None)),
+        ),
+        patch("custom_components.sunsynk._migrate_virtual_slot_entity_unique_ids"),
+    ):
+        assert await async_setup_entry(hass, entry) is True
+
+    tariff.start.assert_called_once_with()
+    tariff.set_enabled.assert_called_once_with(True)
+    assert hass.data[DOMAIN]["entry-1_options"] == entry.options

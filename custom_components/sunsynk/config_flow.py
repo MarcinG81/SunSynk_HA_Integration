@@ -37,6 +37,7 @@ from .const import (
     CONF_PRICE_MAX_AGE,
     CONF_REFRESH_INTERVAL,
     CONF_SERIALS,
+    CONF_TARIFF_ENABLED,
     CONF_TARIFF_END_HOUR,
     CONF_TARIFF_START_HOUR,
     DEFAULT_CHEAP_TARGET_SOC,
@@ -285,6 +286,12 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                             ),
                             **forecast_fields,
                             **tariff_fields,
+                            # Saved by the Tariff Manager switch, not a form field.
+                            **(
+                                {CONF_TARIFF_ENABLED: opts[CONF_TARIFF_ENABLED]}
+                                if CONF_TARIFF_ENABLED in opts and tariff_fields
+                                else {}
+                            ),
                         },
                     )
 

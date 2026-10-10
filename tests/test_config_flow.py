@@ -131,6 +131,13 @@ async def test_options_flow_form_validation_and_success_paths():
     result = await flow.async_step_init(full)
     assert result["type"] == "create_entry"
     assert result["data"]["create_dashboard"] is True
+    assert "tariff_enabled" not in result["data"]
+
+    # The Tariff Manager switch state isn't a form field, so a Configure
+    # save must carry it over instead of silently switching it off (#30).
+    flow._config_entry.options = {"tariff_enabled": True}
+    result = await flow.async_step_init(full)
+    assert result["data"]["tariff_enabled"] is True
 
 
 @pytest.mark.asyncio

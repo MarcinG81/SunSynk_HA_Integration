@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN
@@ -26,3 +30,23 @@ def build_device_info(coordinator: SunsynkCoordinator, serial: str) -> DeviceInf
         sw_version=sw_version,
         serial_number=serial,
     )
+
+
+def options_snapshot_key(entry_id: str) -> str:
+    """hass.data key holding the options the running entry was set up with."""
+    return f"{entry_id}_options"
+
+
+def persist_runtime_option(
+    hass: HomeAssistant, entry: ConfigEntry, key: str, value: Any
+) -> None:
+    """Save a value changed live (e.g. from an entity) so it survives restarts.
+
+    The snapshot is updated first, so the options-update listener can tell
+    this apart from a Configure change and skip reloading the integration.
+    """
+    if entry.options.get(key) == value:
+        return
+    options = {**entry.options, key: value}
+    hass.data[DOMAIN][options_snapshot_key(entry.entry_id)] = options
+    hass.config_entries.async_update_entry(entry, options=options)

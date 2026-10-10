@@ -39,6 +39,7 @@ from .const import (
     CONF_PRICE_MAX_AGE,
     CONF_REFRESH_INTERVAL,
     CONF_SERIALS,
+    CONF_TARIFF_ENABLED,
     CONF_TARIFF_END_HOUR,
     CONF_TARIFF_START_HOUR,
     DEFAULT_CHEAP_TARGET_SOC,
@@ -50,6 +51,7 @@ from .const import (
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .dashboard import build_dashboard
+from .helpers import options_snapshot_key
 from .tariff import TariffChargingManager
 from .virtual_slots import (
     MAX_VIRTUAL_SLOTS,
@@ -524,6 +526,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     tariff_manager = hass.data[DOMAIN].get(f"{entry.entry_id}_tariff")
     if tariff_manager is not None:
         tariff_manager.start()
+        if _opt(CONF_TARIFF_ENABLED, False):
+            tariff_manager.set_enabled(True)
     for scheduler in vslot_schedulers.values():
         scheduler.start()
 
@@ -531,6 +535,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await _async_enable_dashboard_frontend(hass)
         hass.async_create_task(_async_setup_dashboard(hass, entry, coordinator))
 
+    hass.data[DOMAIN][options_snapshot_key(entry.entry_id)] = dict(entry.options)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
@@ -612,6 +617,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data.pop(f"{entry.entry_id}_forecast", None)
     domain_data.pop(f"{entry.entry_id}_tariff", None)
     domain_data.pop(f"{entry.entry_id}_vslots", None)
+    domain_data.pop(options_snapshot_key(entry.entry_id), None)
     return True
 
 
@@ -747,5 +753,8 @@ async def _async_setup_dashboard(
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update."""
+    """Reload on a Configure change, not on a value saved live by an entity."""
+    snapshot = hass.data.get(DOMAIN, {}).get(options_snapshot_key(entry.entry_id))
+    if snapshot == dict(entry.options):
+        return
     await hass.config_entries.async_reload(entry.entry_id)
