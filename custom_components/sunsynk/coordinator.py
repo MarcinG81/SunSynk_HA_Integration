@@ -35,13 +35,14 @@ from .write_validation import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Some accounts (observed on a parallel/multi-inverter setup, #21) apparently
-# relay a settings write to the physical inverter asynchronously — the write
-# The write endpoint acknowledges before a command has necessarily propagated.
-# Verify adaptively instead of blocking every per-inverter write queue for a
-# fixed two seconds: most writes settle after the first short delay, while
-# slower relays still get the same two-second propagation window.
-_VERIFY_WRITE_RETRY_DELAYS = (0.25, 0.5, 1.25)
+# The write endpoint acknowledges before a command has necessarily reached the
+# inverter, and how long that takes varies a lot between installations: a
+# single Deye inverter (#31) still reported the previous value 2 s after every
+# write, yet had applied it a few minutes later. Writes are therefore
+# confirmed in the background at these offsets (seconds after the write),
+# stopping at the first read-back that matches. Only a value that still hasn't
+# arrived after the last offset is reported as rejected.
+_VERIFY_WRITE_OFFSETS = (5, 10, 15, 30, 60)
 
 
 class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
@@ -72,6 +73,12 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         ] = {}
         self._write_drain_scheduled: set[str] = set()
         self._write_drain_tasks: dict[str, asyncio.Task[None]] = {}
+        # serial -> setting -> (write id, value sent) for writes the inverter
+        # hasn't confirmed yet. The write id lets a newer write of the same
+        # setting supersede an older one's background confirmation.
+        self._unconfirmed_writes: dict[str, dict[str, tuple[int, Any]]] = {}
+        self._write_seq = 0
+        self._verify_tasks: set[asyncio.Task[None]] = set()
 
     async def _async_get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -142,6 +149,9 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         for serial in self.serials:
             try:
                 result[serial] = await client.async_fetch_all(session, serial)
+                SunsynkCoordinator._overlay_unconfirmed_writes(
+                    self, serial, result[serial]
+                )
                 _LOGGER.debug("Data updated for inverter %s", serial)
                 ir.async_delete_issue(self.hass, DOMAIN, f"inverter_offline_{serial}")
             except SunsynkAuthenticationError as err:
@@ -271,6 +281,12 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             self._write_drain_scheduled = set()
         if not hasattr(self, "_write_drain_tasks"):
             self._write_drain_tasks = {}
+        if not hasattr(self, "_unconfirmed_writes"):
+            self._unconfirmed_writes = {}
+        if not hasattr(self, "_write_seq"):
+            self._write_seq = 0
+        if not hasattr(self, "_verify_tasks"):
+            self._verify_tasks = set()
 
     def _write_lock_for(self, serial: str) -> asyncio.Lock:
         SunsynkCoordinator._ensure_write_state(self)
@@ -393,8 +409,6 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             return {key: error for key in updates}
 
         client = SunsynkClient(self._auth._api_server, token)
-        # Never put an optimistic value in the coordinator cache: the write
-        # endpoint can acknowledge a command which the inverter then rejects.
         current_settings = dict((self.data or {}).get(serial, {}).get("settings", {}))
         if not current_settings:
             try:
@@ -454,108 +468,170 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             current_settings.update(payload)
 
         if written:
-            try:
-                await SunsynkCoordinator._async_verify_writes(
-                    self, client, session, serial, written
-                )
-            except UpdateFailed as err:
-                failures.update({key: err for key in written})
-            else:
-                await self.async_request_refresh()
+            SunsynkCoordinator._track_unconfirmed_writes(self, serial, written)
+            await self.async_request_refresh()
         return failures
 
-    async def _async_verify_write(
-        self,
-        client: SunsynkClient,
-        session: aiohttp.ClientSession,
-        serial: str,
-        setting_key: str,
-        value: Any,
-    ) -> None:
-        """Backward-compatible single-setting verification wrapper."""
-        await SunsynkCoordinator._async_verify_writes(
-            self, client, session, serial, {setting_key: value}
-        )
+    def _track_unconfirmed_writes(self, serial: str, written: dict[str, Any]) -> None:
+        """Hold just-written values until the inverter confirms them.
 
-    async def _async_verify_writes(
-        self,
-        client: SunsynkClient,
-        session: aiohttp.ClientSession,
-        serial: str,
-        expected: dict[str, Any],
+        Until confirmation, the cache keeps the value we sent rather than an
+        older one read back too early. Otherwise the next write to the same
+        group (e.g. a slot's limit after its start time) would resend the old
+        sibling value and undo the earlier change (#31).
+        """
+        SunsynkCoordinator._ensure_write_state(self)
+        write_ids: dict[str, int] = {}
+        unconfirmed = self._unconfirmed_writes.setdefault(serial, {})
+        for key, value in written.items():
+            self._write_seq += 1
+            write_ids[key] = self._write_seq
+            unconfirmed[key] = (self._write_seq, value)
+        if self.data is not None and serial in self.data:
+            self.data[serial].setdefault("settings", {}).update(written)
+            SunsynkCoordinator._notify_settings_changed(self)
+
+        task = asyncio.get_running_loop().create_task(
+            SunsynkCoordinator._async_confirm_writes(
+                self, serial, write_ids, dict(written)
+            )
+        )
+        self._verify_tasks.add(task)
+        task.add_done_callback(self._verify_tasks.discard)
+
+    def _notify_settings_changed(self) -> None:
+        notify = getattr(self, "async_update_listeners", None)
+        if notify is not None:
+            notify()
+
+    def _is_unconfirmed(self, serial: str, setting_key: str, write_id: int) -> bool:
+        entry = self._unconfirmed_writes.get(serial, {}).get(setting_key)
+        return entry is not None and entry[0] == write_id
+
+    def _overlay_unconfirmed_writes(self, serial: str, data: dict[str, Any]) -> None:
+        """Keep unconfirmed values over a poll that may predate them."""
+        SunsynkCoordinator._ensure_write_state(self)
+        unconfirmed = self._unconfirmed_writes.get(serial)
+        if unconfirmed:
+            settings = data.setdefault("settings", {})
+            settings.update({key: value for key, (_id, value) in unconfirmed.items()})
+
+    async def _async_read_settings(self, serial: str) -> dict[str, Any]:
+        session = await self._async_get_session()
+        token = await self._auth.async_get_token(session)
+        client = SunsynkClient(self._auth._api_server, token)
+        return await client.async_get_settings(session, serial)
+
+    async def _async_confirm_writes(
+        self, serial: str, write_ids: dict[str, int], expected: dict[str, Any]
     ) -> None:
-        """Fail-safe: verify a whole batch with adaptive delayed API reads.
+        """Confirm a batch in the background, stopping at the first match.
 
         The write endpoint returns success even when the inverter silently
         ignores a value (out-of-range, conflicting with another setting,
-        dongle briefly offline), so a 200 response alone doesn't prove the
-        change actually took. Re-reading once confirms every field in the
-        coalesced batch and raises a Repair for each mismatch. Verification
-        starts after a short delay and retries only while propagation is still
-        pending, avoiding a fixed two-second delay on every successful write.
+        dongle offline), so a 200 response alone doesn't prove the change
+        took. A Repair is raised only for a value that still hasn't arrived
+        after the last offset. A newer write of the same setting supersedes
+        this confirmation.
         """
-        fresh_settings: dict[str, Any] = {}
-        for delay in _VERIFY_WRITE_RETRY_DELAYS:
-            await asyncio.sleep(delay)
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        remaining = dict(expected)
+        fresh_settings: dict[str, Any] | None = None
+        for offset in _VERIFY_WRITE_OFFSETS:
+            await asyncio.sleep(max(0.0, started + offset - loop.time()))
+            remaining = {
+                key: value
+                for key, value in remaining.items()
+                if SunsynkCoordinator._is_unconfirmed(self, serial, key, write_ids[key])
+            }
+            if not remaining:
+                return
             try:
-                fresh_settings = await client.async_get_settings(session, serial)
+                fresh_settings = await SunsynkCoordinator._async_read_settings(
+                    self, serial
+                )
             except SunsynkAuthenticationError as err:
                 self._auth.invalidate_token()
-                raise UpdateFailed(f"Authentication failed: {err}") from err
-            except SunsynkApiError as err:
-                raise UpdateFailed(
-                    f"Could not verify writes of {', '.join(expected)} for "
-                    f"{serial}: {err}"
-                ) from err
-
-            if all(
-                SunsynkCoordinator._values_match(value, fresh_settings.get(key))
-                for key, value in expected.items()
-            ):
-                break
-
-        # Replace any assumptions with the authoritative read-back before
-        # notifying consumers. This also rolls the cache back when the device
-        # silently ignored one or more values.
-        if self.data is not None and serial in self.data:
-            self.data[serial].setdefault("settings", {}).update(fresh_settings)
-
-        mismatches: list[str] = []
-        for setting_key, value in expected.items():
-            issue_id = f"setting_write_mismatch_{serial}_{setting_key}"
-            actual = fresh_settings.get(setting_key)
-            if SunsynkCoordinator._values_match(value, actual):
-                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+                _LOGGER.debug("Could not confirm writes for %s: %s", serial, err)
                 continue
+            except (SunsynkAuthError, SunsynkApiError) as err:
+                _LOGGER.debug("Could not confirm writes for %s: %s", serial, err)
+                continue
+            for key, value in list(remaining.items()):
+                if SunsynkCoordinator._values_match(value, fresh_settings.get(key)):
+                    SunsynkCoordinator._settle_write(
+                        self,
+                        serial,
+                        key,
+                        write_ids[key],
+                        value,
+                        fresh_settings.get(key),
+                    )
+                    del remaining[key]
+            if not remaining:
+                return
 
-            _LOGGER.warning(
-                "Write verification failed for %s on inverter %s: sent %r, "
-                "inverter reports %r",
-                setting_key,
-                serial,
-                value,
-                actual,
-            )
-            mismatches.append(f"{setting_key}: expected {value!r}, actual {actual!r}")
-            ir.async_create_issue(
-                self.hass,
-                DOMAIN,
-                issue_id,
-                is_fixable=False,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key="setting_write_mismatch",
-                translation_placeholders={
-                    "serial": serial,
-                    "setting_key": setting_key,
-                    "expected": str(value),
-                    "actual": str(actual),
-                },
+        for key, value in remaining.items():
+            if fresh_settings is None:
+                # Never managed to read back: we know nothing, so don't claim a
+                # rejection. The next poll shows the real value.
+                if SunsynkCoordinator._is_unconfirmed(
+                    self, serial, key, write_ids[key]
+                ):
+                    del self._unconfirmed_writes[serial][key]
+                _LOGGER.warning(
+                    "Could not confirm write of %s on inverter %s", key, serial
+                )
+                continue
+            SunsynkCoordinator._settle_write(
+                self, serial, key, write_ids[key], value, fresh_settings.get(key)
             )
 
-        if mismatches:
-            raise UpdateFailed(
-                f"Inverter {serial} rejected setting write(s): " + "; ".join(mismatches)
-            )
+    def _settle_write(
+        self,
+        serial: str,
+        setting_key: str,
+        write_id: int,
+        sent: Any,
+        actual: Any,
+    ) -> None:
+        """Record the inverter's final answer for one unconfirmed write."""
+        if not SunsynkCoordinator._is_unconfirmed(self, serial, setting_key, write_id):
+            return
+        del self._unconfirmed_writes[serial][setting_key]
+        if self.data is not None and serial in self.data and actual is not None:
+            self.data[serial].setdefault("settings", {})[setting_key] = actual
+            SunsynkCoordinator._notify_settings_changed(self)
+
+        issue_id = f"setting_write_mismatch_{serial}_{setting_key}"
+        if SunsynkCoordinator._values_match(sent, actual):
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            return
+
+        _LOGGER.warning(
+            "Write verification failed for %s on inverter %s: sent %r, "
+            "inverter still reports %r after %ss",
+            setting_key,
+            serial,
+            sent,
+            actual,
+            _VERIFY_WRITE_OFFSETS[-1],
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="setting_write_mismatch",
+            translation_placeholders={
+                "serial": serial,
+                "setting_key": setting_key,
+                "expected": str(sent),
+                "actual": str(actual),
+            },
+        )
 
     _TRUE_STRINGS = frozenset({"true", "1"})
     _FALSE_STRINGS = frozenset({"false", "0"})
@@ -703,6 +779,11 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         tasks = list(self._write_drain_tasks.values())
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        verify_tasks = list(self._verify_tasks)
+        for task in verify_tasks:
+            task.cancel()
+        if verify_tasks:
+            await asyncio.gather(*verify_tasks, return_exceptions=True)
         if self._session and not self._session.closed:
             await self._session.close()
 

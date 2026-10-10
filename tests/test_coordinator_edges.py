@@ -196,16 +196,14 @@ async def test_drain_reschedules_work_arriving_at_cleanup():
 
 
 @pytest.mark.asyncio
-async def test_single_write_verification_wrapper():
+async def test_close_cancels_pending_write_confirmations():
     obj = _bare()
-    client = MagicMock()
-    with patch.object(
-        SunsynkCoordinator, "_async_verify_writes", new=AsyncMock()
-    ) as verify:
-        await SunsynkCoordinator._async_verify_write(
-            obj, client, MagicMock(), "SN1", "time1on", 1
-        )
-    verify.assert_awaited_once()
+    SunsynkCoordinator._ensure_write_state(obj)
+    task = asyncio.create_task(asyncio.Event().wait())
+    obj._verify_tasks.add(task)
+    obj._session = None
+    await SunsynkCoordinator.async_close(obj)
+    assert task.cancelled()
 
 
 @pytest.mark.asyncio
