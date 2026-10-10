@@ -84,8 +84,16 @@ async def test_setup_and_unload_two_independent_inverters_minimal_ha():
     )
     tariff = MagicMock(async_shutdown=AsyncMock(return_value=True))
     schedulers = [
-        MagicMock(async_load=AsyncMock(), async_shutdown=AsyncMock(return_value=True)),
-        MagicMock(async_load=AsyncMock(), async_shutdown=AsyncMock(return_value=True)),
+        MagicMock(
+            async_load=AsyncMock(),
+            async_shutdown=AsyncMock(return_value=True),
+            wanted_enabled=False,
+        ),
+        MagicMock(
+            async_load=AsyncMock(),
+            async_shutdown=AsyncMock(return_value=True),
+            wanted_enabled=False,
+        ),
     ]
     store = MagicMock(
         async_load=AsyncMock(return_value={"slots": [{"slot_id": 1}]}),
@@ -121,6 +129,7 @@ async def test_setup_and_unload_two_independent_inverters_minimal_ha():
             legacy_slots=[{"slot_id": 1}]
         )
         scheduler.start.assert_called_once()
+        scheduler.set_enabled.assert_not_called()
     store.async_remove.assert_awaited_once()
     migrate.assert_called_once_with(hass, "entry-1", "INV1")
     hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(
@@ -187,8 +196,9 @@ async def test_update_listener_reloads_entry():
 
 
 @pytest.mark.asyncio
-async def test_setup_restores_remembered_tariff_manager_switch():
+async def test_setup_restores_remembered_tariff_and_scheduler_switches():
     hass = _hass()
+    scheduler = MagicMock(async_load=AsyncMock(), wanted_enabled=True)
     entry = _entry()
     entry.options = {**entry.options, "tariff_enabled": True}
     coordinator = MagicMock(
@@ -210,10 +220,7 @@ async def test_setup_restores_remembered_tariff_manager_switch():
             return_value=MagicMock(async_config_entry_first_refresh=AsyncMock()),
         ),
         patch("custom_components.sunsynk.TariffChargingManager", return_value=tariff),
-        patch(
-            "custom_components.sunsynk.VirtualSlotScheduler",
-            return_value=MagicMock(async_load=AsyncMock()),
-        ),
+        patch("custom_components.sunsynk.VirtualSlotScheduler", return_value=scheduler),
         patch(
             "custom_components.sunsynk.Store",
             return_value=MagicMock(async_load=AsyncMock(return_value=None)),
@@ -224,4 +231,5 @@ async def test_setup_restores_remembered_tariff_manager_switch():
 
     tariff.start.assert_called_once_with()
     tariff.set_enabled.assert_called_once_with(True)
+    scheduler.set_enabled.assert_called_once_with(True)
     assert hass.data[DOMAIN]["entry-1_options"] == entry.options

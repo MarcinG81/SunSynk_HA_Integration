@@ -530,6 +530,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             tariff_manager.set_enabled(True)
     for scheduler in vslot_schedulers.values():
         scheduler.start()
+        if scheduler.wanted_enabled:
+            scheduler.set_enabled(True)
 
     if _dashboard_enabled(entry):
         await _async_enable_dashboard_frontend(hass)

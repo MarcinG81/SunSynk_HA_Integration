@@ -281,6 +281,9 @@ class VirtualSlotScheduler:
         self._last_current_key: tuple[str, int] | _CurrentState | None = None
         self._last_written_slot2_boundary: str | None = None
         self._original_settings: dict[str, Any] | None = None
+        # The user's on/off choice, kept across restarts. Unload/reload stops
+        # the scheduler without changing it.
+        self._wanted_enabled = False
         self._operation_lock = Lock()
 
         self._listeners: list[Callable[[], None]] = []
@@ -321,13 +324,26 @@ class VirtualSlotScheduler:
         self._slots = {
             int(s["slot_id"]): VirtualSlot.from_dict(s) for s in data.get("slots", [])
         }
+        self._wanted_enabled = bool(data.get("enabled", False))
+        # Settings captured before taking ownership survive a restart, so a
+        # later disable restores the user's timer, not the scheduler's own.
+        self._original_settings = data.get("original_settings") or None
         if migrated:
             await self._async_persist()
 
     async def _async_persist(self) -> None:
         await self._store.async_save(
-            {"slots": [s.to_dict() for s in self._slots.values()]}
+            {
+                "slots": [s.to_dict() for s in self._slots.values()],
+                "enabled": self._wanted_enabled,
+                "original_settings": self._original_settings,
+            }
         )
+
+    @property
+    def wanted_enabled(self) -> bool:
+        """Whether the user left the scheduler switched on."""
+        return self._wanted_enabled
 
     # ── Lifecycle ────────────────────────────────────────────────────────
 
@@ -373,6 +389,8 @@ class VirtualSlotScheduler:
     def set_enabled(self, enabled: bool) -> None:
         was_enabled = self._enabled
         self._enabled = enabled
+        self._wanted_enabled = enabled
+        self._hass.async_create_task(self._async_persist())
         if enabled:
             self._hass.async_create_task(self._async_bootstrap())
         else:
@@ -406,6 +424,7 @@ class VirtualSlotScheduler:
                         self._serial,
                         ", ".join(sorted(missing)),
                     )
+                await self._async_persist()
 
             await self._coordinator.async_write_settings(
                 self._serial,
@@ -485,6 +504,7 @@ class VirtualSlotScheduler:
             self._last_written = {}
             self._last_current_key = None
             self._last_written_slot2_boundary = None
+            await self._async_persist()
 
         self._notify_listeners()
         return success

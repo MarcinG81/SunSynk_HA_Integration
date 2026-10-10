@@ -105,7 +105,7 @@ def _make_scheduler(
     normal_charge_current=None,
     normal_discharge_current=None,
 ) -> VirtualSlotScheduler:
-    return VirtualSlotScheduler(
+    scheduler = VirtualSlotScheduler(
         hass=mock_hass,
         coordinator=mock_coordinator,
         entry_id="test_entry",
@@ -114,6 +114,10 @@ def _make_scheduler(
         normal_charge_current=normal_charge_current,
         normal_discharge_current=normal_discharge_current,
     )
+    scheduler._store = MagicMock(
+        async_load=AsyncMock(return_value=None), async_save=AsyncMock()
+    )
+    return scheduler
 
 
 def _consume_created_tasks(hass):
@@ -970,3 +974,60 @@ async def test_stray_scheduler_never_writes(mock_hass, mock_coordinator):
 
     mock_coordinator.async_write_settings.assert_not_awaited()
     mock_coordinator.async_write_setting.assert_not_awaited()
+
+
+# ── The scheduler's on/off state survives a restart ─────────────────────────
+#
+# Like Tariff Manager (#30), the switch used to reset to off on restart,
+# leaving slots 1 and 6 as the scheduler last wrote them with nothing
+# managing them. The settings captured before taking ownership are kept
+# too: re-capturing after a restart would snapshot the scheduler's own
+# writes and "restore" those instead of the user's timer.
+
+
+@pytest.mark.asyncio
+async def test_switch_state_and_original_timer_survive_a_restart(
+    mock_hass, mock_coordinator
+):
+    _consume_created_tasks(mock_hass)
+    mock_coordinator.data["TEST123"]["settings"].update(
+        {"time1on": "true", "cap1": "55", "sellTime1": "06:30"}
+    )
+    first = _make_scheduler(mock_hass, mock_coordinator)
+    first._now = lambda: _dt(2024, 1, 1, 12, 0)
+    first.set_enabled(True)
+    await first._async_bootstrap()
+    saved = first._store.async_save.await_args.args[0]
+    assert saved["enabled"] is True
+    assert saved["original_settings"]["sellTime1"] == "06:30"
+
+    # Restart: the inverter now shows the scheduler's own values.
+    mock_coordinator.data["TEST123"]["settings"].update(
+        {"time1on": 0, "cap1": 20, "sellTime1": "00:00"}
+    )
+    second = _make_scheduler(mock_hass, mock_coordinator)
+    second._store.async_load = AsyncMock(return_value=saved)
+    await second.async_load()
+    assert second.wanted_enabled is True
+
+    second._enabled = True
+    second._now = lambda: _dt(2024, 1, 1, 12, 0)
+    await second._async_bootstrap()
+    mock_coordinator.async_write_settings.reset_mock()
+    await second.async_shutdown()
+
+    restored = mock_coordinator.async_write_settings.await_args_list[0].args[1]
+    assert restored["sellTime1"] == "06:30"
+    assert restored["cap1"] == "55"
+    # Unload doesn't change what the user chose; the snapshot is cleared.
+    final = second._store.async_save.await_args.args[0]
+    assert final["enabled"] is True
+    assert final["original_settings"] is None
+
+
+def test_switching_off_is_remembered(mock_hass, mock_coordinator):
+    _consume_created_tasks(mock_hass)
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched.set_enabled(True)
+    sched.set_enabled(False)
+    assert sched.wanted_enabled is False
