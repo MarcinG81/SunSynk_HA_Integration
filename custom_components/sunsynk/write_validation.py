@@ -67,6 +67,11 @@ _BOOLEAN_KEYS = frozenset(
     }
 )
 _TIME_KEYS = frozenset(f"sellTime{slot}" for slot in range(1, 7))
+# Values an inverter itself reports for a setting it doesn't use. They may be
+# resent unchanged alongside a caller's change in a grouped payload, but are
+# never written on purpose. Several Sunsynk/Deye models with a lithium BMS
+# report battMode -1, which blocked every battery and System Mode write (#32).
+_REPORTED_ONLY_VALUES: dict[str, frozenset[int]] = {"battMode": frozenset({-1})}
 
 WRITABLE_SETTING_KEYS: Final = frozenset().union(
     _CURRENT_KEYS,
@@ -130,6 +135,16 @@ def validate_setting_value(key: str, value: Any) -> Any:
             raise SunsynkSettingValidationError(f"{key} must use 24-hour HH:MM format")
         return value
     raise SunsynkSettingValidationError(f"Unsupported writable setting: {key}")
+
+
+def validate_cached_sibling(key: str, value: Any) -> Any:
+    """Validate a cached value resent unchanged next to a caller's change."""
+    try:
+        if int(str(value).strip()) in _REPORTED_ONLY_VALUES.get(key, frozenset()):
+            return value
+    except ValueError:
+        pass
+    return validate_setting_value(key, value)
 
 
 def validate_setting_batch(settings: dict[str, Any]) -> dict[str, Any]:

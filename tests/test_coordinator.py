@@ -182,6 +182,28 @@ async def test_invalid_cached_sibling_cannot_hitchhike_in_payload(fake_coordinat
 
 
 @pytest.mark.asyncio
+async def test_inverter_reported_batt_mode_does_not_block_writes(fake_coordinator):
+    """#32: several lithium-BMS inverters report battMode -1. Resending it
+    unchanged must not block an unrelated battery write."""
+    fake_coordinator.data["TEST123"]["settings"].update(
+        {"chargeCurrent": "40", "battMode": "-1"}
+    )
+    sent_payloads: list[dict] = []
+    mock_client = _echoing_client(sent_payloads)
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient",
+        return_value=mock_client,
+    ):
+        await SunsynkCoordinator.async_write_setting(
+            fake_coordinator, "TEST123", "chargeCurrent", 50
+        )
+
+    assert sent_payloads[0]["chargeCurrent"] == 50
+    assert sent_payloads[0]["battMode"] == "-1"
+
+
+@pytest.mark.asyncio
 async def test_write_can_replace_its_own_invalid_cached_value(fake_coordinator):
     fake_coordinator.data["TEST123"]["settings"].update(
         {"chargeCurrent": 40, "dischargeCurrent": 1040}

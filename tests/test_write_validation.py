@@ -10,6 +10,7 @@ from custom_components.sunsynk.write_validation import (
     MAX_PLANT_PRICE,
     MAX_POWER_W,
     SunsynkSettingValidationError,
+    validate_cached_sibling,
     validate_plant_price,
     validate_setting_batch,
     validate_setting_value,
@@ -86,3 +87,26 @@ def test_valid_plant_prices(value):
 def test_invalid_plant_prices(value):
     with pytest.raises(SunsynkSettingValidationError):
         validate_plant_price(value)
+
+
+@pytest.mark.parametrize("reported", ["-1", -1, " -1 "])
+def test_inverter_reported_batt_mode_passes_as_cached_sibling(reported):
+    assert validate_cached_sibling("battMode", reported) == reported
+
+
+def test_inverter_reported_batt_mode_cannot_be_written_on_purpose():
+    with pytest.raises(SunsynkSettingValidationError):
+        validate_setting_batch({"battMode": -1})
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("battMode", "-2"), ("battMode", "bad"), ("dischargeCurrent", "-1")],
+)
+def test_other_invalid_cached_siblings_are_still_rejected(key, value):
+    with pytest.raises(SunsynkSettingValidationError):
+        validate_cached_sibling(key, value)
+
+
+def test_valid_cached_sibling_is_normalized():
+    assert validate_cached_sibling("battMode", "1") == 1

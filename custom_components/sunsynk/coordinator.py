@@ -28,6 +28,7 @@ from .const import (
 from .write_validation import (
     WRITABLE_SETTING_KEYS,
     SunsynkSettingValidationError,
+    validate_cached_sibling,
     validate_plant_price,
     validate_setting_batch,
     validate_setting_value,
@@ -443,7 +444,12 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 # writable siblings, not just the caller's changed fields, so
                 # a corrupt cached current/SOC/power cannot hitch a ride.
                 for key in payload.keys() & WRITABLE_SETTING_KEYS:
-                    payload[key] = validate_setting_value(key, payload[key])
+                    validate = (
+                        validate_setting_value
+                        if key in group_updates
+                        else validate_cached_sibling
+                    )
+                    payload[key] = validate(key, payload[key])
             except SunsynkSettingValidationError as err:
                 error = UpdateFailed(
                     f"Unsafe cached setting blocks write of "
