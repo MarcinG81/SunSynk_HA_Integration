@@ -43,10 +43,11 @@ class TariffChargingManager:
     specific hours of the day.  If start_hour > end_hour the range
     wraps midnight (e.g., 22–06).
 
-    price_max_age_minutes: if the price sensor has not updated within
-    this many minutes the data is considered stale and any active mode
-    is cancelled to avoid acting on outdated prices.  Pass None to
-    skip the staleness check.
+    price_max_age_minutes: if the import price sensor has not updated
+    within this many minutes the data is considered stale and any active
+    mode is cancelled to avoid acting on outdated prices.  Pass None to
+    skip the staleness check. A separate export price sensor is not
+    age-checked.
 
     export_price_entity: optional second price sensor. When set, it
     drives discharging decisions while price_entity continues to drive
@@ -247,7 +248,12 @@ class TariffChargingManager:
             float(state.state)
         except (ValueError, TypeError):
             return QUALITY_INVALID, f"Non-numeric state '{state.state}'"
-        if self._price_max_age_minutes is not None:
+        # Only the import price is age-checked. Export rates are often fixed
+        # for months (e.g. Octopus Outgoing), so their sensor rarely updates
+        # and always looked stale, which silently blocked every discharge
+        # (#16, #21, #30). An unavailable or non-numeric export price is
+        # still caught above.
+        if self._price_max_age_minutes is not None and entity_id == self._price_entity:
             age_seconds = (dt_util.utcnow() - state.last_updated).total_seconds()
             age_minutes = age_seconds / 60
             if age_minutes > self._price_max_age_minutes:

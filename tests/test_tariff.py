@@ -757,3 +757,84 @@ async def test_shutdown_attempts_every_inverter_after_restore_failure(
         "INV2", {"chargeCurrent": 50}
     )
     assert not mgr.is_charging_active
+
+
+# ── Export price staleness (#16, #21, #30) ──────────────────────────────────
+#
+# Export rates are often fixed for months (e.g. Octopus Outgoing), so their
+# sensor rarely updates. Age-checking it marked the export price "stale" and
+# silently blocked every discharge. Only the import price is age-checked.
+
+_TWO_DAYS = 2 * 24 * 3600
+
+
+def test_separate_export_price_is_not_age_checked(mock_hass, mock_coordinator):
+    mock_hass.states.get.side_effect = _states_for({
+        "sensor.electricity_price": _price_state("0.10"),
+        "sensor.export_price": _price_state("0.15", age_seconds=_TWO_DAYS),
+    })
+    mgr = _make_manager(
+        mock_hass, mock_coordinator, price_max_age=30, export_price_entity="sensor.export_price"
+    )
+
+    export_quality, _ = mgr._compute_price_quality(mgr.export_price_entity)
+
+    assert export_quality == QUALITY_OK
+
+
+def test_import_price_is_still_age_checked(mock_hass, mock_coordinator):
+    mock_hass.states.get.side_effect = _states_for({
+        "sensor.electricity_price": _price_state("0.10", age_seconds=_TWO_DAYS),
+        "sensor.export_price": _price_state("0.15"),
+    })
+    mgr = _make_manager(
+        mock_hass, mock_coordinator, price_max_age=30, export_price_entity="sensor.export_price"
+    )
+
+    import_quality, _ = mgr._compute_price_quality(mgr.price_entity)
+
+    assert import_quality == QUALITY_STALE
+
+
+def test_single_price_sensor_is_still_age_checked(mock_hass, mock_coordinator):
+    """With one sensor for both sides, it is the import price: unchanged."""
+    mock_hass.states.get.return_value = _price_state("0.40", age_seconds=_TWO_DAYS)
+    mgr = _make_manager(mock_hass, mock_coordinator, price_max_age=30)
+
+    export_quality, _ = mgr._compute_price_quality(mgr.export_price_entity)
+
+    assert export_quality == QUALITY_STALE
+
+
+def test_unavailable_export_price_still_blocks(mock_hass, mock_coordinator):
+    mock_hass.states.get.side_effect = _states_for({
+        "sensor.electricity_price": _price_state("0.10"),
+        "sensor.export_price": _price_state("unavailable"),
+    })
+    mgr = _make_manager(mock_hass, mock_coordinator, export_price_entity="sensor.export_price")
+
+    export_quality, _ = mgr._compute_price_quality(mgr.export_price_entity)
+
+    assert export_quality == QUALITY_UNAVAILABLE
+
+
+@pytest.mark.asyncio
+async def test_fixed_export_rate_still_starts_discharging(mock_hass, mock_coordinator):
+    """The reporters' case: a fixed export rate that last changed days ago."""
+    mock_hass.states.get.side_effect = _states_for({
+        "sensor.electricity_price": _price_state("0.20"),
+        "sensor.export_price": _price_state("0.40", age_seconds=_TWO_DAYS),
+    })
+    mgr = _make_manager(
+        mock_hass,
+        mock_coordinator,
+        price_max_age=30,
+        expensive_threshold=0.30,
+        export_price_entity="sensor.export_price",
+    )
+    mgr._enabled = True
+
+    await mgr._evaluate()
+
+    assert mgr.export_price_quality == QUALITY_OK
+    assert mgr.is_discharging_active_for("TEST123")
