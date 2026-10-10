@@ -140,4 +140,28 @@ async def async_get_config_entry_diagnostics(
             "export_price_entity": "**REDACTED**",
         }
 
+    # Which inverter each scheduler drives, and whether that matches the
+    # current write target, is what a parallel-setup VSS report needs (#21).
+    schedulers = hass.data[DOMAIN].get(f"{entry.entry_id}_vslots", {})
+    if schedulers:
+        result["virtual_slots"] = {
+            "write_targets": _redacted_data(
+                list(coordinator.write_target_serials), replacements
+            ),
+            "schedulers": _redacted_data(
+                {
+                    # Keys aren't covered by value redaction: alias them here.
+                    serial_aliases.get(str(serial), "inverter_unknown"): {
+                        "enabled": scheduler.is_enabled,
+                        "drives_inverter": coordinator.resolve_write_target(serial)
+                        == serial,
+                        "active_source": scheduler.active_source,
+                        "slots": scheduler.list_slots(),
+                    }
+                    for serial, scheduler in schedulers.items()
+                },
+                replacements,
+            ),
+        }
+
     return result

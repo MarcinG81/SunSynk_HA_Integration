@@ -944,3 +944,29 @@ async def test_unknown_battery_low_capacity_uses_safe_default(
         _slot_batch(mock_coordinator, 1)["cap1"]
         == VirtualSlotScheduler._DEFAULT_SOC_FLOOR
     )
+
+
+# ── A scheduler that doesn't own its inverter's writes stays hands-off ──────
+#
+# #21: on a parallel setup, a scheduler created for the slave (before the
+# group was recognised) must never drive the master's timer slots alongside
+# the master's own scheduler.
+
+
+@pytest.mark.asyncio
+async def test_stray_scheduler_never_writes(mock_hass, mock_coordinator):
+    mock_coordinator.resolve_write_target.side_effect = lambda serial: "MASTER1"
+    sched = _make_scheduler(mock_hass, mock_coordinator, serial="TEST123")
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="00:00", end="23:59", mode=MODE_CHARGE, current=60
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+    await sched._async_tick()
+    sched._enabled = False
+    await sched._async_shutdown(force_disable=True)
+
+    mock_coordinator.async_write_settings.assert_not_awaited()
+    mock_coordinator.async_write_setting.assert_not_awaited()

@@ -70,6 +70,7 @@ def mock_coordinator(mock_hass):
     # (non-parallel) single-inverter fixture this is identical to `serials`.
     # A test exercising parallel-group dedup overrides this directly.
     coordinator.write_target_serials = ["TEST123"]
+    coordinator.resolve_write_target.side_effect = lambda serial: serial
     coordinator.data = {
         "TEST123": {
             "battery": {"soc": 50, "power": 0},

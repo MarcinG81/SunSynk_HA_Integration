@@ -386,7 +386,7 @@ class VirtualSlotScheduler:
         async with self._operation_lock:
             # The enable task may still be queued when an unload/disable wins
             # the race. Never take ownership after shutdown has begun.
-            if not self._enabled:
+            if not self._enabled or not self._drives_inverter():
                 return
             if self._original_settings is None:
                 settings = (
@@ -435,7 +435,7 @@ class VirtualSlotScheduler:
                         self._serial,
                         err,
                     )
-            elif force_disable:
+            elif force_disable and self._drives_inverter():
                 try:
                     await self._coordinator.async_write_settings(
                         self._serial,
@@ -691,8 +691,27 @@ class VirtualSlotScheduler:
         async with self._operation_lock:
             await self._async_tick_locked()
 
+    def _drives_inverter(self) -> bool:
+        """Whether this scheduler owns its inverter's writes right now.
+
+        A scheduler created for a parallel slave before the group was
+        recognised must not drive the master's timer slots alongside the
+        master's own scheduler (#21).
+        """
+        target = self._coordinator.resolve_write_target(self._serial)
+        if target == self._serial:
+            return True
+        _LOGGER.warning(
+            "Virtual slots [%s]: not driving the inverter, %s owns its writes",
+            self._serial,
+            target,
+        )
+        return False
+
     async def _async_tick_locked(self) -> None:
         if not self._enabled:
+            return
+        if not self._drives_inverter():
             return
 
         now = self._now()

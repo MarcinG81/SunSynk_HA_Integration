@@ -180,3 +180,27 @@ class TestAsyncGetConfigEntryDiagnostics:
         result = await async_get_config_entry_diagnostics(hass, entry)
 
         assert result["coordinator"]["last_update_success_time"] is None
+
+
+@pytest.mark.asyncio
+async def test_includes_virtual_slot_schedulers_with_redacted_serials(hass_with_entry):
+    """#21: shows which scheduler actually drives each inverter."""
+    hass, entry, coordinator = hass_with_entry
+    serial = coordinator.serials[0]
+    coordinator.write_target_serials = [serial]
+    coordinator.resolve_write_target = lambda s: serial
+    owner = MagicMock(is_enabled=True, active_source="virtual_slot:1")
+    owner.list_slots.return_value = [{"slot_id": 1, "start": "14:30"}]
+    stray = MagicMock(is_enabled=False, active_source="none")
+    stray.list_slots.return_value = [{"slot_id": 1, "start": "20:30"}]
+    hass.data[DOMAIN]["entry1_vslots"] = {serial: owner, "SLAVE9": stray}
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+
+    vslots = result["virtual_slots"]
+    assert vslots["write_targets"] == ["inverter_1"]
+    assert vslots["schedulers"]["inverter_1"]["drives_inverter"] is True
+    assert vslots["schedulers"]["inverter_1"]["slots"] == [
+        {"slot_id": 1, "start": "14:30"}
+    ]
+    assert vslots["schedulers"]["inverter_unknown"]["drives_inverter"] is False
