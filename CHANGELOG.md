@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.0.0-beta.3] - 2026-10-10
+
+### Fixed
+- **Battery and timer settings couldn't be changed on inverters reporting Battery Mode -1.** Several Sunsynk/Deye inverters with a lithium BMS report `battMode` as -1. 2.0 re-checks every value it resends alongside a change, and -1 failed that check, so charge/discharge currents, System Work Mode, Grid Charge slots and the Virtual Slot Scheduler were all blocked with "Unsafe cached setting blocks write". A value the inverter itself reports for a setting it doesn't use is now resent unchanged; it still can't be written on purpose. (#32)
+- **On a parallel system, a second Virtual Slot Scheduler could drive the master.** If the master/slave group wasn't recognised the moment Home Assistant started, the slave got its own scheduler, which then also drove the master's timer slots, and the VSS page could show a different schedule from the one `sunsynk.set_virtual_slot` updated. A scheduler that doesn't own its inverter's writes now never touches the timer. Diagnostics now include a *virtual_slots* section showing which scheduler drives which inverter. (#21)
+
 ## [2.0.0-beta.2] - 2026-10-10
 
 ### Fixed
