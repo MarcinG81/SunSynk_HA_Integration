@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.0.0-beta.2] - 2026-10-10
+
+### Fixed
+- **Most "write verification failed" warnings were false alarms, and changing a slot's limit could undo its new start time.** Some inverters take well over 2 seconds to report a newly written value, so the integration flagged writes as rejected while they were actually applying. In 2.0.0-beta.1 that early read-back also replaced the new value with the old one, so the next change to the same timer slot (e.g. its limit after its start time) sent the old start time back to the inverter. Writes now return as soon as the Sunsynk cloud accepts them and are confirmed in the background for up to 60 seconds. Until then, the integration keeps the value you sent, so later changes to the same slot can't undo it. A Repair is only raised if the value still hasn't arrived after 60 seconds. (#31)
+- **Tariff Manager settings were lost on restart.** Thresholds, currents and SOC limits changed on the device page, and the Tariff Manager switch, were only kept in memory. They are now saved permanently, in the same place as the values in **Configure**, without reloading the integration. (#30)
+- **Tariff Manager never discharged with a fixed export rate.** A separate export price sensor was checked against *Price data max age*, but export rates are often fixed for months (e.g. Octopus Outgoing) so the sensor rarely updates. The export price was marked "stale" and every discharge was blocked. Only the import price is age-checked now; an unavailable or non-numeric export price still blocks discharging. (#16, #21, #30)
+
 ## [2.0.0-beta.1] - 2026-10-01
 
 ### The road to 2.0 beta
