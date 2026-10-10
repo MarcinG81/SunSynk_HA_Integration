@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.9] - 2026-10-10
+
+### Security
+- **Diagnostics files no longer contain your personal details.** Your Sunsynk login email and username, the plant owner's and installer's names and contact details, inverter, dongle and plant serial numbers, plant name, address and latitude/longitude, and the entity IDs of your price sensors are now hidden automatically. Several diagnostics files attached to public GitHub issues contained them. Serial numbers are replaced with stable placeholders (`inverter_1`, …), so the file is still useful for troubleshooting. This is the same redaction that ships in 2.0.
+
 ## [1.9.8] - 2026-10-01
 
 ### Changed
