@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.10] - 2026-10-11
+
+### Fixed
+- **Most "write verification failed" warnings were false alarms, and changing a slot's limit could undo its new start time.** Some inverters take well over 2 seconds to report a newly written value, so the integration flagged writes as rejected while they were actually applying. A regular data refresh could also pick up the old value before the new one arrived, so the next change to the same timer slot (e.g. its limit after its start time) sent the old start time back to the inverter. Writes are now confirmed in the background for up to 60 seconds, and until then the integration keeps the value you sent. A Repair is only raised if the value still hasn't arrived after 60 seconds. This is the same fix that ships in 2.0.0-beta.2. (#31)
+
 ## [1.9.9] - 2026-10-10
 
 ### Security

@@ -20,6 +20,7 @@ already used throughout this suite.
 """
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -36,6 +37,21 @@ def _no_verify_write_delay():
     (see _VERIFY_WRITE_DELAY_SECONDS) to give slower/relayed APIs time to
     apply a write before reading it back — skip that delay in tests."""
     with patch("custom_components.sunsynk.coordinator.asyncio.sleep", AsyncMock()):
+        yield
+
+
+@pytest.fixture
+def real_confirm():
+    """Request the real background write confirmation in a test."""
+
+
+@pytest.fixture(autouse=True)
+def _confirmation_off_unless_requested(request):
+    """Most tests are about the write itself, not its 60 s confirmation."""
+    if "real_confirm" in request.fixturenames:
+        yield
+        return
+    with patch.object(SunsynkCoordinator, "_async_confirm_write", AsyncMock()):
         yield
 
 
@@ -329,8 +345,30 @@ class TestValuesMatch:
         assert SunsynkCoordinator._values_match(sent, actual) is False
 
 
+async def _settle_verification(coordinator) -> None:
+    """Let background write confirmations finish (sleeps are patched out)."""
+    await asyncio.gather(*list(coordinator._verify_tasks))
+
+
+def _gated_sleep():
+    """A patched sleep that holds background confirmation until released."""
+    gate = asyncio.Event()
+
+    async def _sleep(_seconds):
+        await gate.wait()
+
+    return gate, _sleep
+
+
+def _client(read_backs) -> MagicMock:
+    mock_client = MagicMock()
+    mock_client.async_write_settings = AsyncMock()
+    mock_client.async_get_settings = AsyncMock(side_effect=read_backs)
+    return mock_client
+
+
 @pytest.mark.asyncio
-async def test_write_verification_clears_issue_on_match(fake_coordinator):
+async def test_write_verification_clears_issue_on_match(fake_coordinator, real_confirm):
     mock_client = _echoing_client([])
 
     with (
@@ -340,56 +378,148 @@ async def test_write_verification_clears_issue_on_match(fake_coordinator):
         patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
     ):
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await _settle_verification(fake_coordinator)
 
     mock_ir.async_create_issue.assert_not_called()
-    mock_ir.async_delete_issue.assert_any_call(
-        fake_coordinator.hass,
-        DOMAIN,
-        "setting_write_mismatch_TEST123_time1on",
+    mock_ir.async_delete_issue.assert_called_once_with(
+        fake_coordinator.hass, DOMAIN, "setting_write_mismatch_TEST123_time1on"
     )
 
 
 @pytest.mark.asyncio
-async def test_write_verification_raises_issue_on_mismatch(fake_coordinator):
-    mock_client = MagicMock()
-    mock_client.async_write_settings = AsyncMock()
-    # The inverter reports the write never took — still "false" after we sent 1.
-    mock_client.async_get_settings = AsyncMock(
-        return_value={**fake_coordinator.data["TEST123"]["settings"], "time1on": "false"}
-    )
+async def test_write_verification_raises_issue_only_after_last_offset(
+    fake_coordinator, real_confirm,
+):
+    stale = {**fake_coordinator.data["TEST123"]["settings"], "time1on": "false"}
+    mock_client = _client([stale] * 5)
+    gate, gated_sleep = _gated_sleep()
 
     with (
         patch(
             "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
         ),
         patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
+        patch("custom_components.sunsynk.coordinator.asyncio.sleep", gated_sleep),
     ):
+        # The write itself returns straight away; confirmation is background.
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == 1
+        mock_ir.async_create_issue.assert_not_called()
+        gate.set()
+        await _settle_verification(fake_coordinator)
 
+    assert mock_client.async_get_settings.await_count == 5
     mock_ir.async_create_issue.assert_called_once()
     args, kwargs = mock_ir.async_create_issue.call_args
     assert args[:3] == (fake_coordinator.hass, DOMAIN, "setting_write_mismatch_TEST123_time1on")
-    assert kwargs["translation_key"] == "setting_write_mismatch"
     assert kwargs["translation_placeholders"] == {
         "serial": "TEST123",
         "setting_key": "time1on",
         "expected": "1",
         "actual": "false",
     }
+    assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == "false"
 
 
 @pytest.mark.asyncio
-async def test_write_verification_does_not_block_on_api_error(fake_coordinator):
-    """If the confirming read itself fails, the write should still be
-    treated as successful (the request_refresh below still runs) — a
-    verification hiccup shouldn't turn into a raised exception on top of
-    an otherwise-successful write.
-    """
+async def test_slow_propagation_is_not_reported_as_a_failure(fake_coordinator, real_confirm):
+    """#31: the inverter still reported the previous value seconds after
+    every write, yet had applied it by the next one."""
+    stale = {**fake_coordinator.data["TEST123"]["settings"], "time1on": "false"}
+    current = {**stale, "time1on": "true"}
+    mock_client = _client([stale, stale, current])
+
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
+        patch(
+            "custom_components.sunsynk.coordinator.asyncio.sleep", AsyncMock()
+        ) as mock_sleep,
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await _settle_verification(fake_coordinator)
+
+    assert mock_client.async_get_settings.await_count == 3
+    assert [round(c.args[0]) for c in mock_sleep.await_args_list] == [5, 10, 15]
+    mock_ir.async_create_issue.assert_not_called()
+    mock_ir.async_delete_issue.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_unconfirmed_value_survives_a_stale_poll(fake_coordinator, real_confirm):
+    """#31: changing a slot's limit used to resend the slot's old start time
+    when a poll had read the inverter before the new start time arrived."""
+    sent_payloads: list[dict] = []
     mock_client = MagicMock()
-    mock_client.async_write_settings = AsyncMock()
-    mock_client.async_get_settings = AsyncMock(
-        side_effect=SunsynkApiError("boom")
+    mock_client.async_write_settings = AsyncMock(
+        side_effect=lambda session, serial, payload: sent_payloads.append(dict(payload))
     )
+    _gate, blocking_sleep = _gated_sleep()
+
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.asyncio.sleep", blocking_sleep),
+    ):
+        await SunsynkCoordinator.async_write_setting(
+            fake_coordinator, "TEST123", "sellTime1", "23:00"
+        )
+        polled = {"settings": {**fake_coordinator.data["TEST123"]["settings"], "sellTime1": "23:30"}}
+        SunsynkCoordinator._overlay_unconfirmed_writes(fake_coordinator, "TEST123", polled)
+        assert polled["settings"]["sellTime1"] == "23:00"
+        fake_coordinator.data["TEST123"] = polled
+
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "cap1", 90)
+        await SunsynkCoordinator.async_close(
+            SimpleNamespace(
+                _verify_tasks=fake_coordinator._verify_tasks, _session=None
+            )
+        )
+
+    assert sent_payloads[1]["cap1"] == 90
+    assert sent_payloads[1]["sellTime1"] == "23:00"
+
+
+def test_overlay_without_unconfirmed_writes_leaves_poll_untouched(fake_coordinator):
+    polled = {"settings": {"cap1": "50"}}
+    SunsynkCoordinator._overlay_unconfirmed_writes(fake_coordinator, "TEST123", polled)
+    assert polled == {"settings": {"cap1": "50"}}
+
+
+@pytest.mark.asyncio
+async def test_superseded_write_stops_background_confirmation(fake_coordinator, real_confirm):
+    mock_client = _client([])
+    gate, gated_sleep = _gated_sleep()
+
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
+        patch("custom_components.sunsynk.coordinator.asyncio.sleep", gated_sleep),
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        fake_coordinator._unconfirmed_writes["TEST123"]["time1on"] = (999, 0)
+        gate.set()
+        await _settle_verification(fake_coordinator)
+
+    mock_client.async_get_settings.assert_not_awaited()
+    mock_ir.async_create_issue.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_superseded_after_last_read_is_left_to_the_newer_write(fake_coordinator, real_confirm):
+    stale = {**fake_coordinator.data["TEST123"]["settings"], "time1on": "false"}
+
+    async def _stale_then_superseded(session, serial):
+        if mock_client.async_get_settings.await_count == 5:
+            fake_coordinator._unconfirmed_writes["TEST123"]["time1on"] = (999, 0)
+        return stale
+
+    mock_client = _client(_stale_then_superseded)
 
     with (
         patch(
@@ -398,29 +528,31 @@ async def test_write_verification_does_not_block_on_api_error(fake_coordinator):
         patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
     ):
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await _settle_verification(fake_coordinator)
 
     mock_ir.async_create_issue.assert_not_called()
-    mock_ir.async_delete_issue.assert_not_called()
-    fake_coordinator.async_request_refresh.assert_awaited_once()
+    assert fake_coordinator._unconfirmed_writes["TEST123"] == {"time1on": (999, 0)}
 
 
 @pytest.mark.asyncio
-async def test_write_verification_waits_before_reading_back(fake_coordinator):
-    """Regression coverage for #21: a parallel/multi-inverter setup relays
-    writes asynchronously — the API acknowledges before the command has
-    actually propagated, so an immediate read-back raced ahead of it and
-    flagged every write as a mismatch. Verification must wait first.
-    """
-    mock_client = _echoing_client([])
+async def test_write_verification_does_not_block_on_api_error(fake_coordinator, real_confirm):
+    """A confirmation that can never read back must not claim a rejection."""
+    mock_client = _client(SunsynkApiError("boom"))
 
     with (
-        patch("custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client),
-        patch("custom_components.sunsynk.coordinator.asyncio.sleep", AsyncMock()) as mock_sleep,
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
     ):
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await _settle_verification(fake_coordinator)
 
-    mock_sleep.assert_awaited_once()
-    assert mock_sleep.call_args.args[0] > 0
+    assert mock_client.async_get_settings.await_count == 5
+    mock_ir.async_create_issue.assert_not_called()
+    mock_ir.async_delete_issue.assert_not_called()
+    assert fake_coordinator._unconfirmed_writes["TEST123"] == {}
+    fake_coordinator.async_request_refresh.assert_awaited_once()
 
 
 # ── Parallel-inverter master redirect for all settings (#21) ─────────────────
