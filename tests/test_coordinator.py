@@ -1278,3 +1278,62 @@ def test_unreadable_parallel_role_never_drops_an_inverter(bad_mode):
         "2406060175",
         "2406060181",
     ]
+
+
+# ── A slot's grid and generator charge flags travel together (#26, #31, #32) ─
+#
+# On several single Deye inverters, writing a slot's grid-charge flag
+# without its generator-charge flag was acknowledged but never applied,
+# while the same change from the Sunsynk app stuck.
+
+
+@pytest.mark.asyncio
+async def test_grid_charge_write_carries_the_slots_generator_flag(fake_coordinator):
+    fake_coordinator.data["TEST123"]["settings"].update(
+        {
+            "time5on": "false",
+            "genTime5on": "false",
+            "cap5": "10",
+            "sellTime5": "17:00",
+            "sellTime5Pac": "5000",
+            "sellTime5Volt": "49",
+            "time4on": "false",
+            "genTime4on": "false",
+        }
+    )
+    sent_payloads: list[dict] = []
+    mock_client = _echoing_client(sent_payloads)
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    ):
+        await SunsynkCoordinator.async_write_setting(
+            fake_coordinator, "TEST123", "time5on", 1
+        )
+
+    payload = sent_payloads[0]
+    assert payload["time5on"] == 1
+    assert payload["genTime5on"] == 0
+    assert {"cap5", "sellTime5", "sellTime5Pac", "sellTime5Volt"} <= payload.keys()
+    # Still nothing from other slots (#21).
+    assert "time4on" not in payload
+    assert "genTime4on" not in payload
+
+
+@pytest.mark.asyncio
+async def test_generator_charge_write_carries_the_slots_grid_flag(fake_coordinator):
+    fake_coordinator.data["TEST123"]["settings"].update(
+        {"time5on": "true", "genTime5on": "false"}
+    )
+    sent_payloads: list[dict] = []
+    mock_client = _echoing_client(sent_payloads)
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    ):
+        await SunsynkCoordinator.async_write_setting(
+            fake_coordinator, "TEST123", "genTime5on", 1
+        )
+
+    assert sent_payloads[0]["genTime5on"] == 1
+    assert sent_payloads[0]["time5on"] == 1

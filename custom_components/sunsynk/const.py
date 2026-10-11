@@ -923,10 +923,17 @@ BATTERY_SETTING_KEYS = frozenset(
 # time from an untouched slot into the payload, which appears to silently
 # corrupt the *targeted* slot's own end time (Sunsynk derives slot N's end
 # from slot N+1's start) rather than being rejected outright (#21).
+#
+# The slot's generator-charge flag travels with its grid-charge flag. On
+# several single Deye inverters a grid-charge switch written without it
+# was acknowledged but never applied, while the same change from the
+# Sunsynk app (which sends both) stuck (#26, #31, #32). 1.9.4 and earlier
+# sent it as part of the full System Mode group.
 SLOT_SETTING_KEY_GROUPS: dict[int, frozenset[str]] = {
     n: frozenset(
         {
             f"time{n}on",
+            f"genTime{n}on",
             f"cap{n}",
             f"sellTime{n}Pac",
             f"sellTime{n}",
