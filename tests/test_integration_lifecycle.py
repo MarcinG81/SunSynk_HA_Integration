@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.exceptions import ConfigEntryError
 
 from custom_components.sunsynk import (
     PLATFORMS,
@@ -287,3 +288,21 @@ async def test_reloads_once_when_a_parallel_group_is_recognised_after_setup():
     hass.async_create_task.assert_called_once()
     await hass.async_create_task.call_args.args[0]
     hass.config_entries.async_reload.assert_awaited_once_with("entry-1")
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing", ["api_server", "username", "password"])
+async def test_incomplete_entry_fails_with_a_clear_message(missing):
+    """#32: an incomplete entry used to crash setup with a bare KeyError."""
+    hass = _hass()
+    entry = _entry()
+    entry.data = {k: v for k, v in entry.data.items() if k != missing}
+
+    with (
+        patch("custom_components.sunsynk.SunsynkAuth") as auth_cls,
+        pytest.raises(ConfigEntryError, match=f"missing {missing}"),
+    ):
+        await async_setup_entry(hass, entry)
+
+    auth_cls.assert_not_called()

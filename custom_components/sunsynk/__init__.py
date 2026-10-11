@@ -14,6 +14,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 
@@ -431,6 +432,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     serials: list[str] = entry.options.get(
         CONF_SERIALS, entry.data.get(CONF_SERIALS, [])
     )
+
+    missing = [
+        key
+        for key in (CONF_API_SERVER, CONF_USERNAME, CONF_PASSWORD)
+        if key not in entry.data
+    ]
+    if missing:
+        # An incomplete entry crashed setup with a bare KeyError (#32). It
+        # sat next to a working entry for the same account, so guessing a
+        # default would have had both polling and writing the same inverter.
+        raise ConfigEntryError(
+            "This Sunsynk entry is incomplete (missing "
+            f"{', '.join(missing)}). If you have another Sunsynk entry for the "
+            "same account, delete this one; otherwise delete it and add the "
+            "integration again."
+        )
 
     auth = SunsynkAuth(
         api_server=entry.data[CONF_API_SERVER],
