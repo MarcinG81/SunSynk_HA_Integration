@@ -1220,3 +1220,61 @@ class TestWriteTargetSerials:
         coordinator = _parallel_coordinator()
         coordinator.data["MASTER1"]["inverter"]["equipMode"] = 0
         assert self._get(coordinator) == ["SLAVE1", "MASTER1"]
+
+
+# ── Parallel role comes from the settings payload (#21) ─────────────────────
+#
+# A real parallel diagnostics dump had `parallel` and `equipMode` only in the
+# settings, never in the inverter info the code used to read, so the group
+# was never recognised: writes weren't redirected to the master and 2.0
+# created a Virtual Slot Scheduler for each inverter.
+
+
+def _real_shape_parallel(slave_mode=0, master_mode=1, parallel=1) -> SimpleNamespace:
+    return SimpleNamespace(
+        serials=["2406060175", "2406060181"],
+        data={
+            "2406060175": {
+                "inverter": {"sn": "2406060175", "alias": "Slave"},
+                "settings": {"parallel": parallel, "equipMode": slave_mode},
+            },
+            "2406060181": {
+                "inverter": {"sn": "2406060181", "alias": "Master"},
+                "settings": {"parallel": parallel, "equipMode": master_mode},
+            },
+        },
+    )
+
+
+def test_parallel_group_is_recognised_from_settings():
+    coordinator = _real_shape_parallel()
+
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "2406060175") == "2406060181"
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "2406060181") == "2406060181"
+    assert SunsynkCoordinator.write_target_serials.fget(coordinator) == ["2406060181"]
+
+
+def test_parallel_role_accepts_string_values():
+    coordinator = _real_shape_parallel(slave_mode="0", master_mode="1", parallel="1")
+
+    assert SunsynkCoordinator.write_target_serials.fget(coordinator) == ["2406060181"]
+
+
+def test_parallel_zero_means_independent_inverters():
+    coordinator = _real_shape_parallel(parallel=0)
+
+    assert SunsynkCoordinator.write_target_serials.fget(coordinator) == [
+        "2406060175",
+        "2406060181",
+    ]
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "2406060175") == "2406060175"
+
+
+@pytest.mark.parametrize("bad_mode", [None, "bad", 7])
+def test_unreadable_parallel_role_never_drops_an_inverter(bad_mode):
+    coordinator = _real_shape_parallel(master_mode=bad_mode)
+
+    assert SunsynkCoordinator.write_target_serials.fget(coordinator) == [
+        "2406060175",
+        "2406060181",
+    ]

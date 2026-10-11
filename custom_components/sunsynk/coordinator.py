@@ -103,26 +103,40 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         write loop; keep using `self.serials` for reads (fetching data
         still needs every configured serial).
         """
-
-        def _info(serial: str) -> dict[str, Any]:
-            return (self.data or {}).get(serial, {}).get("inverter", {})
-
-        has_master = any(
-            _info(s).get("parallel") and _info(s).get("equipMode") == 1
-            for s in self.serials
-        )
-        if not has_master:
+        roles = {
+            serial: SunsynkCoordinator._parallel_role(self, serial)
+            for serial in self.serials
+        }
+        if "master" not in roles.values():
             # No confirmed master anywhere (e.g. a momentary bad poll) —
             # don't guess at dropping a serial with nothing left to cover it.
             return list(self.serials)
 
-        return [
-            serial
-            for serial in self.serials
-            if not (
-                _info(serial).get("parallel") and _info(serial).get("equipMode") == 0
-            )
-        ]
+        return [serial for serial in self.serials if roles[serial] != "slave"]
+
+    def _parallel_role(self, serial: str) -> str | None:
+        """Return "master", "slave", or None outside a parallel group.
+
+        The API reports `parallel` and `equipMode` (1 = master, 0 = slave) in
+        the *settings* payload: a real parallel diagnostics dump (#21) had
+        them nowhere else. Reading them from the inverter info, as before,
+        meant no parallel group was ever recognised. The inverter info is
+        still checked as a fallback.
+        """
+        data = (self.data or {}).get(serial, {})
+        for section in ("settings", "inverter"):
+            info = data.get(section) or {}
+            if "equipMode" not in info:
+                continue
+            try:
+                parallel = int(info.get("parallel") or 0)
+                equip_mode = int(info["equipMode"])
+            except (TypeError, ValueError):
+                continue
+            if not parallel:
+                return None
+            return {1: "master", 0: "slave"}.get(equip_mode)
+        return None
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         """Fetch data from all inverter endpoints."""
@@ -253,15 +267,13 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         setting, redirecting only some categories was an artificially
         narrow fix — now applied to every setting.
         """
-        inverter_info = (self.data or {}).get(serial, {}).get("inverter", {})
-        if not inverter_info.get("parallel") or inverter_info.get("equipMode") == 1:
+        if SunsynkCoordinator._parallel_role(self, serial) != "slave":
             return serial
 
         for other_serial in self.serials:
             if other_serial == serial:
                 continue
-            other_info = (self.data or {}).get(other_serial, {}).get("inverter", {})
-            if other_info.get("parallel") and other_info.get("equipMode") == 1:
+            if SunsynkCoordinator._parallel_role(self, other_serial) == "master":
                 return other_serial
 
         return serial
