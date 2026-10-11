@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **An incomplete integration entry stopped Home Assistant setting it up with a bare `KeyError: 'api_server'`.** It now fails with a clear message naming the missing details and telling you to delete that entry. In the reported case it sat next to a second, working entry for the same account, so the integration deliberately doesn't guess the missing values: that would have had both entries controlling the same inverter. (#32)
+
 ## [2.0.0-beta.4] - 2026-10-11
 
 ### Fixed
@@ -182,6 +187,11 @@ especially parallel master/slave installations exposed API and firmware behaviou
 that is neither documented nor obvious from a successful HTTP response. Those
 reports did not merely fix isolated bugs; they shaped the safer write pipeline,
 restoration lifecycle and per-inverter architecture delivered in this 2.0 beta.
+
+## [1.9.10] - 2026-10-11
+
+### Fixed
+- **False "write verification failed" warnings, and a slot's start time going back after changing its limit.** Backport of the 2.0.0-beta.2 fix: writes are confirmed in the background for up to 60 seconds, and the value you sent is kept until the inverter confirms it. (#31)
 
 ## [1.9.9] - 2026-10-10
 
