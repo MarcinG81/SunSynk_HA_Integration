@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0-beta.5] - 2026-10-11
 
 ### Fixed
 - **Grid Charge slot switches didn't stick on some Deye inverters.** Turning a slot's Grid Charge on or off from Home Assistant was accepted by the Sunsynk cloud but never applied, while the same change from the Sunsynk app worked. Since 1.9.5 a slot change no longer included that slot's generator-charge flag, which these inverters appear to need alongside the grid one. It's now sent with every change to the slot. Nothing from other slots is sent, so the parallel-system fix from #21 is unaffected. (#26, #31, #32)
