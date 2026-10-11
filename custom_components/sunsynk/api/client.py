@@ -212,6 +212,13 @@ class SunsynkClient:
         self, session: aiohttp.ClientSession, serial: str, payload: dict[str, Any]
     ) -> None:
         url = f"{self._base}/api/v1/common/setting/{serial}/set"
+        # Exactly which fields went in one request is what tells apart a
+        # rejected write from a partial one (#32). "sn" is left out.
+        _LOGGER.debug(
+            "Writing settings to inverter %s: %s",
+            serial,
+            {key: value for key, value in payload.items() if key != "sn"},
+        )
         await self._post(session, url, payload)
         _LOGGER.debug("Settings written to inverter %s", serial)
 
