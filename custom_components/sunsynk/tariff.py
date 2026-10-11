@@ -254,12 +254,18 @@ class TariffChargingManager:
         # (#16, #21, #30). An unavailable or non-numeric export price is
         # still caught above.
         if self._price_max_age_minutes is not None and entity_id == self._price_entity:
-            age_seconds = (dt_util.utcnow() - state.last_updated).total_seconds()
+            # last_updated only moves when the value changes, so a rate that
+            # stays the same for hours (e.g. an off-peak block) looked stale
+            # even though its integration kept reporting it (#21). Since HA
+            # 2024.3, last_reported moves on every report; older HA falls
+            # back to last_updated.
+            reported = getattr(state, "last_reported", None) or state.last_updated
+            age_seconds = (dt_util.utcnow() - reported).total_seconds()
             age_minutes = age_seconds / 60
             if age_minutes > self._price_max_age_minutes:
                 return (
                     QUALITY_STALE,
-                    f"Last updated {age_minutes:.0f} min ago (max {self._price_max_age_minutes} min)",
+                    f"Last reported {age_minutes:.0f} min ago (max {self._price_max_age_minutes} min)",
                 )
         return QUALITY_OK, "ok"
 

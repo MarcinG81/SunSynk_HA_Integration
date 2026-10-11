@@ -53,10 +53,16 @@ def _make_manager(
     )
 
 
-def _price_state(value: str, age_seconds: int = 60) -> MagicMock:
+def _price_state(
+    value: str, age_seconds: int = 60, reported_seconds: int | None = None
+) -> MagicMock:
     state = MagicMock()
     state.state = value
-    state.last_updated = datetime.now(tz=timezone.utc) - timedelta(seconds=age_seconds)
+    now = datetime.now(tz=timezone.utc)
+    state.last_updated = now - timedelta(seconds=age_seconds)
+    state.last_reported = now - timedelta(
+        seconds=age_seconds if reported_seconds is None else reported_seconds
+    )
     return state
 
 
@@ -838,3 +844,42 @@ async def test_fixed_export_rate_still_starts_discharging(mock_hass, mock_coordi
 
     assert mgr.export_price_quality == QUALITY_OK
     assert mgr.is_discharging_active_for("TEST123")
+
+
+# ── Staleness follows the last report, not the last value change (#21) ─────
+
+
+def test_unchanged_but_regularly_reported_price_is_not_stale(mock_hass, mock_coordinator):
+    """An off-peak rate unchanged for hours, still reported every minute."""
+    mock_hass.states.get.return_value = _price_state(
+        "0.07", age_seconds=5 * 3600, reported_seconds=60
+    )
+    mgr = _make_manager(mock_hass, mock_coordinator, price_max_age=90)
+
+    quality, _ = mgr._compute_price_quality()
+
+    assert quality == QUALITY_OK
+
+
+def test_price_no_longer_reported_is_stale(mock_hass, mock_coordinator):
+    mock_hass.states.get.return_value = _price_state(
+        "0.07", age_seconds=5 * 3600, reported_seconds=5 * 3600
+    )
+    mgr = _make_manager(mock_hass, mock_coordinator, price_max_age=90)
+
+    quality, detail = mgr._compute_price_quality()
+
+    assert quality == QUALITY_STALE
+    assert detail.startswith("Last reported 300 min ago")
+
+
+def test_older_home_assistant_falls_back_to_last_updated(mock_hass, mock_coordinator):
+    """HA before 2024.3 has no last_reported."""
+    state = _price_state("0.07", age_seconds=5 * 3600)
+    del state.last_reported
+    mock_hass.states.get.return_value = state
+    mgr = _make_manager(mock_hass, mock_coordinator, price_max_age=90)
+
+    quality, _ = mgr._compute_price_quality()
+
+    assert quality == QUALITY_STALE

@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **Parallel (master/slave) systems were never recognised.** The integration looked for the parallel role in the wrong part of the Sunsynk data, so since 1.9.2 settings meant for the master were still sent to the slave, and in 2.0 each inverter got its own Virtual Slot Scheduler: the VSS page showed one schedule while `sunsynk.set_virtual_slot` and `sunsynk.clear_virtual_slot` changed the other. The role is now read from where the API actually reports it, verified against a real parallel system's diagnostics. On the first start after updating, the slave's separate schedule is merged into the master's, keeping your existing entity IDs. Check your virtual slots afterwards: the master's schedule is the one that's kept. (#21)
+- **Tariff Manager marked a price "stale" while it was still being reported.** The price's age was measured from its last *change*, so a rate that stays the same for hours (e.g. an off-peak block) looked out of date even though its integration kept reporting it. On Home Assistant 2024.3 and later the age is now measured from the sensor's last *report*. Older versions still use the last change. (#21)
 
 ## [2.0.0-beta.3] - 2026-10-10
 
