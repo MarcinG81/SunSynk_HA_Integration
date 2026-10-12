@@ -21,9 +21,8 @@ from .calibration import PerformanceRatioCalibrator
 from .const import (
     BATTERY_SETTING_KEYS,
     DOMAIN,
-    SLOT_SETTING_KEY_GROUPS,
     SOLAR_FORECAST_UPDATE_INTERVAL,
-    SYSTEM_MODE_SETTING_KEYS,
+    SYSTEM_MODE_PAYLOAD_KEYS,
 )
 from .write_validation import (
     WRITABLE_SETTING_KEYS,
@@ -310,14 +309,8 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         """Return the API payload group that owns one setting."""
         if setting_key in BATTERY_SETTING_KEYS:
             return BATTERY_SETTING_KEYS
-        slot_keys = next(
-            (keys for keys in SLOT_SETTING_KEY_GROUPS.values() if setting_key in keys),
-            None,
-        )
-        if slot_keys is not None:
-            return slot_keys
-        if setting_key in SYSTEM_MODE_SETTING_KEYS:
-            return SYSTEM_MODE_SETTING_KEYS
+        if setting_key in SYSTEM_MODE_PAYLOAD_KEYS:
+            return SYSTEM_MODE_PAYLOAD_KEYS
         return frozenset([setting_key])
 
     async def async_write_setting(
@@ -455,13 +448,13 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 # Group writes also resend cached sibling values. Validate all
                 # writable siblings, not just the caller's changed fields, so
                 # a corrupt cached current/SOC/power cannot hitch a ride.
+                # Siblings are then sent exactly as the inverter reported
+                # them ("true", "17:00"), as the Sunsynk portal and 1.8 did.
                 for key in payload.keys() & WRITABLE_SETTING_KEYS:
-                    validate = (
-                        validate_setting_value
-                        if key in group_updates
-                        else validate_cached_sibling
-                    )
-                    payload[key] = validate(key, payload[key])
+                    if key in group_updates:
+                        payload[key] = validate_setting_value(key, payload[key])
+                    else:
+                        validate_cached_sibling(key, payload[key])
             except SunsynkSettingValidationError as err:
                 error = UpdateFailed(
                     f"Unsafe cached setting blocks write of "

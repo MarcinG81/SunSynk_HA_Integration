@@ -340,8 +340,8 @@ async def test_failed_group_does_not_block_other_group_in_same_batch(
     server_settings = dict(fake_coordinator.data["TEST123"]["settings"])
 
     async def _write(session, serial, payload):
-        if "time1on" in payload:
-            raise SunsynkApiError("slot 1 rejected")
+        if "chargeCurrent" in payload:
+            raise SunsynkApiError("battery rejected")
         server_settings.update(payload)
 
     mock_client = MagicMock()
@@ -355,12 +355,12 @@ async def test_failed_group_does_not_block_other_group_in_same_batch(
             "custom_components.sunsynk.coordinator.SunsynkClient",
             return_value=mock_client,
         ),
-        pytest.raises(UpdateFailed, match="slot 1 rejected"),
+        pytest.raises(UpdateFailed, match="battery rejected"),
     ):
         await SunsynkCoordinator.async_write_settings(
             fake_coordinator,
             "TEST123",
-            {"time1on": 1, "time6on": 1},
+            {"chargeCurrent": 50, "time6on": 1},
         )
 
     assert mock_client.async_write_settings.await_count == 2
@@ -529,69 +529,110 @@ async def test_full_slot_arm_sequence_does_not_revert_the_on_flag(fake_coordinat
     assert fake_coordinator.data["TEST123"]["settings"]["sellTime1"] == "23:30"
 
 
-# ── settings-write payload scoping: a slot write must not touch other slots
-# or unrelated global fields (#21) ────────────────────────────────────────
+# ── System Mode is written as one full payload (#26, #31, #32) ───────────
 #
-# A reporter on a parallel/dual-inverter system found that writing one
-# physical slot's fields (time1on/cap1/sellTime1Pac/sellTime1/sellTime1on)
-# used to resend all 36 SYSTEM_MODE_SETTING_KEYS fields — every other
-# slot's cached values plus unrelated global settings — on every single
-# field write. That (a) multiplied write volume enough to visibly desync
-# master/slave (screen "flickering many times" per write), and (b)
-# reintroduced a stale, chronologically-earlier start time from an
-# untouched slot (e.g. slot 2's original 05:30 grid-charge start) into the
-# payload, which silently corrupted the *targeted* slot's own end time
-# (Sunsynk derives slot N's end from slot N+1's start). Slot fields now
-# group only with their own slot's siblings.
+# The Sunsynk portal, the openHAB binding and the solarsynkv3 add-on all send
+# every System Mode field (global timer settings plus all six slots) in one
+# request, and so did 1.8. Since 1.9.5 a slot change sent only that slot's
+# fields, and several single Deye inverters acknowledged Grid Charge changes
+# without ever applying them, even with the slot's generator flag included.
+
+
+def _full_system_mode_settings() -> dict[str, str]:
+    """Settings shaped like a real Deye dump: strings, as the API reports."""
+    settings = {
+        "sn": "TEST123",
+        "safetyType": "0",
+        "battMode": "-1",
+        "solarSell": "1",
+        "pvMaxLimit": "6000",
+        "energyMode": "0",
+        "peakAndVallery": "1",
+        "sysWorkMode": "2",
+        "zeroExportPower": "20",
+        "solarMaxSellPower": "5000",
+        **{f"{day}On": "true" for day in (
+            "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"
+        )},
+    }
+    for n in range(1, 7):
+        settings.update(
+            {
+                f"time{n}on": "false",
+                f"genTime{n}on": "false",
+                f"sellTime{n}": f"{n * 3:02d}:00",
+                f"cap{n}": "10",
+                f"sellTime{n}Pac": "5000",
+                f"sellTime{n}Volt": "49",
+            }
+        )
+    return settings
 
 
 @pytest.mark.asyncio
-async def test_slot_write_payload_excludes_other_slots_fields(fake_coordinator):
-    fake_coordinator.data["TEST123"]["settings"]["sellTime2"] = "05:30"
-    fake_coordinator.data["TEST123"]["settings"]["cap2"] = "20"
+async def test_slot_write_sends_the_whole_system_mode_page(fake_coordinator):
+    fake_coordinator.data["TEST123"]["settings"] = _full_system_mode_settings()
     sent_payloads: list[dict] = []
     mock_client = _echoing_client(sent_payloads)
 
     with patch(
         "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
     ):
-        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time5on", 1)
 
-    assert "sellTime2" not in sent_payloads[0]
-    assert "cap2" not in sent_payloads[0]
+    payload = sent_payloads[0]
+    # Exactly the portal's 52 System Mode fields, nothing more or less.
+    assert payload.keys() == _full_system_mode_settings().keys()
+    assert payload["time5on"] == 1
+    # Everything else is resent exactly as the inverter reported it.
+    assert payload["time4on"] == "false"
+    assert payload["sellTime2"] == "06:00"
+    assert payload["sysWorkMode"] == "2"
+    assert payload["battMode"] == "-1"
+    assert payload["mondayOn"] == "true"
 
 
 @pytest.mark.asyncio
-async def test_slot_write_payload_still_includes_same_slot_siblings(fake_coordinator):
-    """The reason these are grouped at all: sellTime{n}on silently failed to
-    persist when sent alone, without its own slot's other fields (#21)."""
+async def test_global_write_also_sends_the_whole_system_mode_page(fake_coordinator):
+    fake_coordinator.data["TEST123"]["settings"] = _full_system_mode_settings()
     sent_payloads: list[dict] = []
     mock_client = _echoing_client(sent_payloads)
 
     with patch(
         "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
     ):
-        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "solarSell", 0)
 
-    for key in ("cap1", "sellTime1Pac", "sellTime1", "time1on"):
-        assert key in sent_payloads[0]
+    payload = sent_payloads[0]
+    assert payload.keys() == _full_system_mode_settings().keys()
+    assert payload["solarSell"] == 0
+    assert payload["time1on"] == "false"
+    assert payload["cap6"] == "10"
 
 
 @pytest.mark.asyncio
-async def test_global_system_mode_write_still_uses_full_group(fake_coordinator):
-    """Non-slot System Mode Timer settings (solarSell, pvMaxLimit, ...) keep
-    the original full-group write behavior — only slot-indexed fields were
-    ever implicated in the desync/corruption reports."""
-    fake_coordinator.data["TEST123"]["settings"]["pvMaxLimit"] = "6000"
+async def test_battery_write_does_not_carry_system_mode_fields(fake_coordinator):
+    """Battery and System Mode settings must never be mixed in one request."""
+    fake_coordinator.data["TEST123"]["settings"] = {
+        **_full_system_mode_settings(),
+        "chargeCurrent": "40",
+        "batteryLowCap": "20",
+    }
     sent_payloads: list[dict] = []
     mock_client = _echoing_client(sent_payloads)
 
     with patch(
         "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
     ):
-        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "solarSell", 1)
+        await SunsynkCoordinator.async_write_setting(
+            fake_coordinator, "TEST123", "chargeCurrent", 50
+        )
 
-    assert sent_payloads[0]["pvMaxLimit"] == 6000
+    payload = sent_payloads[0]
+    assert payload["chargeCurrent"] == 50
+    assert payload["batteryLowCap"] == "20"
+    assert "time1on" not in payload
+    assert "sysWorkMode" not in payload
 
 
 # ── async_write_plant_price: plant_id cache-miss fallback (#20) ──────────────
@@ -1280,60 +1321,39 @@ def test_unreadable_parallel_role_never_drops_an_inverter(bad_mode):
     ]
 
 
-# ── A slot's grid and generator charge flags travel together (#26, #31, #32) ─
-#
-# On several single Deye inverters, writing a slot's grid-charge flag
-# without its generator-charge flag was acknowledged but never applied,
-# while the same change from the Sunsynk app stuck.
-
-
 @pytest.mark.asyncio
-async def test_grid_charge_write_carries_the_slots_generator_flag(fake_coordinator):
-    fake_coordinator.data["TEST123"]["settings"].update(
-        {
-            "time5on": "false",
-            "genTime5on": "false",
-            "cap5": "10",
-            "sellTime5": "17:00",
-            "sellTime5Pac": "5000",
-            "sellTime5Volt": "49",
-            "time4on": "false",
-            "genTime4on": "false",
-        }
-    )
+async def test_full_page_never_resends_another_slots_stale_start_time(
+    fake_coordinator,
+):
+    """#21's worry with a full payload: a stale start time from another slot.
+    An unconfirmed write is held over polls, so the new value is resent."""
+    fake_coordinator.data["TEST123"]["settings"] = _full_system_mode_settings()
     sent_payloads: list[dict] = []
-    mock_client = _echoing_client(sent_payloads)
+    mock_client = MagicMock()
+    mock_client.async_write_settings = AsyncMock(
+        side_effect=lambda session, serial, payload: sent_payloads.append(dict(payload))
+    )
+    _gate, blocking_sleep = _gated_sleep()
 
-    with patch(
-        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.asyncio.sleep", blocking_sleep),
     ):
         await SunsynkCoordinator.async_write_setting(
-            fake_coordinator, "TEST123", "time5on", 1
+            fake_coordinator, "TEST123", "sellTime2", "18:00"
         )
+        # A poll that still sees slot 2's old start time.
+        polled = {"settings": _full_system_mode_settings()}
+        SunsynkCoordinator._overlay_unconfirmed_writes(fake_coordinator, "TEST123", polled)
+        fake_coordinator.data["TEST123"] = polled
 
-    payload = sent_payloads[0]
-    assert payload["time5on"] == 1
-    assert payload["genTime5on"] == 0
-    assert {"cap5", "sellTime5", "sellTime5Pac", "sellTime5Volt"} <= payload.keys()
-    # Still nothing from other slots (#21).
-    assert "time4on" not in payload
-    assert "genTime4on" not in payload
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
 
+        for task in list(fake_coordinator._verify_tasks):
+            task.cancel()
+        await asyncio.gather(*fake_coordinator._verify_tasks, return_exceptions=True)
 
-@pytest.mark.asyncio
-async def test_generator_charge_write_carries_the_slots_grid_flag(fake_coordinator):
-    fake_coordinator.data["TEST123"]["settings"].update(
-        {"time5on": "true", "genTime5on": "false"}
-    )
-    sent_payloads: list[dict] = []
-    mock_client = _echoing_client(sent_payloads)
-
-    with patch(
-        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
-    ):
-        await SunsynkCoordinator.async_write_setting(
-            fake_coordinator, "TEST123", "genTime5on", 1
-        )
-
-    assert sent_payloads[0]["genTime5on"] == 1
-    assert sent_payloads[0]["time5on"] == 1
+    assert sent_payloads[1]["time1on"] == 1
+    assert sent_payloads[1]["sellTime2"] == "18:00"

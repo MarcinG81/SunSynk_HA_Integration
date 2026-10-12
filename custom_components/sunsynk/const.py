@@ -912,23 +912,7 @@ BATTERY_SETTING_KEYS = frozenset(
     ]
 )
 
-# Each System Mode Timer slot's own fields (start time, cap, sell power,
-# sell permission, sell voltage threshold), grouped per slot index rather
-# than lumped in with every other slot. Kept separate from
-# SYSTEM_MODE_SETTING_KEYS so that writing slot 1's fields never also
-# resends slots 2-5's cached, unrelated values — on a parallel/dual-inverter
-# system a reporter found that resending all 6 slots on every Virtual Slot
-# Scheduler write (a) multiplied write volume enough to visibly desync
-# master/slave, and (b) reintroduced a stale, chronologically-earlier start
-# time from an untouched slot into the payload, which appears to silently
-# corrupt the *targeted* slot's own end time (Sunsynk derives slot N's end
-# from slot N+1's start) rather than being rejected outright (#21).
-#
-# The slot's generator-charge flag travels with its grid-charge flag. On
-# several single Deye inverters a grid-charge switch written without it
-# was acknowledged but never applied, while the same change from the
-# Sunsynk app (which sends both) stuck (#26, #31, #32). 1.9.4 and earlier
-# sent it as part of the full System Mode group.
+# Each System Mode Timer slot's own fields.
 SLOT_SETTING_KEY_GROUPS: dict[int, frozenset[str]] = {
     n: frozenset(
         {
@@ -970,4 +954,20 @@ SYSTEM_MODE_SETTING_KEYS = frozenset(
         "genTime5on",
         "genTime6on",
     ]
+)
+
+# Everything on the System Mode page is written as one payload: the global
+# timer settings plus all six slots. The Sunsynk portal, the openHAB binding
+# and the solarsynkv3 add-on all send this full set, and so did 1.8.
+#
+# 1.9.5 narrowed a slot change to that slot's own fields, to stop a stale
+# start time from another slot being resent and to cut write volume on
+# parallel systems (#21). Several single Deye inverters then acknowledged
+# Grid Charge slot changes but never applied them, even with the slot's
+# generator flag included (#26, #31, #32). Both #21 causes are now fixed at
+# the source: unconfirmed writes are held over polls, so a stale sibling is
+# never resent, and parallel groups are recognised, so only the master is
+# written.
+SYSTEM_MODE_PAYLOAD_KEYS: frozenset[str] = SYSTEM_MODE_SETTING_KEYS.union(
+    *SLOT_SETTING_KEY_GROUPS.values()
 )

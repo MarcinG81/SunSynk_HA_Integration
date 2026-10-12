@@ -29,6 +29,7 @@ sell power / on), without touching its start time or the other slot.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from asyncio import Lock
 from collections.abc import Callable
@@ -737,9 +738,14 @@ class VirtualSlotScheduler:
         now = self._now()
         plan = self._plan(now)
 
-        wrote1 = await self._write_window_if_changed(1, plan.slot1, plan.slot1_start)
-        wrote6 = await self._write_window_if_changed(6, plan.slot6, plan.slot6_start)
-        wrote_boundary = await self._write_slot2_boundary_if_changed(plan.slot6_start)
+        # Started together, these land in the coordinator's queue in the same
+        # turn and go out as one System Mode request rather than three, which
+        # keeps write volume down on parallel systems (#21).
+        wrote1, wrote6, wrote_boundary = await asyncio.gather(
+            self._write_window_if_changed(1, plan.slot1, plan.slot1_start),
+            self._write_window_if_changed(6, plan.slot6, plan.slot6_start),
+            self._write_slot2_boundary_if_changed(plan.slot6_start),
+        )
         wrote_current = await self._apply_current_if_changed(plan.active_resolution)
 
         changed = wrote1 or wrote6 or wrote_boundary or wrote_current

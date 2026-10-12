@@ -1,6 +1,7 @@
 """Tests for the virtual slot resolution engine."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1031,3 +1032,38 @@ def test_switching_off_is_remembered(mock_hass, mock_coordinator):
     sched.set_enabled(True)
     sched.set_enabled(False)
     assert sched.wanted_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_tick_starts_all_timer_writes_together(mock_hass, mock_coordinator):
+    """Slots 1 and 6 and slot 2's boundary must reach the coordinator in the
+    same turn, so they go out as one System Mode request (#21, #32)."""
+    in_flight: list[dict] = []
+    release = asyncio.Event()
+
+    async def _write(serial, settings):
+        in_flight.append(settings)
+        await release.wait()
+
+    mock_coordinator.async_write_settings = AsyncMock(side_effect=_write)
+    async def _write_one(serial, key, value):
+        await _write(serial, {key: value})
+
+    mock_coordinator.async_write_setting = AsyncMock(side_effect=_write_one)
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="20:30", end="21:00", mode=MODE_DISCHARGE, sell_power=3000
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 20, 10)
+    sched._enabled = True
+
+    tick = asyncio.ensure_future(sched._async_tick())
+    for _ in range(5):
+        await asyncio.sleep(0)
+    started = [set(batch) for batch in in_flight]
+    release.set()
+    await tick
+
+    assert any("time1on" in keys for keys in started)
+    assert any("time6on" in keys for keys in started)
+    assert any(keys == {"sellTime2"} for keys in started)
