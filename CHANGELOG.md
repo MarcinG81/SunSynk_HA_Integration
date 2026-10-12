@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0-beta.6] - 2026-10-12
 
 ### Fixed
 - **Grid Charge slot switches still didn't stick on some Deye inverters.** Adding the slot's generator flag in beta.5 wasn't enough. Every change to the System Mode timer page (a slot's Grid Charge, limit, start time or power, or a global setting like work mode) now sends the whole page in one request, exactly the fields the Sunsynk portal sends, with every other value exactly as the inverter reported it. The Sunsynk portal, the openHAB binding and the solarsynkv3 add-on all do this, and so did 1.8. The two problems that led 1.9.5 to send only part of the page are now fixed at the source: a value you just changed is held until the inverter confirms it, so an old start time is never sent back, and parallel systems are recognised, so only the master is written. (#26, #31, #32)
