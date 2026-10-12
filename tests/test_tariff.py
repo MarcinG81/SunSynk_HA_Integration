@@ -883,3 +883,29 @@ def test_older_home_assistant_falls_back_to_last_updated(mock_hass, mock_coordin
     quality, _ = mgr._compute_price_quality()
 
     assert quality == QUALITY_STALE
+
+
+
+def test_hand_set_helper_price_is_never_stale(mock_hass, mock_coordinator):
+    """#21: a tester's input_number price, unchanged since a restart 2 h ago."""
+    mock_hass.states.get.return_value = _price_state(
+        "0.40", age_seconds=2 * 3600, reported_seconds=2 * 3600
+    )
+    mgr = TariffChargingManager(
+        hass=mock_hass,
+        coordinator=mock_coordinator,
+        price_entity="input_number.test_price",
+        cheap_threshold=0.10,
+        cheap_current=100,
+        normal_charge_current=50,
+        target_soc=90,
+        expensive_threshold=0.30,
+        peak_discharge_current=100,
+        normal_discharge_current=50,
+        discharge_min_soc=10,
+        price_max_age_minutes=90,
+    )
+
+    quality, _ = mgr._compute_price_quality()
+
+    assert quality == QUALITY_OK

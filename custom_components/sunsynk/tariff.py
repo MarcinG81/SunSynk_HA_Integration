@@ -253,7 +253,13 @@ class TariffChargingManager:
         # and always looked stale, which silently blocked every discharge
         # (#16, #21, #30). An unavailable or non-numeric export price is
         # still caught above.
-        if self._price_max_age_minutes is not None and entity_id == self._price_entity:
+        # An input_number helper is set by hand and only reports when it
+        # changes, so it can never be "out of date" (#21).
+        if (
+            self._price_max_age_minutes is not None
+            and entity_id == self._price_entity
+            and not entity_id.startswith("input_number.")
+        ):
             # last_updated only moves when the value changes, so a rate that
             # stays the same for hours (e.g. an off-peak block) looked stale
             # even though its integration kept reporting it (#21). Since HA

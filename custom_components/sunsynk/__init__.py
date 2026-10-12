@@ -274,15 +274,28 @@ _NUMBERED_ENTITY_ID = re.compile(r"_\d+$")
 
 
 def _adopt_stray_virtual_slot_entities(
-    hass: HomeAssistant, coordinator: SunsynkCoordinator, targets: set[str]
+    hass: HomeAssistant,
+    coordinator: SunsynkCoordinator,
+    targets: set[str],
+    entry_id: str,
 ) -> None:
     """Hand a parallel slave's scheduler entities over to its master's.
 
     If a parallel group wasn't recognised at setup, the slave got its own
     scheduler and entities, possibly including the entity IDs dashboards and
     automations already use (#21). Keep those IDs on the master's scheduler.
+
+    When both exist, the one to keep is the entity carried over from 1.9.x:
+    the registry remembers its previous unique ID. Guessing from HA's "_2"
+    clash suffix alone removed the wrong one when the two belonged to
+    differently named devices, as on a real parallel system.
     """
     registry = er.async_get(hass)
+
+    def _carried_over(entity_id: str, legacy_unique_id: str) -> bool:
+        entry = registry.async_get(entity_id)
+        return entry is not None and entry.previous_unique_id == legacy_unique_id
+
     for serial in coordinator.serials:
         target = coordinator.resolve_write_target(serial)
         if target == serial or target not in targets:
@@ -296,9 +309,14 @@ def _adopt_stray_virtual_slot_entities(
                 continue
             owned = registry.async_get_entity_id(platform, DOMAIN, target_unique_id)
             if owned is not None:
-                if _NUMBERED_ENTITY_ID.search(owned) and not _NUMBERED_ENTITY_ID.search(
-                    stray
-                ):
+                legacy_unique_id = f"{entry_id}_vslots_{suffix}"
+                stray_is_original = _carried_over(stray, legacy_unique_id)
+                if stray_is_original == _carried_over(owned, legacy_unique_id):
+                    stray_is_original = bool(
+                        _NUMBERED_ENTITY_ID.search(owned)
+                        and not _NUMBERED_ENTITY_ID.search(stray)
+                    )
+                if stray_is_original:
                     registry.async_remove(owned)
                 else:
                     registry.async_remove(stray)
@@ -573,7 +591,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _migrate_virtual_slot_entity_unique_ids(
             hass, entry.entry_id, next(iter(vslot_schedulers))
         )
-        _adopt_stray_virtual_slot_entities(hass, coordinator, set(vslot_schedulers))
+        _adopt_stray_virtual_slot_entities(
+            hass, coordinator, set(vslot_schedulers), entry.entry_id
+        )
 
     reload_requested = False
 
