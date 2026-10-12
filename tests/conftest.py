@@ -74,7 +74,13 @@ def mock_coordinator(mock_hass):
     coordinator.data = {
         "TEST123": {
             "battery": {"soc": 50, "power": 0},
-            "settings": {"chargeCurrent": 50, "dischargeCurrent": 50},
+            # A Sunsynk model that has per-slot sell flags (Deye ones don't).
+            "settings": {
+                "chargeCurrent": 50,
+                "dischargeCurrent": 50,
+                "sellTime1on": "false",
+                "sellTime6on": "false",
+            },
         }
     }
     coordinator.async_write_setting = AsyncMock()

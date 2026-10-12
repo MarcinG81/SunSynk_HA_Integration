@@ -800,16 +800,19 @@ class VirtualSlotScheduler:
             return False
 
         keys = _PHYSICAL_KEYS[index]
-        await self._coordinator.async_write_settings(
-            self._serial,
-            {
-                keys["on"]: 1 if on else 0,
-                keys["cap"]: cap,
-                keys["pac"]: pac,
-                keys["start"]: start,
-                keys["en"]: 1 if sell_en else 0,
-            },
+        window = {
+            keys["on"]: 1 if on else 0,
+            keys["cap"]: cap,
+            keys["pac"]: pac,
+            keys["start"]: start,
+        }
+        # Some models (e.g. Deye) have no per-slot sell flag at all (#33).
+        settings = (
+            (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
         )
+        if keys["en"] in settings:
+            window[keys["en"]] = 1 if sell_en else 0
+        await self._coordinator.async_write_settings(self._serial, window)
 
         self._last_written[index] = cache_key
         return True

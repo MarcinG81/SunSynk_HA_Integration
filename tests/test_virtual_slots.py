@@ -697,7 +697,7 @@ async def test_shutdown_restores_exact_pre_ownership_settings(
     restored = {}
     for call in mock_coordinator.async_write_settings.call_args_list:
         restored.update(call.args[1])
-    assert restored == original
+    assert restored == {**original, "sellTime1on": "false", "sellTime6on": "false"}
     assert sched._original_settings is None
 
 
@@ -1067,3 +1067,25 @@ async def test_tick_starts_all_timer_writes_together(mock_hass, mock_coordinator
     assert any("time1on" in keys for keys in started)
     assert any("time6on" in keys for keys in started)
     assert any(keys == {"sellTime2"} for keys in started)
+
+
+
+@pytest.mark.asyncio
+async def test_window_skips_sell_flag_on_models_without_one(mock_hass, mock_coordinator):
+    """#33: Deye inverters have no per-slot sell flag at all."""
+    settings = mock_coordinator.data["TEST123"]["settings"]
+    del settings["sellTime1on"]
+    del settings["sellTime6on"]
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="00:00", end="23:59", mode=MODE_DISCHARGE, sell_power=3000
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    written = {key for key, _value in _written(mock_coordinator)}
+    assert "time1on" in written
+    assert "sellTime1on" not in written
+    assert "sellTime6on" not in written

@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Switches, numbers and text fields for settings your inverter doesn't have are now unavailable** instead of looking usable and then reverting. For example, some Deye inverters have no per-slot *Sell* flag, so their *Sell Time N* switches could never stick. The Virtual Slot Scheduler also no longer writes that flag on those inverters. (#33)
+- **The Sunsynk Power Flow Card logged "Cannot read properties of undefined (reading 'push')"** on pages where Home Assistant hadn't set up its custom card list yet, such as in the Android app. (#33)
+
 ## [2.0.0-beta.6] - 2026-10-12
 
 ### Fixed

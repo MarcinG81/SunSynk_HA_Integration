@@ -88,6 +88,18 @@ class SunsynkTextEntity(CoordinatorEntity[SunsynkCoordinator], TextEntity):
         self._attr_device_info = device_info
 
     @property
+    def available(self) -> bool:
+        """Unavailable when this inverter doesn't report the setting at all.
+
+        Not every model has every field: a Deye without per-slot sell flags
+        showed Sell Time switches that could never stick (#33).
+        """
+        settings = (
+            (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        )
+        return super().available and self.entity_description.setting_key in settings
+
+    @property
     def native_value(self) -> str | None:
         settings = (
             (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
