@@ -38,6 +38,7 @@ from .const import (
     CONF_PERFORMANCE_RATIO,
     CONF_PRICE_ENTITY,
     CONF_PRICE_MAX_AGE,
+    CONF_PRICE_STALE_CHECK,
     CONF_REFRESH_INTERVAL,
     CONF_SERIALS,
     CONF_TARIFF_ENABLED,
@@ -556,7 +557,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             discharge_min_soc=_opt(CONF_DISCHARGE_MIN_SOC, DEFAULT_DISCHARGE_MIN_SOC),
             start_hour=_opt(CONF_TARIFF_START_HOUR),
             end_hour=_opt(CONF_TARIFF_END_HOUR),
-            price_max_age_minutes=_opt(CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE),
+            price_max_age_minutes=(
+                _opt(CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE)
+                if _opt(CONF_PRICE_STALE_CHECK, False)
+                else None
+            ),
         )
         hass.data[DOMAIN][f"{entry.entry_id}_tariff"] = tariff_manager
 

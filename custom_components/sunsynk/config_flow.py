@@ -35,6 +35,7 @@ from .const import (
     CONF_PERFORMANCE_RATIO,
     CONF_PRICE_ENTITY,
     CONF_PRICE_MAX_AGE,
+    CONF_PRICE_STALE_CHECK,
     CONF_REFRESH_INTERVAL,
     CONF_SERIALS,
     CONF_TARIFF_ENABLED,
@@ -417,6 +418,10 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                 ): str,
                 # Price quality
                 vol.Optional(
+                    CONF_PRICE_STALE_CHECK,
+                    default=bool(_opt(CONF_PRICE_STALE_CHECK, False)),
+                ): bool,
+                vol.Optional(
                     CONF_PRICE_MAX_AGE,
                     default=_opt(CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE),
                 ): vol.All(vol.Coerce(int), vol.Range(min=5, max=1440)),
@@ -507,5 +512,8 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
 
         result[CONF_PRICE_MAX_AGE] = user_input.get(
             CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE
+        )
+        result[CONF_PRICE_STALE_CHECK] = bool(
+            user_input.get(CONF_PRICE_STALE_CHECK, False)
         )
         return result

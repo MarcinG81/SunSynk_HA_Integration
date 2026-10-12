@@ -53,6 +53,7 @@
           "discharge_min_soc": "Detener descarga al bajar SOC (%)",
           "tariff_start_hour": "Horario activo — hora de inicio (0–23)",
           "tariff_end_hour": "Horario activo — hora de fin (0–23)",
+          "price_stale_check": "Stop when price data looks out of date",
           "price_max_age": "Antigüedad máxima de los datos de precio (minutos)"
         },
         "data_description": {
@@ -74,6 +75,7 @@
           "discharge_min_soc": "La descarga se detiene automáticamente cuando la batería alcanza este SOC. Por defecto 10.",
           "tariff_start_hour": "Hora del día (0–23) en que se activa la gestión de tarifas. Dejar en blanco para modo siempre activo.",
           "tariff_end_hour": "Hora del día (0–23) en que se desactiva la gestión de tarifas. Puede cruzar la medianoche (p. ej. inicio 22, fin 6).",
+          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
           "price_max_age": "Si el sensor de precio no se ha actualizado en este número de minutos, el modo activo se detiene como medida de seguridad. Por defecto 90."
         }
       }

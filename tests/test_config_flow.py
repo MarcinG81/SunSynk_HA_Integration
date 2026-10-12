@@ -216,7 +216,12 @@ class TestAsyncValidateCredentials:
 class TestParseTariffFields:
     def test_empty_input_yields_only_default_price_max_age(self):
         result = SunsynkOptionsFlow._parse_tariff_fields({})
-        assert result == {"price_max_age": 90}
+        # The age check is off unless the user turns it on (#21, #30).
+        assert result == {"price_max_age": 90, "price_stale_check": False}
+
+    def test_stale_check_can_be_turned_on(self):
+        result = SunsynkOptionsFlow._parse_tariff_fields({"price_stale_check": True})
+        assert result["price_stale_check"] is True
 
     @pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
     def test_price_threshold_must_be_finite(self, value):

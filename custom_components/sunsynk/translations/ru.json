@@ -53,6 +53,7 @@
           "discharge_min_soc": "Остановить разряд при SOC (%)",
           "tariff_start_hour": "Расписание — час начала (0–23)",
           "tariff_end_hour": "Расписание — час окончания (0–23)",
+          "price_stale_check": "Stop when price data looks out of date",
           "price_max_age": "Максимальный возраст данных о цене (минуты)"
         },
         "data_description": {
@@ -74,6 +75,7 @@
           "discharge_min_soc": "Разряд автоматически останавливается при достижении аккумулятором этого SOC. По умолчанию 10.",
           "tariff_start_hour": "Час суток (0–23), когда активируется управление тарифами. Оставьте пустым для постоянного режима.",
           "tariff_end_hour": "Час суток (0–23), когда деактивируется управление тарифами. Может переходить через полночь (например, начало 22, конец 6).",
+          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
           "price_max_age": "Если датчик цены не обновлялся в течение указанного числа минут, активный режим заряда/разряда останавливается в целях безопасности. По умолчанию 90."
         }
       }

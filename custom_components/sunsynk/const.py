@@ -65,6 +65,9 @@ DEFAULT_DISCHARGE_MIN_SOC: Final = 10
 CONF_TARIFF_START_HOUR: Final = "tariff_start_hour"
 CONF_TARIFF_END_HOUR: Final = "tariff_end_hour"
 CONF_PRICE_MAX_AGE: Final = "price_max_age"
+# Off by default: the age check blocked Tariff Manager for fixed export rates,
+# unchanged off-peak blocks and hand-set helpers (#16, #21, #30).
+CONF_PRICE_STALE_CHECK: Final = "price_stale_check"
 # Remembers the Tariff Manager switch across restarts (#30).
 CONF_TARIFF_ENABLED: Final = "tariff_enabled"
 DEFAULT_PRICE_MAX_AGE: Final = 90  # minutes

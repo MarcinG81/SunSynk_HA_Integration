@@ -53,6 +53,7 @@
           "discharge_min_soc": "放至最低 SOC（%）后停止放电",
           "tariff_start_hour": "计划开始时间（0–23 时）",
           "tariff_end_hour": "计划结束时间（0–23 时）",
+          "price_stale_check": "Stop when price data looks out of date",
           "price_max_age": "电价数据最大有效时长（分钟）"
         },
         "data_description": {
@@ -74,6 +75,7 @@
           "discharge_min_soc": "电池达到此 SOC 后自动停止放电，默认 10。",
           "tariff_start_hour": "电价管理激活的时刻（0–23 时）。留空则全天激活。",
           "tariff_end_hour": "电价管理停止的时刻（0–23 时），可跨越午夜（如开始 22 时，结束 6 时）。",
+          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
           "price_max_age": "若电价传感器在此分钟数内未更新，将停止当前充/放电模式以确保安全，默认 90。"
         }
       }

@@ -53,6 +53,7 @@
           "discharge_min_soc": "Arrêter la décharge à l'état de charge (%)",
           "tariff_start_hour": "Plage horaire — heure de début (0–23)",
           "tariff_end_hour": "Plage horaire — heure de fin (0–23)",
+          "price_stale_check": "Stop when price data looks out of date",
           "price_max_age": "Âge maximal des données de prix (minutes)"
         },
         "data_description": {
@@ -74,6 +75,7 @@
           "discharge_min_soc": "La décharge s'arrête automatiquement quand la batterie atteint cet état de charge. Défaut 10.",
           "tariff_start_hour": "Heure de la journée (0–23) à laquelle la gestion tarifaire s'active. Laisser vide pour une activation permanente.",
           "tariff_end_hour": "Heure de la journée (0–23) à laquelle la gestion tarifaire se désactive. Peut chevaucher minuit (ex. début 22, fin 6).",
+          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
           "price_max_age": "Si le capteur de prix ne s'est pas mis à jour dans ce délai (minutes), le mode actif est arrêté par mesure de sécurité. Défaut 90."
         }
       }

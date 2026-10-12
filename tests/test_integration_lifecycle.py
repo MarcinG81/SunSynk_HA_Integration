@@ -121,6 +121,8 @@ async def test_setup_and_unload_two_independent_inverters_minimal_ha():
     coordinator.data = {}
     assert actual_energy_fn() is None
     tariff_cls.assert_called_once()
+    # Off by default, so a saved max age alone doesn't enable it (#21, #30).
+    assert tariff_cls.call_args.kwargs["price_max_age_minutes"] is None
     assert scheduler_cls.call_count == 2
     assert {call.kwargs["serial"] for call in scheduler_cls.call_args_list} == {
         "INV1",
@@ -306,3 +308,43 @@ async def test_incomplete_entry_fails_with_a_clear_message(missing):
         await async_setup_entry(hass, entry)
 
     auth_cls.assert_not_called()
+
+
+
+@pytest.mark.asyncio
+async def test_price_age_check_applies_only_when_turned_on():
+    hass = _hass()
+    entry = _entry()
+    entry.options = {**entry.options, "price_stale_check": True, "price_max_age": 45}
+    coordinator = MagicMock(
+        serials=["INV1"],
+        write_target_serials=["INV1"],
+        data={},
+        async_config_entry_first_refresh=AsyncMock(),
+    )
+
+    with (
+        patch("custom_components.sunsynk.SunsynkCoordinator", return_value=coordinator),
+        patch(
+            "custom_components.sunsynk.PerformanceRatioCalibrator",
+            return_value=MagicMock(async_load=AsyncMock()),
+        ),
+        patch(
+            "custom_components.sunsynk.SolarForecastCoordinator",
+            return_value=MagicMock(async_config_entry_first_refresh=AsyncMock()),
+        ),
+        patch("custom_components.sunsynk.TariffChargingManager") as tariff_cls,
+        patch(
+            "custom_components.sunsynk.VirtualSlotScheduler",
+            return_value=MagicMock(async_load=AsyncMock(), wanted_enabled=False),
+        ),
+        patch(
+            "custom_components.sunsynk.Store",
+            return_value=MagicMock(async_load=AsyncMock(return_value=None)),
+        ),
+        patch("custom_components.sunsynk._migrate_virtual_slot_entity_unique_ids"),
+        patch("custom_components.sunsynk._adopt_stray_virtual_slot_entities"),
+    ):
+        assert await async_setup_entry(hass, entry) is True
+
+    assert tariff_cls.call_args.kwargs["price_max_age_minutes"] == 45

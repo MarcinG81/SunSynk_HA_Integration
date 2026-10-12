@@ -53,6 +53,7 @@
           "discharge_min_soc": "Entladen stoppen bei SOC (%)",
           "tariff_start_hour": "Zeitplan — Startstunde (0–23)",
           "tariff_end_hour": "Zeitplan — Endstunde (0–23)",
+          "price_stale_check": "Stop when price data looks out of date",
           "price_max_age": "Maximales Alter der Preisdaten (Minuten)"
         },
         "data_description": {
@@ -74,6 +75,7 @@
           "discharge_min_soc": "Entladen stoppt automatisch, wenn der Akku diesen SOC erreicht. Standard 10.",
           "tariff_start_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung aktiviert wird. Leer lassen für Dauerbetrieb.",
           "tariff_end_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung deaktiviert wird. Kann Mitternacht überschreiten (z. B. Start 22, Ende 6).",
+          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
           "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90."
         }
       }

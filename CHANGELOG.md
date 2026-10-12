@@ -3,7 +3,10 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0-beta.7] - 2026-10-12
+
+### Changed
+- **Tariff Manager no longer stops because a price "looks stale" unless you ask it to.** The age check kept blocking people whose price legitimately stays the same for a long time: fixed export rates, long off-peak blocks, prices set by a helper. It's now off by default. A price that's unavailable or not a number still stops Tariff Manager as before. To turn the age check back on, tick **Stop when price data looks out of date** in **Configure**; your *Price data max age* setting is kept and used again. (#16, #21, #30)
 
 ### Fixed
 - **Switches, numbers and text fields for settings your inverter doesn't have are now unavailable** instead of looking usable and then reverting. For example, some Deye inverters have no per-slot *Sell* flag, so their *Sell Time N* switches could never stick. The Virtual Slot Scheduler also no longer writes that flag on those inverters. (#33)

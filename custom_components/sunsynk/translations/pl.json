@@ -53,6 +53,7 @@
           "discharge_min_soc": "Zatrzymaj rozładowanie przy SOC (%)",
           "tariff_start_hour": "Harmonogram — godzina rozpoczęcia (0–23)",
           "tariff_end_hour": "Harmonogram — godzina zakończenia (0–23)",
+          "price_stale_check": "Stop when price data looks out of date",
           "price_max_age": "Maksymalny wiek danych cenowych (minuty)"
         },
         "data_description": {
@@ -74,6 +75,7 @@
           "discharge_min_soc": "Rozładowanie zatrzymuje się automatycznie gdy bateria osiągnie ten SOC. Domyślnie 10.",
           "tariff_start_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się aktywuje. Pozostaw puste dla trybu zawsze aktywnego.",
           "tariff_end_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się dezaktywuje. Może przekraczać północ (np. start 22, koniec 6).",
+          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
           "price_max_age": "Jeśli czujnik ceny nie zaktualizował się w ciągu podanej liczby minut, aktywny tryb ładowania/rozładowania zostanie zatrzymany. Domyślnie 90."
         }
       }
