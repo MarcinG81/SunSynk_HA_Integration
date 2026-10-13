@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Grid Charge slot switches on Deye inverters: the actual cause.** The [Predbat](https://github.com/springfall2008/batpred) project confirmed on a live inverter that the Sunsynk API silently ignores a slot's Grid Charge change, while saving everything else in the same request, if (a) the request is missing the slot's *Sell* flag, or (b) a flag is sent in a different form from how the inverter reports it. Deye inverters call the Sell flag `sellTime{n}En` and report flags as the text `"true"`/`"false"`. In 1.9.4 this integration renamed that field to the `sellTime{n}on` used by some Sunsynk models, so it dropped out of Deye requests, and it sent changed flags as `1`. Both are fixed: the right Sell flag is always included, and every changed value is sent exactly the way your inverter reports it. Checked against real Deye and Sunsynk diagnostics. (#26, #32, #33)
+- **Sell Time N switches work on Deye inverters again.** beta.7 hid them as "not supported", but Deye inverters do have them, under a different name. They now use whichever name your inverter has, and so does the Virtual Slot Scheduler. (#33)
+- **Tariff Manager never activated with active hours "0 to 0".** Equal start and end hours were treated as an empty window instead of the whole day, so Tariff Manager stayed idle whatever the price. They now mean all day. (#21)
+- **The Tariff Mode and Tariff Price Quality sensors showed an old price** in their attributes until the mode changed. They now refresh every time prices are checked. (#21)
+
 ## [2.0.0-beta.7] - 2026-10-12
 
 ### Changed
