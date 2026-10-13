@@ -80,6 +80,7 @@ _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
         "pac": "sellTime1Pac",
         "start": "sellTime1",
         "en": "sellTime1on",
+        "en_alt": "sellTime1En",
     },
     6: {
         "on": "time6on",
@@ -87,8 +88,12 @@ _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
         "pac": "sellTime6Pac",
         "start": "sellTime6",
         "en": "sellTime6on",
+        "en_alt": "sellTime6En",
     },
 }
+_SELL_FLAG_KEYS = frozenset(
+    {key for keys in _PHYSICAL_KEYS.values() for key in (keys["en"], keys["en_alt"])}
+)
 # Slots 2-5 are turned off once when the scheduler takes ownership. Slot 2's
 # start is also maintained as slot 1's end boundary; slots 3-5 stay untouched.
 _UNUSED_SLOT_ON_KEYS = ("time2on", "time3on", "time4on", "time5on")
@@ -101,11 +106,13 @@ _MANAGED_SETTING_KEYS = (
     "sellTime1Pac",
     "sellTime1",
     "sellTime1on",
+    "sellTime1En",
     "sellTime2",
     "cap6",
     "sellTime6Pac",
     "sellTime6",
     "sellTime6on",
+    "sellTime6En",
     "time1on",
     "time2on",
     "time3on",
@@ -418,7 +425,12 @@ class VirtualSlotScheduler:
                     for key in _MANAGED_SETTING_KEYS
                     if key in settings
                 }
-                missing = set(_MANAGED_SETTING_KEYS) - self._original_settings.keys()
+                # Each model has only one of the two sell-flag names.
+                missing = (
+                    set(_MANAGED_SETTING_KEYS)
+                    - self._original_settings.keys()
+                    - _SELL_FLAG_KEYS
+                )
                 if missing:
                     _LOGGER.warning(
                         "Virtual slots [%s]: cannot snapshot missing settings: %s",
@@ -806,12 +818,16 @@ class VirtualSlotScheduler:
             keys["pac"]: pac,
             keys["start"]: start,
         }
-        # Some models (e.g. Deye) have no per-slot sell flag at all (#33).
+        # The per-slot sell flag is sellTime{n}on on some Sunsynk models and
+        # sellTime{n}En on Deye ones; write whichever this inverter has (#33).
         settings = (
             (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
         )
-        if keys["en"] in settings:
-            window[keys["en"]] = 1 if sell_en else 0
+        sell_key = next(
+            (key for key in (keys["en"], keys["en_alt"]) if key in settings), None
+        )
+        if sell_key is not None:
+            window[sell_key] = 1 if sell_en else 0
         await self._coordinator.async_write_settings(self._serial, window)
 
         self._last_written[index] = cache_key

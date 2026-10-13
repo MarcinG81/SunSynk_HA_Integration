@@ -102,8 +102,8 @@ async def test_second_write_in_a_burst_sees_the_first_writes_change(fake_coordin
     # The second write's payload must carry the FIRST write's new value for
     # time1on (1), not the stale pre-write value ("false") that was in the
     # cache when the burst started.
-    assert sent_payloads[1]["time1on"] == 1
-    assert sent_payloads[1]["cap1"] == 90
+    assert sent_payloads[1]["time1on"] == "true"
+    assert sent_payloads[1]["cap1"] == "90"
 
 
 @pytest.mark.asyncio
@@ -135,9 +135,10 @@ async def test_concurrent_slot_writes_are_coalesced_into_one_payload(
     assert len(sent_payloads) == 1
     assert sent_payloads[0] == {
         "sn": "TEST123",
-        "time1on": 1,
-        "cap1": 90,
-        "sellTime1Pac": 3000,
+        # Sent in the format the inverter reports each field (#32).
+        "time1on": "true",
+        "cap1": "90",
+        "sellTime1Pac": "3000",
         "sellTime1": "23:30",
     }
     mock_client.async_get_settings.assert_awaited_once()
@@ -199,7 +200,7 @@ async def test_inverter_reported_batt_mode_does_not_block_writes(fake_coordinato
             fake_coordinator, "TEST123", "chargeCurrent", 50
         )
 
-    assert sent_payloads[0]["chargeCurrent"] == 50
+    assert sent_payloads[0]["chargeCurrent"] == "50"
     assert sent_payloads[0]["battMode"] == "-1"
 
 
@@ -494,7 +495,7 @@ async def test_coordinator_cache_updated_immediately_after_write(fake_coordinato
     ):
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
 
-    assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == 1
+    assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == "true"
 
 
 @pytest.mark.asyncio
@@ -520,12 +521,12 @@ async def test_full_slot_arm_sequence_does_not_revert_the_on_flag(fake_coordinat
     # Every payload from the second one onward must carry the *current*
     # (turned-on) value, not the stale pre-burst "false".
     for payload in sent_payloads[1:]:
-        assert payload["time1on"] == 1, "time1on was reverted mid-burst"
+        assert payload["time1on"] == "true", "time1on was reverted mid-burst"
     # And the final on-the-wire state (what the server actually ends up
     # with) is consistent across all four fields.
-    assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == 1
-    assert fake_coordinator.data["TEST123"]["settings"]["cap1"] == 90
-    assert fake_coordinator.data["TEST123"]["settings"]["sellTime1Pac"] == 0
+    assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == "true"
+    assert fake_coordinator.data["TEST123"]["settings"]["cap1"] == "90"
+    assert fake_coordinator.data["TEST123"]["settings"]["sellTime1Pac"] == "0"
     assert fake_coordinator.data["TEST123"]["settings"]["sellTime1"] == "23:30"
 
 
@@ -583,7 +584,7 @@ async def test_slot_write_sends_the_whole_system_mode_page(fake_coordinator):
     payload = sent_payloads[0]
     # Exactly the portal's 52 System Mode fields, nothing more or less.
     assert payload.keys() == _full_system_mode_settings().keys()
-    assert payload["time5on"] == 1
+    assert payload["time5on"] == "true"
     # Everything else is resent exactly as the inverter reported it.
     assert payload["time4on"] == "false"
     assert payload["sellTime2"] == "06:00"
@@ -605,7 +606,7 @@ async def test_global_write_also_sends_the_whole_system_mode_page(fake_coordinat
 
     payload = sent_payloads[0]
     assert payload.keys() == _full_system_mode_settings().keys()
-    assert payload["solarSell"] == 0
+    assert payload["solarSell"] == "0"
     assert payload["time1on"] == "false"
     assert payload["cap6"] == "10"
 
@@ -629,7 +630,7 @@ async def test_battery_write_does_not_carry_system_mode_fields(fake_coordinator)
         )
 
     payload = sent_payloads[0]
-    assert payload["chargeCurrent"] == 50
+    assert payload["chargeCurrent"] == "50"
     assert payload["batteryLowCap"] == "20"
     assert "time1on" not in payload
     assert "sysWorkMode" not in payload
@@ -913,7 +914,7 @@ async def test_write_verification_raises_issue_only_after_last_offset(
     ):
         # The write itself succeeds: confirmation happens in the background.
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
-        assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == 1
+        assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == "true"
         fake_coordinator.async_update_listeners.assert_called_once_with()
         mock_ir.async_create_issue.assert_not_called()
         gate.set()
@@ -927,7 +928,7 @@ async def test_write_verification_raises_issue_only_after_last_offset(
     assert kwargs["translation_placeholders"] == {
         "serial": "TEST123",
         "setting_key": "time1on",
-        "expected": "1",
+        "expected": "true",
         "actual": "false",
     }
     # The rejected value is rolled back to what the inverter really reports.
@@ -999,7 +1000,7 @@ async def test_unconfirmed_value_survives_a_stale_poll_and_is_resent(
             task.cancel()
         await asyncio.gather(*fake_coordinator._verify_tasks, return_exceptions=True)
 
-    assert sent_payloads[1]["cap1"] == 90
+    assert sent_payloads[1]["cap1"] == "90"
     assert sent_payloads[1]["sellTime1"] == "23:00"
 
 
@@ -1224,7 +1225,7 @@ async def test_write_setting_redirects_time_slot_key_to_parallel_master():
         await SunsynkCoordinator.async_write_setting(coordinator, "SLAVE1", "time1on", 1)
 
     assert sent_payloads[0]["sn"] == "MASTER1"
-    assert coordinator.data["MASTER1"]["settings"]["time1on"] == 1
+    assert coordinator.data["MASTER1"]["settings"]["time1on"] == "true"
     assert coordinator.data["SLAVE1"]["settings"]["time1on"] == "false"
 
 
@@ -1355,5 +1356,25 @@ async def test_full_page_never_resends_another_slots_stale_start_time(
             task.cancel()
         await asyncio.gather(*fake_coordinator._verify_tasks, return_exceptions=True)
 
-    assert sent_payloads[1]["time1on"] == 1
+    assert sent_payloads[1]["time1on"] == "true"
     assert sent_payloads[1]["sellTime2"] == "18:00"
+
+
+@pytest.mark.parametrize(
+    ("value", "reported", "expected"),
+    [
+        (1, "true", "true"),
+        (0, "false", "false"),
+        (1, "0", "1"),
+        (90, "10", "90"),
+        ("23:00", "17:00", "23:00"),
+        (1, False, True),
+        (True, False, True),
+        (90, 10, 90),
+        (1, None, 1),
+    ],
+)
+def test_changed_value_is_sent_in_the_reported_format(value, reported, expected):
+    result = SunsynkCoordinator._as_reported(value, reported)
+    assert result == expected
+    assert type(result) is type(expected)

@@ -63,6 +63,7 @@ _BOOLEAN_KEYS = frozenset(
         "allowRemoteControl",
         *(f"time{slot}on" for slot in range(1, 7)),
         *(f"sellTime{slot}on" for slot in range(1, 7)),
+        *(f"sellTime{slot}En" for slot in range(1, 7)),
         *(f"genTime{slot}on" for slot in range(1, 7)),
     }
 )

@@ -452,7 +452,10 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 # them ("true", "17:00"), as the Sunsynk portal and 1.8 did.
                 for key in payload.keys() & WRITABLE_SETTING_KEYS:
                     if key in group_updates:
-                        payload[key] = validate_setting_value(key, payload[key])
+                        payload[key] = SunsynkCoordinator._as_reported(
+                            validate_setting_value(key, payload[key]),
+                            current_settings.get(key),
+                        )
                     else:
                         validate_cached_sibling(key, payload[key])
             except SunsynkSettingValidationError as err:
@@ -475,13 +478,37 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 failures.update({key: error for key in group_updates})
                 continue
 
-            written.update(group_updates)
+            # Exactly what went out, in the inverter's own format, so the
+            # cache and the confirmation compare like with like.
+            written.update({key: payload[key] for key in group_updates})
             current_settings.update(payload)
 
         if written:
             SunsynkCoordinator._track_unconfirmed_writes(self, serial, written)
             await self.async_request_refresh()
         return failures
+
+    @staticmethod
+    def _as_reported(value: Any, reported: Any) -> Any:
+        """Encode a changed value the way the inverter reports that field.
+
+        Predbat confirmed live that the API silently drops a flag sent in a
+        different form from its read-back (e.g. 1 or a bare boolean for a
+        time{n}on reported as "true") while accepting the rest of the write
+        (#32). Deye reports flags as "true"/"false" and sellTime{n}En as
+        "0"/"1"; some Sunsynk models report real booleans.
+        """
+        if reported is None:
+            return value
+        if isinstance(value, bool):
+            value = int(value)
+        if isinstance(reported, bool):
+            return bool(value)
+        if isinstance(reported, str):
+            if reported.strip().lower() in ("true", "false") and value in (0, 1):
+                return "true" if value else "false"
+            return str(value)
+        return value
 
     def _track_unconfirmed_writes(self, serial: str, written: dict[str, Any]) -> None:
         """Hold just-written values until the inverter confirms them.

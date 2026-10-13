@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class SunsynkSwitchEntityDescription(SwitchEntityDescription):
     setting_key: str = ""
+    # Other names the same setting has on other models, tried in order when
+    # the inverter doesn't report setting_key.
+    alt_setting_keys: tuple[str, ...] = ()
 
 
 WRITABLE_SWITCHES: tuple[SunsynkSwitchEntityDescription, ...] = (
@@ -80,36 +83,42 @@ WRITABLE_SWITCHES: tuple[SunsynkSwitchEntityDescription, ...] = (
         key="setting_sell_time1_en",
         name="Sell Time 1 Enabled",
         setting_key="sellTime1on",
+        alt_setting_keys=("sellTime1En",),
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time2_en",
         name="Sell Time 2 Enabled",
         setting_key="sellTime2on",
+        alt_setting_keys=("sellTime2En",),
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time3_en",
         name="Sell Time 3 Enabled",
         setting_key="sellTime3on",
+        alt_setting_keys=("sellTime3En",),
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time4_en",
         name="Sell Time 4 Enabled",
         setting_key="sellTime4on",
+        alt_setting_keys=("sellTime4En",),
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time5_en",
         name="Sell Time 5 Enabled",
         setting_key="sellTime5on",
+        alt_setting_keys=("sellTime5En",),
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
         key="setting_sell_time6_en",
         name="Sell Time 6 Enabled",
         setting_key="sellTime6on",
+        alt_setting_keys=("sellTime6En",),
         entity_category=EntityCategory.CONFIG,
     ),
     SunsynkSwitchEntityDescription(
@@ -279,24 +288,33 @@ class SunsynkSwitchEntity(CoordinatorEntity[SunsynkCoordinator], SwitchEntity):
         self._attr_unique_id = f"{serial}_{description.key}"
         self._attr_device_info = device_info
 
+    def _settings(self) -> dict[str, Any]:
+        return (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
+
+    @property
+    def _setting_key(self) -> str:
+        """The name this inverter uses for the setting.
+
+        The per-slot sell flag is sellTime{n}on on some Sunsynk models and
+        sellTime{n}En on Deye ones (#33).
+        """
+        settings = self._settings()
+        description = self.entity_description
+        if description.setting_key in settings:
+            return description.setting_key
+        return next(
+            (key for key in description.alt_setting_keys if key in settings),
+            description.setting_key,
+        )
+
     @property
     def available(self) -> bool:
-        """Unavailable when this inverter doesn't report the setting at all.
-
-        Not every model has every field: a Deye without per-slot sell flags
-        showed Sell Time switches that could never stick (#33).
-        """
-        settings = (
-            (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
-        )
-        return super().available and self.entity_description.setting_key in settings
+        """Unavailable when this inverter doesn't report the setting at all."""
+        return super().available and self._setting_key in self._settings()
 
     @property
     def is_on(self) -> bool | None:
-        settings = (
-            (self.coordinator.data or {}).get(self._serial, {}).get("settings", {})
-        )
-        value = settings.get(self.entity_description.setting_key)
+        value = self._settings().get(self._setting_key)
         if value is None:
             return None
         if isinstance(value, bool):
@@ -306,14 +324,10 @@ class SunsynkSwitchEntity(CoordinatorEntity[SunsynkCoordinator], SwitchEntity):
         return str(value).lower() in ("1", "true", "yes", "on")
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self.coordinator.async_write_setting(
-            self._serial, self.entity_description.setting_key, 1
-        )
+        await self.coordinator.async_write_setting(self._serial, self._setting_key, 1)
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self.coordinator.async_write_setting(
-            self._serial, self.entity_description.setting_key, 0
-        )
+        await self.coordinator.async_write_setting(self._serial, self._setting_key, 0)
 
 
 class TariffManagerSwitch(SwitchEntity):

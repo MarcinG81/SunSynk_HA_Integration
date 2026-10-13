@@ -1089,3 +1089,22 @@ async def test_window_skips_sell_flag_on_models_without_one(mock_hass, mock_coor
     assert "time1on" in written
     assert "sellTime1on" not in written
     assert "sellTime6on" not in written
+
+
+@pytest.mark.asyncio
+async def test_window_uses_deye_sell_flag(mock_hass, mock_coordinator):
+    """#33: on Deye the per-slot sell flag is sellTime{n}En."""
+    settings = mock_coordinator.data["TEST123"]["settings"]
+    del settings["sellTime1on"]
+    del settings["sellTime6on"]
+    settings.update({"sellTime1En": "0", "sellTime6En": "0"})
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="00:00", end="23:59", mode=MODE_DISCHARGE, sell_power=3000
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 12, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    assert ("sellTime1En", 1) in _written(mock_coordinator)

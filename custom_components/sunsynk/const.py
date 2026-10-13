@@ -915,7 +915,11 @@ BATTERY_SETTING_KEYS = frozenset(
     ]
 )
 
-# Each System Mode Timer slot's own fields.
+# Each System Mode Timer slot's own fields. The per-slot sell flag is
+# sellTime{n}on on some Sunsynk models and sellTime{n}En on Deye ones; only
+# the one the inverter reports is ever sent. Predbat confirmed live that
+# Deye silently drops time{n}on when sellTime{n}En is missing from the write
+# (#26, #32, #33), which 1.9.4 caused by renaming it.
 SLOT_SETTING_KEY_GROUPS: dict[int, frozenset[str]] = {
     n: frozenset(
         {
@@ -925,6 +929,7 @@ SLOT_SETTING_KEY_GROUPS: dict[int, frozenset[str]] = {
             f"sellTime{n}Pac",
             f"sellTime{n}",
             f"sellTime{n}on",
+            f"sellTime{n}En",
             f"sellTime{n}Volt",
         }
     )
