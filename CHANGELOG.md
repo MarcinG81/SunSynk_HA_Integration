@@ -215,6 +215,11 @@ that is neither documented nor obvious from a successful HTTP response. Those
 reports did not merely fix isolated bugs; they shaped the safer write pipeline,
 restoration lifecycle and per-inverter architecture delivered in this 2.0 beta.
 
+## [1.9.11] - 2026-10-13
+
+### Fixed
+- **Settings writes the inverter actually applies.** Backport of the 2.0.0-beta.1 to beta.8 write fixes to the stable line: whole System Mode page per write, each slot's Sell flag under the name the inverter reports (`sellTime{n}En` on Deye-built inverters), values sent exactly as the inverter reports them, a fresh read before every write, Sell Time switches on Deye-built inverters, parallel systems recognised, Virtual Slot Scheduler idle windows at rated power and never below Battery Low Capacity, Tariff Manager hours "0 to 0" meaning all day, and the Power Flow Card `push` error. (#21, #26, #31, #32, #33)
+
 ## [1.9.10] - 2026-10-11
 
 ### Fixed
