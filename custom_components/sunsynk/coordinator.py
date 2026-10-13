@@ -415,19 +415,34 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             return {key: error for key in updates}
 
         client = SunsynkClient(self._auth._api_server, token)
-        current_settings = dict((self.data or {}).get(serial, {}).get("settings", {}))
-        if not current_settings:
-            try:
-                current_settings = dict(
-                    await client.async_get_settings(session, serial)
-                )
-            except SunsynkAuthenticationError as err:
-                self._auth.invalidate_token()
-                error = UpdateFailed(f"Authentication failed: {err}")
-                return {key: error for key in updates}
-            except SunsynkApiError as err:
+        # Read-modify-write from a fresh read, as Predbat and other clients
+        # do: building on a cache up to one poll old would send back, and so
+        # undo, anything changed in the Sunsynk app since that poll. Values we
+        # wrote that the inverter hasn't confirmed yet are kept over the read.
+        cached_settings = dict((self.data or {}).get(serial, {}).get("settings", {}))
+        try:
+            current_settings = dict(await client.async_get_settings(session, serial))
+        except SunsynkAuthenticationError as err:
+            self._auth.invalidate_token()
+            error = UpdateFailed(f"Authentication failed: {err}")
+            return {key: error for key in updates}
+        except Exception as err:  # noqa: BLE001
+            if not cached_settings:
                 error = UpdateFailed(f"Cannot read settings for {serial}: {err}")
                 return {key: error for key in updates}
+            _LOGGER.debug(
+                "Fresh settings read for %s failed, using cached settings: %s",
+                serial,
+                err,
+            )
+            current_settings = cached_settings
+        else:
+            if current_settings:
+                SunsynkCoordinator._overlay_unconfirmed_writes(
+                    self, serial, {"settings": current_settings}
+                )
+            else:
+                current_settings = cached_settings
 
         grouped_updates: dict[frozenset[str], dict[str, Any]] = {}
         for key, value in updates.items():
