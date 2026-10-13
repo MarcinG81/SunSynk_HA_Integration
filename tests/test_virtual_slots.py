@@ -209,7 +209,13 @@ def test_plan_idle_with_nothing_scheduled_uses_slot1_and_disables_slot6(
 
 
 def _written(mock_coordinator) -> set[tuple[str, object]]:
-    return {(c.args[1], c.args[2]) for c in mock_coordinator.async_write_setting.call_args_list}
+    written = {
+        (c.args[1], c.args[2])
+        for c in mock_coordinator.async_write_setting.call_args_list
+    }
+    for c in mock_coordinator.async_write_settings.call_args_list:
+        written.update(c.args[1].items())
+    return written
 
 
 @pytest.mark.asyncio
@@ -274,6 +280,7 @@ async def test_slot2_boundary_not_rewritten_when_unchanged(mock_hass, mock_coord
     await sched._async_bootstrap()
 
     mock_coordinator.async_write_setting.reset_mock()
+    mock_coordinator.async_write_settings.reset_mock()
     await sched._async_tick()
 
     assert ("sellTime2", "18:00") not in _written(mock_coordinator)
@@ -291,6 +298,7 @@ async def test_slot2_boundary_updates_when_slot6_start_changes(mock_hass, mock_c
     assert ("sellTime2", "18:00") in _written(mock_coordinator)
 
     mock_coordinator.async_write_setting.reset_mock()
+    mock_coordinator.async_write_settings.reset_mock()
     sched._slots[1] = VirtualSlot(
         slot_id=1, start="10:00", end="19:00", mode=MODE_CHARGE, current=40, target_soc=80
     )
@@ -322,6 +330,7 @@ async def test_tick_reassigns_physical_slot_across_midnight_wrap(mock_hass, mock
     assert sched.active_source == "virtual_slot:1"
 
     mock_coordinator.async_write_setting.reset_mock()
+    mock_coordinator.async_write_settings.reset_mock()
     sched._now = lambda: _dt(2024, 1, 2, 10, 0)
     await sched._async_tick()
 
@@ -363,6 +372,7 @@ async def test_shutdown_disables_slot1_and_slot6(mock_hass, mock_coordinator):
     sched = _make_scheduler(mock_hass, mock_coordinator)
     sched._enabled = True
     mock_coordinator.async_write_setting.reset_mock()
+    mock_coordinator.async_write_settings.reset_mock()
 
     await sched._async_shutdown()
 
@@ -517,5 +527,42 @@ async def test_bootstrap_never_calls_write_setting_for_a_parallel_slave(
 
     await sched._async_bootstrap()
 
-    called_serials = {c.args[0] for c in mock_coordinator.async_write_setting.call_args_list}
+    called_serials = {
+        c.args[0]
+        for c in (
+            *mock_coordinator.async_write_setting.call_args_list,
+            *mock_coordinator.async_write_settings.call_args_list,
+        )
+    }
     assert called_serials == {"MASTER1"}
+
+
+@pytest.mark.asyncio
+async def test_window_uses_deye_sell_flag_and_battery_low_capacity(mock_hass, mock_coordinator):
+    """1.9.11: Deye's sell flag is sellTime{n}En; SOC never below Battery Low
+    Capacity; an idle window doesn't cap the house at 0 W (#21, #33)."""
+    settings = mock_coordinator.data["TEST123"]["settings"]
+    del settings["sellTime1on"]
+    del settings["sellTime6on"]
+    settings.update({"sellTime1En": "0", "sellTime6En": "0", "batteryLowCap": "19"})
+    mock_coordinator.data["TEST123"]["inverter"] = {"ratePower": 3600}
+    sched = VirtualSlotScheduler(
+        hass=mock_hass, coordinator=mock_coordinator, entry_id="test_entry"
+    )
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="20:30", end="21:00", mode=MODE_DISCHARGE, sell_power=3000
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 20, 10)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    windows = [c.args[1] for c in mock_coordinator.async_write_settings.call_args_list]
+    idle = next(w for w in windows if w.get("sellTime1") == "00:00")
+    discharge = next(w for w in windows if w.get("sellTime6") == "20:30")
+    assert idle["sellTime1En"] == 0
+    assert idle["cap1"] == 19
+    assert idle["sellTime1Pac"] == 3600
+    assert discharge["sellTime6En"] == 1
+    assert discharge["sellTime6Pac"] == 3000
+    assert not any("sellTime1on" in w or "sellTime6on" in w for w in windows)

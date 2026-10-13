@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.11] - 2026-10-13
+
+### Fixed
+- **Grid Charge slot switches didn't stick on many inverters, especially Deye-built ones.** The [Predbat](https://github.com/springfall2008/batpred) project confirmed on a live inverter that the Sunsynk API silently ignores a slot's Grid Charge change, while saving the rest of the same request, if the request leaves out the slot's *Sell* flag or sends a flag in a different form from how the inverter reports it. Since 1.9.4 this integration did both on inverters that call the Sell flag `sellTime{n}En`. Every change to the System Mode timer page now sends the whole page in one request, the Sell flag under whichever name your inverter uses, and every value exactly as your inverter reports it. Confirmed fixed on a Deye 5 kW in 2.0.0-beta.8. (#26, #31, #32, #33)
+- **Sell Time N switches didn't work on Deye-built inverters**, because they only looked for the Sunsynk name of the setting. (#33)
+- **A change made in the Sunsynk app could be undone by the next change from Home Assistant.** Every write now reads the current settings first, as Predbat and other Sunsynk clients do.
+- **Parallel (master/slave) systems were never recognised**, so settings meant for the master were also sent to the slave. The parallel role is now read from where the Sunsynk API actually reports it. (#21)
+- **Virtual Slot Scheduler: the house ran from the grid while waiting for a slot to start, and slots could be written with a 0% SOC.** Idle and charge windows now use the inverter's rated power instead of 0 W, and no slot SOC goes below your inverter's own Battery Low Capacity. Each window is also sent as one request instead of five. (#21)
+- **Tariff Manager never activated with active hours "0 to 0".** Equal start and end hours now mean all day. (#21)
+- **The Sunsynk Power Flow Card logged "Cannot read properties of undefined (reading 'push')"**, e.g. in the Android app. (#33)
+
 ## [1.9.10] - 2026-10-11
 
 ### Fixed

@@ -515,3 +515,16 @@ async def test_stop_discharging_is_a_noop_when_already_inactive(mock_hass, mock_
     mock_coordinator.async_write_setting.assert_not_awaited()
 
     mock_coordinator.async_write_setting.assert_not_awaited()
+
+
+
+@pytest.mark.parametrize("hour", [0, 7, 23])
+def test_equal_start_and_end_hour_means_the_whole_day(mock_hass, mock_coordinator, hour):
+    """#21: "00:00-00:00" kept Tariff Manager idle all day."""
+    mgr = _make_manager(mock_hass, mock_coordinator, start_hour=0, end_hour=0)
+
+    with patch(
+        "custom_components.sunsynk.tariff.dt_util.now",
+        return_value=datetime(2026, 10, 12, hour, 30, tzinfo=timezone.utc),
+    ):
+        assert mgr._is_in_schedule() is True

@@ -19,9 +19,8 @@ from .calibration import PerformanceRatioCalibrator
 from .const import (
     BATTERY_SETTING_KEYS,
     DOMAIN,
-    SLOT_SETTING_KEY_GROUPS,
     SOLAR_FORECAST_UPDATE_INTERVAL,
-    SYSTEM_MODE_SETTING_KEYS,
+    SYSTEM_MODE_PAYLOAD_KEYS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -86,22 +85,40 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         write loop; keep using `self.serials` for reads (fetching data
         still needs every configured serial).
         """
-        def _info(serial: str) -> dict[str, Any]:
-            return (self.data or {}).get(serial, {}).get("inverter", {})
-
-        has_master = any(
-            _info(s).get("parallel") and _info(s).get("equipMode") == 1
-            for s in self.serials
-        )
-        if not has_master:
+        roles = {
+            serial: SunsynkCoordinator._parallel_role(self, serial)
+            for serial in self.serials
+        }
+        if "master" not in roles.values():
             # No confirmed master anywhere (e.g. a momentary bad poll) —
             # don't guess at dropping a serial with nothing left to cover it.
             return list(self.serials)
 
-        return [
-            serial for serial in self.serials
-            if not (_info(serial).get("parallel") and _info(serial).get("equipMode") == 0)
-        ]
+        return [serial for serial in self.serials if roles[serial] != "slave"]
+
+    def _parallel_role(self, serial: str) -> str | None:
+        """Return "master", "slave", or None outside a parallel group.
+
+        The API reports `parallel` and `equipMode` (1 = master, 0 = slave) in
+        the *settings* payload: a real parallel diagnostics dump (#21) had
+        them nowhere else, so reading them from the inverter info meant no
+        parallel group was ever recognised. The inverter info is still
+        checked as a fallback. (Backported from 2.0.0-beta.4.)
+        """
+        data = (self.data or {}).get(serial, {})
+        for section in ("settings", "inverter"):
+            info = data.get(section) or {}
+            if "equipMode" not in info:
+                continue
+            try:
+                parallel = int(info.get("parallel") or 0)
+                equip_mode = int(info["equipMode"])
+            except (TypeError, ValueError):
+                continue
+            if not parallel:
+                return None
+            return {1: "master", 0: "slave"}.get(equip_mode)
+        return None
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         """Fetch data from all inverter endpoints."""
@@ -192,15 +209,13 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         setting, redirecting only some categories was an artificially
         narrow fix — now applied to every setting.
         """
-        inverter_info = (self.data or {}).get(serial, {}).get("inverter", {})
-        if not inverter_info.get("parallel") or inverter_info.get("equipMode") == 1:
+        if SunsynkCoordinator._parallel_role(self, serial) != "slave":
             return serial
 
         for other_serial in self.serials:
             if other_serial == serial:
                 continue
-            other_info = (self.data or {}).get(other_serial, {}).get("inverter", {})
-            if other_info.get("parallel") and other_info.get("equipMode") == 1:
+            if SunsynkCoordinator._parallel_role(self, other_serial) == "master":
                 return other_serial
 
         return serial
@@ -209,7 +224,54 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self, serial: str, setting_key: str, value: Any
     ) -> None:
         """Write a single setting to the inverter."""
-        serial = SunsynkCoordinator._resolve_parallel_write_target(self, serial, setting_key)
+        await SunsynkCoordinator.async_write_settings(self, serial, {setting_key: value})
+
+    @staticmethod
+    def _allowed_setting_group(setting_key: str) -> frozenset[str]:
+        """Return the API payload group that owns one setting."""
+        if setting_key in BATTERY_SETTING_KEYS:
+            return BATTERY_SETTING_KEYS
+        if setting_key in SYSTEM_MODE_PAYLOAD_KEYS:
+            return SYSTEM_MODE_PAYLOAD_KEYS
+        return frozenset([setting_key])
+
+    @staticmethod
+    def _as_reported(value: Any, reported: Any) -> Any:
+        """Encode a changed value the way the inverter reports that field.
+
+        Predbat confirmed live that the API silently drops a flag sent in a
+        different form from its read-back (e.g. 1 for a time{n}on reported
+        as "true") while keeping the rest of the write (#32). Deye-built
+        inverters report flags as "true"/"false" and sellTime{n}En as "0"/"1";
+        some Sunsynk models report real booleans.
+        """
+        if reported is None:
+            return value
+        if isinstance(value, bool):
+            value = int(value)
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+        if isinstance(reported, bool):
+            return bool(value)
+        if isinstance(reported, str):
+            if reported.strip().lower() in ("true", "false") and value in (0, 1):
+                return "true" if value else "false"
+            return str(value)
+        return value
+
+    async def async_write_settings(self, serial: str, settings: dict[str, Any]) -> None:
+        """Write one or more settings, one request per settings page.
+
+        Read-modify-write from a fresh read, as Predbat and other clients do:
+        building on the poll cache would send back, and so undo, anything
+        changed in the Sunsynk app since the last poll. Values written but
+        not yet confirmed by the inverter are kept over the fresh read.
+        """
+        if not settings:
+            return
+        serial = SunsynkCoordinator._resolve_parallel_write_target(
+            self, serial, next(iter(settings))
+        )
         session = await self._async_get_session()
 
         try:
@@ -219,49 +281,56 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
         client = SunsynkClient(self._auth._api_server, token)
 
-        current_settings = (self.data or {}).get(serial, {}).get("settings", {})
-        if not current_settings:
-            try:
-                current_settings = await client.async_get_settings(session, serial)
-            except SunsynkApiError as err:
-                raise UpdateFailed(f"Cannot read settings for {serial}: {err}") from err
-
-        slot_keys = next(
-            (keys for keys in SLOT_SETTING_KEY_GROUPS.values() if setting_key in keys),
-            None,
-        )
-        if setting_key in BATTERY_SETTING_KEYS:
-            allowed_keys = BATTERY_SETTING_KEYS
-        elif slot_keys is not None:
-            allowed_keys = slot_keys
-        elif setting_key in SYSTEM_MODE_SETTING_KEYS:
-            allowed_keys = SYSTEM_MODE_SETTING_KEYS
-        else:
-            allowed_keys = frozenset([setting_key])
-
-        payload: dict[str, Any] = {
-            k: v for k, v in current_settings.items() if k in allowed_keys
-        }
-        payload[setting_key] = value
-        payload["sn"] = serial
-
+        cached_settings = dict((self.data or {}).get(serial, {}).get("settings", {}))
         try:
-            await client.async_write_settings(session, serial, payload)
-        except SunsynkApiError as err:
-            raise UpdateFailed(f"Failed to write setting {setting_key}: {err}") from err
+            current_settings = dict(await client.async_get_settings(session, serial))
+        except Exception as err:
+            if not cached_settings:
+                raise UpdateFailed(f"Cannot read settings for {serial}: {err}") from err
+            _LOGGER.debug(
+                "Fresh settings read for %s failed, using cached settings: %s",
+                serial, err,
+            )
+            current_settings = cached_settings
+        else:
+            if current_settings:
+                SunsynkCoordinator._overlay_unconfirmed_writes(
+                    self, serial, {"settings": current_settings}
+                )
+            else:
+                current_settings = cached_settings
 
-        # Update our own cache immediately with what we just told the API,
-        # rather than waiting for async_request_refresh() below — that call
-        # is debounced (10s cooldown), so a second write_setting() landing
-        # within that window would otherwise build its "preserve the other
-        # fields" payload from data that predates this write, resending
-        # stale values for whatever this write just changed and reverting
-        # it. This keeps same-burst writes (e.g. writing on/cap/pac/start
-        # for one virtual slot back to back) correct regardless of timing.
-        if self.data is not None and serial in self.data:
-            self.data[serial].setdefault("settings", {}).update(payload)
+        groups: dict[frozenset[str], dict[str, Any]] = {}
+        for key, value in settings.items():
+            groups.setdefault(SunsynkCoordinator._allowed_setting_group(key), {})[key] = value
 
-        SunsynkCoordinator._track_unconfirmed_write(self, serial, setting_key, value)
+        for allowed_keys, changes in groups.items():
+            payload: dict[str, Any] = {
+                k: v
+                for k, v in current_settings.items()
+                if k in allowed_keys and v is not None
+            }
+            for key, value in changes.items():
+                payload[key] = SunsynkCoordinator._as_reported(
+                    value, current_settings.get(key)
+                )
+            payload["sn"] = serial
+
+            try:
+                await client.async_write_settings(session, serial, payload)
+            except SunsynkApiError as err:
+                raise UpdateFailed(
+                    f"Failed to write setting {', '.join(changes)}: {err}"
+                ) from err
+
+            # Hold what we just sent in the cache until the inverter confirms
+            # it, so later writes and polls don't fall back to the old value.
+            if self.data is not None and serial in self.data:
+                self.data[serial].setdefault("settings", {}).update(payload)
+            for key in changes:
+                SunsynkCoordinator._track_unconfirmed_write(
+                    self, serial, key, payload[key]
+                )
 
         await self.async_request_refresh()
 

@@ -115,8 +115,8 @@ async def test_second_write_in_a_burst_sees_the_first_writes_change(fake_coordin
     # The second write's payload must carry the FIRST write's new value for
     # time1on (1), not the stale pre-write value ("false") that was in the
     # cache when the burst started.
-    assert sent_payloads[1]["time1on"] == 1
-    assert sent_payloads[1]["cap1"] == 90
+    assert sent_payloads[1]["time1on"] == "true"
+    assert sent_payloads[1]["cap1"] == "90"
 
 
 @pytest.mark.asyncio
@@ -128,7 +128,7 @@ async def test_coordinator_cache_updated_immediately_after_write(fake_coordinato
     ):
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
 
-    assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == 1
+    assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == "true"
 
 
 @pytest.mark.asyncio
@@ -154,12 +154,12 @@ async def test_full_slot_arm_sequence_does_not_revert_the_on_flag(fake_coordinat
     # Every payload from the second one onward must carry the *current*
     # (turned-on) value, not the stale pre-burst "false".
     for payload in sent_payloads[1:]:
-        assert payload["time1on"] == 1, "time1on was reverted mid-burst"
+        assert payload["time1on"] == "true", "time1on was reverted mid-burst"
     # And the final on-the-wire state (what the server actually ends up
     # with) is consistent across all four fields.
-    assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == 1
-    assert fake_coordinator.data["TEST123"]["settings"]["cap1"] == 90
-    assert fake_coordinator.data["TEST123"]["settings"]["sellTime1Pac"] == 0
+    assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == "true"
+    assert fake_coordinator.data["TEST123"]["settings"]["cap1"] == "90"
+    assert fake_coordinator.data["TEST123"]["settings"]["sellTime1Pac"] == "0"
     assert fake_coordinator.data["TEST123"]["settings"]["sellTime1"] == "23:30"
 
 
@@ -180,7 +180,9 @@ async def test_full_slot_arm_sequence_does_not_revert_the_on_flag(fake_coordinat
 
 
 @pytest.mark.asyncio
-async def test_slot_write_payload_excludes_other_slots_fields(fake_coordinator):
+async def test_slot_write_sends_the_whole_system_mode_page(fake_coordinator):
+    """Since 1.9.11 every System Mode change carries the whole page, as the
+    Sunsynk portal and Predbat send it (#26, #31, #32, #33)."""
     fake_coordinator.data["TEST123"]["settings"]["sellTime2"] = "05:30"
     fake_coordinator.data["TEST123"]["settings"]["cap2"] = "20"
     sent_payloads: list[dict] = []
@@ -191,8 +193,9 @@ async def test_slot_write_payload_excludes_other_slots_fields(fake_coordinator):
     ):
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
 
-    assert "sellTime2" not in sent_payloads[0]
-    assert "cap2" not in sent_payloads[0]
+    assert sent_payloads[0]["sellTime2"] == "05:30"
+    assert sent_payloads[0]["cap2"] == "20"
+    assert sent_payloads[0]["time1on"] == "true"
 
 
 @pytest.mark.asyncio
@@ -360,10 +363,30 @@ def _gated_sleep():
     return gate, _sleep
 
 
-def _client(read_backs) -> MagicMock:
+def _client(read_backs, baseline=None) -> MagicMock:
+    """read_backs are the confirmation reads, after the fresh pre-write read.
+
+    The pre-write read returns ``baseline`` (empty means "use the cache"); a
+    single exception in read_backs is raised by every read.
+    """
     mock_client = MagicMock()
     mock_client.async_write_settings = AsyncMock()
-    mock_client.async_get_settings = AsyncMock(side_effect=read_backs)
+    if isinstance(read_backs, BaseException):
+        mock_client.async_get_settings = AsyncMock(side_effect=read_backs)
+    elif callable(read_backs):
+        first = [True]
+
+        async def _read(session, serial):
+            if first[0]:
+                first[0] = False
+                return dict(baseline or {})
+            return await read_backs(session, serial)
+
+        mock_client.async_get_settings = AsyncMock(side_effect=_read)
+    else:
+        mock_client.async_get_settings = AsyncMock(
+            side_effect=[baseline or {}, *read_backs]
+        )
     return mock_client
 
 
@@ -403,19 +426,19 @@ async def test_write_verification_raises_issue_only_after_last_offset(
     ):
         # The write itself returns straight away; confirmation is background.
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
-        assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == 1
+        assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == "true"
         mock_ir.async_create_issue.assert_not_called()
         gate.set()
         await _settle_verification(fake_coordinator)
 
-    assert mock_client.async_get_settings.await_count == 5
+    assert mock_client.async_get_settings.await_count == 6
     mock_ir.async_create_issue.assert_called_once()
     args, kwargs = mock_ir.async_create_issue.call_args
     assert args[:3] == (fake_coordinator.hass, DOMAIN, "setting_write_mismatch_TEST123_time1on")
     assert kwargs["translation_placeholders"] == {
         "serial": "TEST123",
         "setting_key": "time1on",
-        "expected": "1",
+        "expected": "true",
         "actual": "false",
     }
     assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == "false"
@@ -441,7 +464,7 @@ async def test_slow_propagation_is_not_reported_as_a_failure(fake_coordinator, r
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
         await _settle_verification(fake_coordinator)
 
-    assert mock_client.async_get_settings.await_count == 3
+    assert mock_client.async_get_settings.await_count == 4
     assert [round(c.args[0]) for c in mock_sleep.await_args_list] == [5, 10, 15]
     mock_ir.async_create_issue.assert_not_called()
     mock_ir.async_delete_issue.assert_called_once()
@@ -479,7 +502,7 @@ async def test_unconfirmed_value_survives_a_stale_poll(fake_coordinator, real_co
             )
         )
 
-    assert sent_payloads[1]["cap1"] == 90
+    assert sent_payloads[1]["cap1"] == "90"
     assert sent_payloads[1]["sellTime1"] == "23:00"
 
 
@@ -506,7 +529,8 @@ async def test_superseded_write_stops_background_confirmation(fake_coordinator, 
         gate.set()
         await _settle_verification(fake_coordinator)
 
-    mock_client.async_get_settings.assert_not_awaited()
+    # Only the pre-write read: the confirmation was superseded.
+    mock_client.async_get_settings.assert_awaited_once()
     mock_ir.async_create_issue.assert_not_called()
 
 
@@ -548,7 +572,7 @@ async def test_write_verification_does_not_block_on_api_error(fake_coordinator, 
         await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
         await _settle_verification(fake_coordinator)
 
-    assert mock_client.async_get_settings.await_count == 5
+    assert mock_client.async_get_settings.await_count == 6
     mock_ir.async_create_issue.assert_not_called()
     mock_ir.async_delete_issue.assert_not_called()
     assert fake_coordinator._unconfirmed_writes["TEST123"] == {}
@@ -671,7 +695,7 @@ async def test_write_setting_redirects_time_slot_key_to_parallel_master():
         await SunsynkCoordinator.async_write_setting(coordinator, "SLAVE1", "time1on", 1)
 
     assert sent_payloads[0]["sn"] == "MASTER1"
-    assert coordinator.data["MASTER1"]["settings"]["time1on"] == 1
+    assert coordinator.data["MASTER1"]["settings"]["time1on"] == "true"
     assert coordinator.data["SLAVE1"]["settings"]["time1on"] == "false"
 
 

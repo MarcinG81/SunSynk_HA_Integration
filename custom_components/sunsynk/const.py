@@ -885,8 +885,8 @@ BATTERY_SETTING_KEYS = frozenset([
 # from slot N+1's start) rather than being rejected outright (#21).
 SLOT_SETTING_KEY_GROUPS: dict[int, frozenset[str]] = {
     n: frozenset({
-        f"time{n}on", f"cap{n}", f"sellTime{n}Pac", f"sellTime{n}",
-        f"sellTime{n}on", f"sellTime{n}Volt",
+        f"time{n}on", f"genTime{n}on", f"cap{n}", f"sellTime{n}Pac",
+        f"sellTime{n}", f"sellTime{n}on", f"sellTime{n}En", f"sellTime{n}Volt",
     })
     for n in range(1, 7)
 }
@@ -898,3 +898,16 @@ SYSTEM_MODE_SETTING_KEYS = frozenset([
     "saturdayOn", "sundayOn", "genTime1on", "genTime2on", "genTime3on",
     "genTime4on", "genTime5on", "genTime6on",
 ])
+
+# Everything on the System Mode page is written as one request: the global
+# timer settings plus all six slots, exactly the set the Sunsynk portal,
+# Predbat, openHAB and the solarsynkv3 add-on send. Predbat confirmed on a
+# live inverter that the API silently drops a slot's time{n}on, while
+# keeping the rest of the write, if the slot's sell flag is missing or a
+# flag is sent in a different form from its read-back. Deye-built inverters
+# call the sell flag sellTime{n}En; some Sunsynk models call it
+# sellTime{n}on. Only the fields the inverter reports are ever sent.
+# (Backported from 2.0.0-beta.8; #26, #31, #32, #33.)
+SYSTEM_MODE_PAYLOAD_KEYS: frozenset[str] = SYSTEM_MODE_SETTING_KEYS.union(
+    *SLOT_SETTING_KEY_GROUPS.values()
+)

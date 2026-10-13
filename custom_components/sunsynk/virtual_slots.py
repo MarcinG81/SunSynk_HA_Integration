@@ -62,11 +62,11 @@ ALL_WEEKDAYS: frozenset[int] = frozenset(range(7))
 _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
     1: {
         "on": "time1on", "cap": "cap1", "pac": "sellTime1Pac",
-        "start": "sellTime1", "en": "sellTime1on",
+        "start": "sellTime1", "en": "sellTime1on", "en_alt": "sellTime1En",
     },
     6: {
         "on": "time6on", "cap": "cap6", "pac": "sellTime6Pac",
-        "start": "sellTime6", "en": "sellTime6on",
+        "start": "sellTime6", "en": "sellTime6on", "en_alt": "sellTime6En",
     },
 }
 # Slots 2-5 are turned off once when the scheduler takes ownership, and
@@ -293,8 +293,9 @@ class VirtualSlotScheduler:
     async def _async_bootstrap(self) -> None:
         """Take ownership: disable slots 2-5, then compute 1 & 6 from scratch."""
         for serial in self._coordinator.write_target_serials:
-            for key in _UNUSED_SLOT_ON_KEYS:
-                await self._coordinator.async_write_setting(serial, key, 0)
+            await self._coordinator.async_write_settings(
+                serial, {key: 0 for key in _UNUSED_SLOT_ON_KEYS}
+            )
         self._last_written = {}
         self._last_current_key = None
         self._last_written_slot2_boundary = None
@@ -302,8 +303,9 @@ class VirtualSlotScheduler:
 
     async def _async_shutdown(self) -> None:
         for serial in self._coordinator.write_target_serials:
-            await self._coordinator.async_write_setting(serial, _PHYSICAL_KEYS[1]["on"], 0)
-            await self._coordinator.async_write_setting(serial, _PHYSICAL_KEYS[6]["on"], 0)
+            await self._coordinator.async_write_settings(
+                serial, {_PHYSICAL_KEYS[1]["on"]: 0, _PHYSICAL_KEYS[6]["on"]: 0}
+            )
         self._last_written = {}
         self._last_current_key = None
 
@@ -401,6 +403,15 @@ class VirtualSlotScheduler:
         return None
 
     _DEFAULT_UNCAPPED_SELL_POWER = 30000
+    _DEFAULT_SOC_FLOOR = 20
+
+    @classmethod
+    def _soc_floor(cls, settings: dict[str, Any]) -> int:
+        """The inverter's own Battery Low Capacity, or a safe default."""
+        try:
+            return max(0, min(100, int(settings["batteryLowCap"])))
+        except (KeyError, TypeError, ValueError):
+            return cls._DEFAULT_SOC_FLOOR
 
     def _uncapped_sell_power(self) -> int:
         """Best-effort "no artificial cap" sell power for a price-override
@@ -516,20 +527,45 @@ class VirtualSlotScheduler:
         Zero-Export/Limited to Home.
         """
         on = resolution.mode != MODE_IDLE
-        cap = resolution.target_soc if resolution.target_soc is not None else 0
-        pac = resolution.sell_power if resolution.mode == MODE_DISCHARGE else 0
+        # With Use Timer on and Sell unticked, a slot's power is also the most
+        # the inverter may draw from the battery for the house, so 0 W pushed
+        # the house onto the grid during idle windows (#21). Only a discharge
+        # window carries a real cap. (Backported from 2.0.0-beta.1.)
+        pac = (
+            resolution.sell_power
+            if resolution.mode == MODE_DISCHARGE
+            else self._uncapped_sell_power()
+        )
         sell_en = resolution.mode == MODE_DISCHARGE
-        cache_key = (on, cap, pac, start, sell_en)
+        cache_key = (on, resolution.target_soc, pac, start, sell_en)
         if self._last_written.get(index) == cache_key:
             return False
 
         keys = _PHYSICAL_KEYS[index]
         for serial in self._coordinator.write_target_serials:
-            await self._coordinator.async_write_setting(serial, keys["on"], 1 if on else 0)
-            await self._coordinator.async_write_setting(serial, keys["cap"], cap)
-            await self._coordinator.async_write_setting(serial, keys["pac"], pac)
-            await self._coordinator.async_write_setting(serial, keys["start"], start)
-            await self._coordinator.async_write_setting(serial, keys["en"], 1 if sell_en else 0)
+            settings = (
+                (self._coordinator.data or {}).get(serial, {}).get("settings", {})
+            )
+            window = {
+                keys["on"]: 1 if on else 0,
+                # Never below the inverter's own Battery Low Capacity: a window
+                # without a target SOC used to be written as 0% (#21).
+                keys["cap"]: max(
+                    resolution.target_soc or 0, self._soc_floor(settings)
+                ),
+                keys["pac"]: pac,
+                keys["start"]: start,
+            }
+            # sellTime{n}on on some Sunsynk models, sellTime{n}En on
+            # Deye-built ones; write whichever this inverter has (#33).
+            sell_key = next(
+                (key for key in (keys["en"], keys["en_alt"]) if key in settings),
+                None,
+            )
+            if sell_key is not None:
+                window[sell_key] = 1 if sell_en else 0
+            # One request for the whole window rather than one per field.
+            await self._coordinator.async_write_settings(serial, window)
 
         self._last_written[index] = cache_key
         return True

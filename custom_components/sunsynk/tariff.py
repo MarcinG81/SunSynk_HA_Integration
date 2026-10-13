@@ -253,6 +253,10 @@ class TariffChargingManager:
         """Return True if current hour is within the configured active window."""
         if self._start_hour is None or self._end_hour is None:
             return True
+        if self._start_hour == self._end_hour:
+            # e.g. 0 to 0: the whole day. Read as an empty window, it kept
+            # Tariff Manager permanently idle (#21).
+            return True
         hour = dt_util.now().hour
         if self._start_hour <= self._end_hour:
             return self._start_hour <= hour < self._end_hour
