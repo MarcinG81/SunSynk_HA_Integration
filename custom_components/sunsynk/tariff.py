@@ -321,6 +321,10 @@ class TariffChargingManager:
         """Return True if current hour is within the configured active window."""
         if self._start_hour is None or self._end_hour is None:
             return True
+        if self._start_hour == self._end_hour:
+            # e.g. 0 to 0: the whole day. Read as an empty window, it kept
+            # Tariff Manager permanently idle (#21).
+            return True
         hour = dt_util.now().hour
         if self._start_hour <= self._end_hour:
             return self._start_hour <= hour < self._end_hour
@@ -343,6 +347,9 @@ class TariffChargingManager:
         """Serialize evaluations triggered by price and coordinator updates."""
         async with self._evaluate_lock:
             await self._evaluate_locked()
+        # Refresh the Tariff Mode / Price Quality sensors even when the mode
+        # didn't change, so their price attributes show the price just read.
+        self._notify_listeners()
 
     async def _evaluate_locked(self) -> None:
         """Re-check both price entities and act on each side independently.

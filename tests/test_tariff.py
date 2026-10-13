@@ -909,3 +909,43 @@ def test_hand_set_helper_price_is_never_stale(mock_hass, mock_coordinator):
     quality, _ = mgr._compute_price_quality()
 
     assert quality == QUALITY_OK
+
+
+
+@pytest.mark.parametrize("hour", [0, 7, 13, 23])
+def test_equal_start_and_end_hour_means_the_whole_day(mock_hass, mock_coordinator, hour):
+    """#21: "00:00-00:00" kept Tariff Manager idle all day."""
+    mgr = _make_manager(mock_hass, mock_coordinator, start_hour=0, end_hour=0)
+
+    with patch(
+        "custom_components.sunsynk.tariff.dt_util.now",
+        return_value=datetime(2026, 10, 12, hour, 30, tzinfo=timezone.utc),
+    ):
+        assert mgr._is_in_schedule() is True
+
+
+@pytest.mark.asyncio
+async def test_export_above_threshold_discharges_with_whole_day_schedule(
+    mock_hass, mock_coordinator
+):
+    """The reporter's case: hours 0 to 0, export helper 0.18 > 0.16."""
+    mock_hass.states.get.side_effect = _states_for({
+        "sensor.electricity_price": _price_state("0.26"),
+        "input_number.electric_export_rate": _price_state("0.18"),
+    })
+    mgr = _make_manager(
+        mock_hass,
+        mock_coordinator,
+        expensive_threshold=0.16,
+        start_hour=0,
+        end_hour=0,
+        export_price_entity="input_number.electric_export_rate",
+    )
+    mgr._enabled = True
+    listener = MagicMock()
+    mgr.async_add_listener(listener)
+
+    await mgr._evaluate()
+
+    assert mgr.is_discharging_active_for("TEST123")
+    listener.assert_called()
