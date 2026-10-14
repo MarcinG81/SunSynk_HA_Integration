@@ -223,6 +223,11 @@ that is neither documented nor obvious from a successful HTTP response. Those
 reports did not merely fix isolated bugs; they shaped the safer write pipeline,
 restoration lifecycle and per-inverter architecture delivered in this 2.0 beta.
 
+## [1.9.12] - 2026-10-14
+
+### Fixed
+- **Tariff Manager fields couldn't be cleared in Configure**; cleared active hours came back as "0 to 0". Same fix as 2.0.0-beta.9. (#21)
+
 ## [1.9.11] - 2026-10-13
 
 ### Fixed
