@@ -1108,3 +1108,16 @@ async def test_window_uses_deye_sell_flag(mock_hass, mock_coordinator):
     await sched._async_bootstrap()
 
     assert ("sellTime1En", 1) in _written(mock_coordinator)
+
+
+def test_a_failing_vss_listener_does_not_stop_the_others(mock_hass, mock_coordinator, caplog):
+    _consume_created_tasks(mock_hass)
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    other = MagicMock()
+    sched.async_add_listener(MagicMock(side_effect=RuntimeError("boom")))
+    sched.async_add_listener(other)
+
+    sched._notify_listeners()
+
+    other.assert_called_once()
+    assert "a listener failed to update" in caplog.text

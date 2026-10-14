@@ -1056,3 +1056,18 @@ async def test_decision_without_any_price_reading(mock_hass, mock_coordinator):
 
     assert mgr.decisions["TEST123"]["charging"] == "no import price"
     assert mgr.decisions["TEST123"]["discharging"] == "no export price"
+
+
+def test_a_failing_listener_does_not_stop_the_others(mock_hass, mock_coordinator, caplog):
+    """#21: the switch must still update if another entity's update fails."""
+    _consume_created_tasks(mock_hass)
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    broken = MagicMock(side_effect=RuntimeError("boom"))
+    switch = MagicMock()
+    mgr.async_add_listener(broken)
+    mgr.async_add_listener(switch)
+
+    mgr.set_enabled(True)
+
+    switch.assert_called()
+    assert "a listener failed to update" in caplog.text

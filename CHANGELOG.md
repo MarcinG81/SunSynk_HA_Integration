@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **The Tariff Manager switch could flip itself back off.** When Tariff Manager changes state it updates several entities in turn (its switch, the Tariff Mode and Price Quality sensors, its number entities and the Virtual Slot Scheduler). If one of them failed to update, the rest were skipped, so the switch never showed "on" and Home Assistant flipped it back after two seconds. Each entity now updates independently, and any failure is logged with full details. (#21)
+
 ## [2.0.0-beta.9] - 2026-10-14
 
 ### Added

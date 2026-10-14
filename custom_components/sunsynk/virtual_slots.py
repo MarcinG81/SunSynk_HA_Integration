@@ -310,8 +310,14 @@ class VirtualSlotScheduler:
         return _remove
 
     def _notify_listeners(self) -> None:
-        for cb in self._listeners:
-            cb()
+        # One failing entity must not stop the others updating: a switch
+        # whose state never gets written is flipped back by the frontend
+        # after two seconds, which looks like it turning itself off (#21).
+        for cb in list(self._listeners):
+            try:
+                cb()
+            except Exception:
+                _LOGGER.exception("Virtual slots: a listener failed to update")
 
     # ── Persistence ──────────────────────────────────────────────────────
 
