@@ -111,6 +111,9 @@ class TariffChargingManager:
         self._price_quality: str = QUALITY_NOT_FOUND
         self._export_price_quality: str = QUALITY_NOT_FOUND
         self._soc_quality_by_serial: dict[str, str] = {}
+        # Why each target is or isn't charging/discharging, shown on the
+        # Tariff Mode sensor so "idle" can be explained at a glance (#21).
+        self._decisions: dict[str, dict[str, Any]] = {}
         self._listeners: list[Callable[[], None]] = []
         self._evaluate_lock = Lock()
         self._unsub_price: Any = None
@@ -406,6 +409,14 @@ class TariffChargingManager:
                 self._soc_quality_by_serial[serial] = soc_quality
                 self._notify_listeners()
 
+            import_price = self._read_price(self._price_entity)
+            export_price = self._read_price(self._export_price_entity)
+            decision: dict[str, Any] = {
+                "battery_soc": soc,
+                "import_price": import_price,
+                "export_price": export_price,
+            }
+
             if soc is None:
                 # Missing, non-finite or out-of-range SOC is never equivalent
                 # to 0%.  Stop anything this manager owns and do not make a
@@ -413,25 +424,94 @@ class TariffChargingManager:
                 reason = f"battery SOC quality: {soc_quality}"
                 await self._stop_charging(serial, reason)
                 await self._stop_discharging(serial, reason)
+                decision["charging"] = decision["discharging"] = (
+                    f"battery SOC unavailable ({soc_quality})"
+                )
+                self._record_decision(serial, decision)
                 continue
 
             if import_quality == QUALITY_OK:
-                price = self._read_price(self._price_entity)
-                if price is not None:
-                    await self._evaluate_charging(serial, price, soc, in_schedule)
+                if import_price is not None:
+                    await self._evaluate_charging(
+                        serial, import_price, soc, in_schedule
+                    )
+                decision["charging"] = self._charge_reason(
+                    serial, import_price, soc, in_schedule
+                )
             else:
                 await self._stop_charging(
                     serial, f"import price quality: {import_detail}"
                 )
+                decision["charging"] = f"import price {import_quality}: {import_detail}"
 
             if export_quality == QUALITY_OK:
-                price = self._read_price(self._export_price_entity)
-                if price is not None:
-                    await self._evaluate_discharging(serial, price, soc, in_schedule)
+                if export_price is not None:
+                    await self._evaluate_discharging(
+                        serial, export_price, soc, in_schedule
+                    )
+                decision["discharging"] = self._discharge_reason(
+                    serial, export_price, soc, in_schedule
+                )
             else:
                 await self._stop_discharging(
                     serial, f"export price quality: {export_detail}"
                 )
+                decision["discharging"] = (
+                    f"export price {export_quality}: {export_detail}"
+                )
+            self._record_decision(serial, decision)
+
+    def _record_decision(self, serial: str, decision: dict[str, Any]) -> None:
+        if self._decisions.get(serial) != decision:
+            _LOGGER.debug("Tariff decision [%s]: %s", serial, decision)
+        self._decisions[serial] = decision
+
+    def _charge_reason(
+        self, serial: str, price: float | None, soc: float, in_schedule: bool
+    ) -> str:
+        """Plain-English reason for the charging decision just made."""
+        if serial in self._charging_active_serials:
+            return "charging"
+        if self._cheap_threshold is None or self._cheap_current is None:
+            return (
+                "not set up (needs a cheap threshold and a cheap-rate charge current)"
+            )
+        if price is None:
+            return "no import price"
+        if not in_schedule:
+            return "outside the active hours"
+        if price > self._cheap_threshold:
+            return (
+                f"import price {price:g} is above the cheap threshold "
+                f"{self._cheap_threshold:g}"
+            )
+        return f"battery {soc:.0f}% has reached the target {self._target_soc}%"
+
+    def _discharge_reason(
+        self, serial: str, price: float | None, soc: float, in_schedule: bool
+    ) -> str:
+        """Plain-English reason for the discharging decision just made."""
+        if serial in self._discharging_active_serials:
+            return "discharging"
+        if self._expensive_threshold is None or self._peak_discharge_current is None:
+            return (
+                "not set up (needs an expensive threshold and a peak discharge current)"
+            )
+        if price is None:
+            return "no export price"
+        if not in_schedule:
+            return "outside the active hours"
+        if price < self._expensive_threshold:
+            return (
+                f"export price {price:g} is below the expensive threshold "
+                f"{self._expensive_threshold:g}"
+            )
+        if soc <= self._discharge_min_soc:
+            return (
+                f"battery {soc:.0f}% is not above the minimum "
+                f"{self._discharge_min_soc}%"
+            )
+        return "charging takes priority"
 
     @staticmethod
     def _read_soc(battery: dict[str, Any]) -> tuple[float | None, str]:
@@ -638,6 +718,11 @@ class TariffChargingManager:
             serial: self.mode_for(serial)
             for serial in self._coordinator.write_target_serials
         }
+
+    @property
+    def decisions(self) -> dict[str, dict[str, Any]]:
+        """Last decision and its reasons for each physical write target."""
+        return {serial: dict(decision) for serial, decision in self._decisions.items()}
 
     @property
     def soc_quality_by_inverter(self) -> dict[str, str]:

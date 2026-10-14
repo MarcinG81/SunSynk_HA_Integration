@@ -326,3 +326,36 @@ class TestParseTariffFields:
         })
         assert "cheap_threshold" not in result
         assert "expensive_threshold" not in result
+
+
+@pytest.mark.asyncio
+async def test_tariff_text_fields_can_be_cleared():
+    """#21: cleared active hours came back as 0 because the form used them as
+    defaults; Home Assistant omits a cleared field and voluptuous refilled it."""
+    flow = _options_flow()
+    flow._config_entry.options = {
+        "price_entity": "sensor.price",
+        "tariff_start_hour": 0,
+        "tariff_end_hour": 0,
+        "cheap_threshold": 0.1,
+    }
+    form = await flow.async_step_init()
+    schema = form["data_schema"]
+
+    keys = {str(key): key for key in schema.schema}
+    assert keys["tariff_start_hour"].description == {"suggested_value": "0"}
+    assert keys["cheap_threshold"].description == {"suggested_value": "0.1"}
+    # A submission without the cleared fields stays without them.
+    validated = schema({})
+    assert "tariff_start_hour" not in validated
+    assert "tariff_end_hour" not in validated
+    assert "cheap_threshold" not in validated
+
+
+@pytest.mark.asyncio
+async def test_unset_tariff_text_fields_have_no_suggestion():
+    flow = _options_flow()
+    form = await flow.async_step_init()
+    keys = {str(key): key for key in form["data_schema"].schema}
+
+    assert keys["tariff_start_hour"].description == {"suggested_value": None}

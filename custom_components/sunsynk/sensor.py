@@ -606,6 +606,8 @@ class TariffStateSensor(SensorEntity):
             )
         attrs["per_inverter_mode"] = self._manager.per_inverter_modes
         attrs["soc_quality_by_inverter"] = self._manager.soc_quality_by_inverter
+        # What Tariff Manager last saw and why it is or isn't acting (#21).
+        attrs["decisions"] = self._manager.decisions
         return attrs
 
 

@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **The Tariff Mode sensor now shows why Tariff Manager is or isn't acting.** A new `decisions` attribute lists, for each inverter, the import and export prices it last read, the battery SOC, and a plain-English reason for charging and for discharging, e.g. "export price 0.1 is below the expensive threshold 0.16", "battery 18% is not above the minimum 20%" or "not set up (needs an expensive threshold and a peak discharge current)". (#21)
+
+### Fixed
+- **Tariff Manager fields couldn't be cleared in Configure.** Clearing a threshold, current or active hour and saving put the old value straight back, so cleared active hours came back as "0 to 0". Cleared fields now stay cleared. (#21)
+
 ## [2.0.0-beta.8] - 2026-10-13
 
 ### Fixed

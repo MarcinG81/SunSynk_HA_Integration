@@ -949,3 +949,110 @@ async def test_export_above_threshold_discharges_with_whole_day_schedule(
 
     assert mgr.is_discharging_active_for("TEST123")
     listener.assert_called()
+
+
+# ── Why Tariff Manager is or isn't acting (#21) ─────────────────────────────
+
+
+async def _decide(mock_hass, mock_coordinator, *, import_price="0.30", export_price="0.18",
+                  soc=80, **kwargs):
+    mock_hass.states.get.side_effect = _states_for({
+        "sensor.electricity_price": _price_state(import_price),
+        "input_number.export": _price_state(export_price),
+    })
+    mock_coordinator.data["TEST123"]["battery"]["soc"] = soc
+    options = {"expensive_threshold": 0.16, "export_price_entity": "input_number.export"}
+    options.update(kwargs)
+    mgr = _make_manager(mock_hass, mock_coordinator, **options)
+    mgr._enabled = True
+    await mgr._evaluate()
+    return mgr.decisions["TEST123"]
+
+
+@pytest.mark.asyncio
+async def test_decision_shows_prices_soc_and_discharging(mock_hass, mock_coordinator):
+    decision = await _decide(mock_hass, mock_coordinator)
+
+    assert decision["import_price"] == 0.30
+    assert decision["export_price"] == 0.18
+    assert decision["battery_soc"] == 80
+    assert decision["discharging"] == "discharging"
+    assert decision["charging"] == "import price 0.3 is above the cheap threshold 0.1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"soc": 15, "discharge_min_soc": 20}, "battery 15% is not above the minimum 20%"),
+        ({"export_price": "0.10"}, "export price 0.1 is below the expensive threshold 0.16"),
+        ({"peak_discharge": None}, "not set up (needs an expensive threshold and a peak discharge current)"),
+        ({"start_hour": 1, "end_hour": 2}, "outside the active hours"),
+    ],
+)
+async def test_decision_explains_why_not_discharging(
+    mock_hass, mock_coordinator, kwargs, expected
+):
+    with patch(
+        "custom_components.sunsynk.tariff.dt_util.now",
+        return_value=datetime(2026, 10, 13, 22, 7, tzinfo=timezone.utc),
+    ):
+        decision = await _decide(mock_hass, mock_coordinator, **kwargs)
+
+    assert decision["discharging"] == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({"import_price": "0.05"}, "charging"),
+        ({"import_price": "0.05", "soc": 95}, "battery 95% has reached the target 90%"),
+        ({"cheap_threshold": None}, "not set up (needs a cheap threshold and a cheap-rate charge current)"),
+        ({"import_price": "0.05", "start_hour": 1, "end_hour": 2}, "outside the active hours"),
+    ],
+)
+async def test_decision_explains_charging(mock_hass, mock_coordinator, kwargs, expected):
+    with patch(
+        "custom_components.sunsynk.tariff.dt_util.now",
+        return_value=datetime(2026, 10, 13, 22, 7, tzinfo=timezone.utc),
+    ):
+        decision = await _decide(mock_hass, mock_coordinator, **kwargs)
+
+    assert decision["charging"] == expected
+
+
+@pytest.mark.asyncio
+async def test_charging_takes_priority_is_explained(mock_hass, mock_coordinator):
+    decision = await _decide(
+        mock_hass, mock_coordinator, import_price="0.05", export_price="0.40",
+        expensive_threshold=0.30,
+    )
+
+    assert decision["charging"] == "charging"
+    assert decision["discharging"] == "charging takes priority"
+
+
+@pytest.mark.asyncio
+async def test_decision_explains_missing_soc_and_bad_prices(mock_hass, mock_coordinator):
+    decision = await _decide(mock_hass, mock_coordinator, soc=None)
+    assert decision["charging"] == decision["discharging"] == "battery SOC unavailable (missing)"
+
+    decision = await _decide(
+        mock_hass, mock_coordinator, import_price="unavailable", export_price="bad"
+    )
+    assert decision["charging"].startswith("import price unavailable")
+    assert decision["discharging"].startswith("export price invalid")
+
+
+@pytest.mark.asyncio
+async def test_decision_without_any_price_reading(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    with patch.object(mgr, "_read_price", return_value=None), patch.object(
+        mgr, "_compute_price_quality", return_value=(QUALITY_OK, "ok")
+    ):
+        mgr._enabled = True
+        await mgr._evaluate()
+
+    assert mgr.decisions["TEST123"]["charging"] == "no import price"
+    assert mgr.decisions["TEST123"]["discharging"] == "no export price"
