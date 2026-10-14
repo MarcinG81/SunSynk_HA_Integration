@@ -269,13 +269,15 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
         def _opt(key: str, default: Any = "") -> Any:
             return opts.get(key, data.get(key, default))
 
-        def _opt_str(key: str) -> str:
+        def _opt_str(key: str) -> str | None:
             # Tariff fields are stored as int/float once saved (see
             # _parse_tariff_fields), but redisplayed here as plain `str`
-            # form fields — always stringify so the schema default never
-            # disagrees with its own validator.
+            # form fields. Shown as a suggested value, not a default: Home
+            # Assistant leaves a cleared field out of the submission, and a
+            # default would then put the old value straight back, so a field
+            # could never be cleared (#21: cleared active hours saved as 0).
             value = _opt(key, "")
-            return "" if value == "" else str(value)
+            return None if value in ("", None) else str(value)
 
         schema = vol.Schema(
             {
@@ -317,36 +319,44 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                 ): EntitySelector(EntitySelectorConfig(domain=["sensor", "input_number"])),
                 # Cheap-rate charging
                 vol.Optional(
-                    CONF_CHEAP_THRESHOLD, default=_opt_str(CONF_CHEAP_THRESHOLD)
+                    CONF_CHEAP_THRESHOLD,
+                    description={"suggested_value": _opt_str(CONF_CHEAP_THRESHOLD)},
                 ): str,
                 vol.Optional(
-                    CONF_CHEAP_CHARGE_CURRENT, default=_opt_str(CONF_CHEAP_CHARGE_CURRENT)
+                    CONF_CHEAP_CHARGE_CURRENT,
+                    description={"suggested_value": _opt_str(CONF_CHEAP_CHARGE_CURRENT)},
                 ): str,
                 vol.Optional(
-                    CONF_NORMAL_CHARGE_CURRENT, default=_opt_str(CONF_NORMAL_CHARGE_CURRENT)
+                    CONF_NORMAL_CHARGE_CURRENT,
+                    description={"suggested_value": _opt_str(CONF_NORMAL_CHARGE_CURRENT)},
                 ): str,
                 vol.Optional(
                     CONF_CHEAP_TARGET_SOC, default=_opt(CONF_CHEAP_TARGET_SOC, DEFAULT_CHEAP_TARGET_SOC)
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=100)),
                 # Expensive-rate discharging
                 vol.Optional(
-                    CONF_EXPENSIVE_THRESHOLD, default=_opt_str(CONF_EXPENSIVE_THRESHOLD)
+                    CONF_EXPENSIVE_THRESHOLD,
+                    description={"suggested_value": _opt_str(CONF_EXPENSIVE_THRESHOLD)},
                 ): str,
                 vol.Optional(
-                    CONF_PEAK_DISCHARGE_CURRENT, default=_opt_str(CONF_PEAK_DISCHARGE_CURRENT)
+                    CONF_PEAK_DISCHARGE_CURRENT,
+                    description={"suggested_value": _opt_str(CONF_PEAK_DISCHARGE_CURRENT)},
                 ): str,
                 vol.Optional(
-                    CONF_NORMAL_DISCHARGE_CURRENT, default=_opt_str(CONF_NORMAL_DISCHARGE_CURRENT)
+                    CONF_NORMAL_DISCHARGE_CURRENT,
+                    description={"suggested_value": _opt_str(CONF_NORMAL_DISCHARGE_CURRENT)},
                 ): str,
                 vol.Optional(
                     CONF_DISCHARGE_MIN_SOC, default=_opt(CONF_DISCHARGE_MIN_SOC, DEFAULT_DISCHARGE_MIN_SOC)
                 ): vol.All(vol.Coerce(int), vol.Range(min=0, max=90)),
                 # Scheduler (both blank = always active)
                 vol.Optional(
-                    CONF_TARIFF_START_HOUR, default=_opt_str(CONF_TARIFF_START_HOUR)
+                    CONF_TARIFF_START_HOUR,
+                    description={"suggested_value": _opt_str(CONF_TARIFF_START_HOUR)},
                 ): str,
                 vol.Optional(
-                    CONF_TARIFF_END_HOUR, default=_opt_str(CONF_TARIFF_END_HOUR)
+                    CONF_TARIFF_END_HOUR,
+                    description={"suggested_value": _opt_str(CONF_TARIFF_END_HOUR)},
                 ): str,
                 # Price quality
                 vol.Optional(

@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.12] - 2026-10-14
+
+### Fixed
+- **Tariff Manager fields couldn't be cleared in Configure.** Clearing a threshold, current or active hour and saving put the old value straight back, so cleared active hours came back as "0 to 0". Cleared fields now stay cleared. (#21)
+
 ## [1.9.11] - 2026-10-13
 
 ### Fixed
