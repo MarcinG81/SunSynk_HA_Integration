@@ -5,9 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Option: allow only administrators to use control actions.** A new tick in **Configure**, off by default. When ticked, the Sunsynk actions (`force_charge`, `force_discharge`, `set_work_mode`, `set_virtual_slot`, `clear_virtual_slot`) can only be run by Home Assistant administrators; automations and scripts are unaffected. Only administrators can open Configure, so only they can change it.
+
 ### Fixed
+- **Battery BMS SOC showed a made-up percentage** when the BMS wasn't communicating (BMS voltage 0). It now shows unknown.
+- **A price of "inf" or "nan" counted as valid**, and "inf" would have read as above every threshold and started a discharge. It's now treated as invalid price data.
+- **Login and settings writes no longer follow HTTP redirects**, so your credentials or access token can never be sent on to another address.
 - **Tariff Manager couldn't discharge on some inverters: "Unsafe cached setting blocks write of dischargeCurrent".** Since beta.1 the integration refused to send a battery setting change if any *other* battery setting your inverter reports looked out of range. A parallel master reporting a charge current of 1040 therefore blocked every battery change, including Tariff Manager's discharge current, the moment the export price crossed the threshold. Other settings are your inverter's own values and are now sent back exactly as it reports them, as the Sunsynk portal does; only the value being changed is checked. Stable 1.9 was never affected. (#21)
 - **Tariff Manager errors were logged as "Task exception was never retrieved"** on every refresh. They're now logged once per evaluation with a clear message. (#21)
+
+### Thanks
+- The administrator option, the BMS SOC, non-finite price and redirect fixes come from a security and safety review by **David ([@davidatjourney](https://github.com/davidatjourney))**. Thank you!
 
 ## [2.0.0-beta.10] - 2026-10-14
 
