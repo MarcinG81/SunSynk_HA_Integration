@@ -88,7 +88,9 @@
       "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Ongeldige reeksnommer(s). Voer ten minste een reeksnommer in.",
       "invalid_forecast_config": "Sonsenergie-voorspelling vereis geldige breedtegraad, lengtegraad en paneel-kWp.",
-      "invalid_tariff_config": "Tariefkonfigurasie-fout. Goedkoop laaing benodig drempel + laaistroomsterkte + normale stroomsterkte (al drie). Ontlaaing benodig drempel + piekstroomsterkte + normale stroomsterkte (al drie)."
+      "invalid_tariff_config": "Tariefkonfigurasie-fout. Goedkoop laaing benodig drempel + laaistroomsterkte + normale stroomsterkte (al drie). Ontlaaing benodig drempel + piekstroomsterkte + normale stroomsterkte (al drie).",
+      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
+      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
     }
   },
   "issues": {

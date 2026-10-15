@@ -88,7 +88,9 @@
       "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Invalid serial number(s). Enter at least one serial.",
       "invalid_forecast_config": "Solar forecast requires valid latitude, longitude and panel kWp (all numeric, kWp > 0).",
-      "invalid_tariff_config": "Tariff configuration error. Cheap charging needs threshold + charge current + normal current (all three). Discharge needs threshold + peak current + normal current (all three)."
+      "invalid_tariff_config": "Tariff configuration error. Cheap charging needs threshold + charge current + normal current (all three). Discharge needs threshold + peak current + normal current (all three).",
+      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
+      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
     }
   },
   "issues": {

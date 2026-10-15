@@ -88,7 +88,9 @@
       "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "序列号无效，请至少输入一个序列号。",
       "invalid_forecast_config": "光伏发电预测需要有效的纬度、经度和组件峰值功率（kWp）。",
-      "invalid_tariff_config": "电价配置错误。谷电充电需要阈值 + 充电电流 + 正常电流（三者缺一不可）。放电需要阈值 + 峰值电流 + 正常电流（三者缺一不可）。"
+      "invalid_tariff_config": "电价配置错误。谷电充电需要阈值 + 充电电流 + 正常电流（三者缺一不可）。放电需要阈值 + 峰值电流 + 正常电流（三者缺一不可）。",
+      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
+      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
     }
   },
   "issues": {

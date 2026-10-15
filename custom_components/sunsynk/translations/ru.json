@@ -88,7 +88,9 @@
       "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Неверный серийный номер(а). Введите хотя бы один серийный номер.",
       "invalid_forecast_config": "Прогноз солнечной генерации требует корректных широты, долготы и мощности панелей в кВп.",
-      "invalid_tariff_config": "Ошибка конфигурации тарифа. Дешёвая зарядка требует порог + ток заряда + нормальный ток (все три). Разряд требует порог + пиковый ток + нормальный ток (все три)."
+      "invalid_tariff_config": "Ошибка конфигурации тарифа. Дешёвая зарядка требует порог + ток заряда + нормальный ток (все три). Разряд требует порог + пиковый ток + нормальный ток (все три).",
+      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
+      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
     }
   },
   "issues": {

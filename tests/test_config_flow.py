@@ -70,6 +70,7 @@ def _options_flow():
     flow.hass = SimpleNamespace(
         config=SimpleNamespace(latitude=51.0, longitude=-1.0),
         config_entries=MagicMock(),
+        data={},
     )
     flow.hass.config_entries.async_entries.return_value = []
     return flow
@@ -359,3 +360,68 @@ async def test_unset_tariff_text_fields_have_no_suggestion():
     keys = {str(key): key for key in form["data_schema"].schema}
 
     assert keys["tariff_start_hour"].description == {"suggested_value": None}
+
+
+# ── Tariff Manager currents above what the hardware uses ────────────────────
+
+
+def _tariff_input(**updates):
+    # No new password: credentials unchanged, so nothing is contacted.
+    return _user_input(
+        password="",
+        price_entity="sensor.price",
+        cheap_threshold="0.1",
+        cheap_charge_current="150",
+        normal_charge_current="50",
+        expensive_threshold="0.3",
+        peak_discharge_current="200",
+        normal_discharge_current="50",
+        **updates,
+    )
+
+
+def _running_coordinator(flow, data):
+    coordinator = MagicMock(data=data, write_target_serials=list(data))
+    flow.hass.data = {"sunsynk": {"entry": coordinator}}
+
+
+@pytest.mark.asyncio
+async def test_options_flow_refuses_currents_above_the_hardware_limit():
+    flow = _options_flow()
+    _running_coordinator(
+        flow,
+        {
+            "INV1": {
+                "settings": {
+                    "batteryMaxCurrentCharge": 120,
+                    "batteryMaxCurrentDischarge": 120,
+                },
+                "battery": {"maxDischargeCurrentLimit": 100},
+            }
+        },
+    )
+
+    result = await flow.async_step_init(_tariff_input())
+
+    assert result["type"] == "form"
+    assert result["errors"] == {
+        "cheap_charge_current": "charge_current_above_limit",
+        "peak_discharge_current": "discharge_current_above_limit",
+    }
+    assert result["description_placeholders"] == {
+        "charge_max": "120",
+        "charge_limits": "inverter 120 A",
+        "discharge_max": "100",
+        "discharge_limits": "inverter 120 A, battery BMS 100 A",
+    }
+
+
+@pytest.mark.asyncio
+async def test_options_flow_accepts_currents_when_limits_are_unknown():
+    flow = _options_flow()
+    _running_coordinator(flow, {"INV1": {"settings": {}, "battery": {}}})
+
+    result = await flow.async_step_init(_tariff_input())
+
+    assert result["type"] == "create_entry"
+    assert result["data"]["peak_discharge_current"] == 200

@@ -88,7 +88,9 @@
       "already_configured": "To konto Sunsynk jest już skonfigurowane.",
       "invalid_serials": "Nieprawidłowy numer(y) seryjny. Podaj co najmniej jeden numer.",
       "invalid_forecast_config": "Prognoza słoneczna wymaga prawidłowej szerokości, długości geograficznej i mocy paneli kWp.",
-      "invalid_tariff_config": "Błąd konfiguracji taryfy. Ładowanie wymaga progu + prądu ładowania + normalnego prądu (wszystkich trzech). Rozładowanie wymaga progu + szczytowego prądu + normalnego prądu."
+      "invalid_tariff_config": "Błąd konfiguracji taryfy. Ładowanie wymaga progu + prądu ładowania + normalnego prądu (wszystkich trzech). Rozładowanie wymaga progu + szczytowego prądu + normalnego prądu.",
+      "charge_current_above_limit": "Za dużo: Twój system ładuje baterię prądem najwyżej {charge_max} A ({charge_limits}). Wyższa wartość nic nie zmienia.",
+      "discharge_current_above_limit": "Za dużo: Twój system rozładowuje baterię prądem najwyżej {discharge_max} A ({discharge_limits}). Wyższa wartość nic nie zmienia."
     }
   },
   "issues": {

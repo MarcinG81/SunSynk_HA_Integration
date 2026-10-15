@@ -14,7 +14,12 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ConfigEntryError, Unauthorized, UnknownUser
+from homeassistant.exceptions import (
+    ConfigEntryError,
+    ServiceValidationError,
+    Unauthorized,
+    UnknownUser,
+)
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 
@@ -53,11 +58,14 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
+from .current_limits import current_limit, describe_limit
 from .dashboard import build_dashboard
 from .helpers import options_snapshot_key
 from .tariff import TariffChargingManager
 from .virtual_slots import (
     MAX_VIRTUAL_SLOTS,
+    MODE_CHARGE,
+    MODE_DISCHARGE,
     STORAGE_VERSION,
     WEEKDAY_NAMES,
     VirtualSlot,
@@ -259,6 +267,20 @@ async def _async_ensure_control_allowed(
         raise Unauthorized(context=call.context)
 
 
+def _ensure_current_within_limit(
+    coordinator: SunsynkCoordinator, target: str, direction: str, current: int | None
+) -> None:
+    """Refuse a current the inverter or battery won't use, saying what will."""
+    if not current:
+        return
+    limit = current_limit(coordinator.data, [target], direction)
+    if limit.maximum is not None and current > limit.maximum:
+        raise ServiceValidationError(
+            f"{current} A is too high: inverter {target} {direction}s the battery "
+            f"at no more than {limit.maximum} A ({describe_limit(limit)})"
+        )
+
+
 def _find_virtual_slot_scheduler(
     hass: HomeAssistant, serial: str
 ) -> VirtualSlotScheduler | None:
@@ -378,6 +400,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         if coordinator is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
         target = coordinator.resolve_write_target(serial)
+        _ensure_current_within_limit(
+            coordinator, target, "charge", call.data["current"]
+        )
         await coordinator.async_write_setting(
             target, "chargeCurrent", call.data["current"]
         )
@@ -389,6 +414,9 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         if coordinator is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
         target = coordinator.resolve_write_target(serial)
+        _ensure_current_within_limit(
+            coordinator, target, "discharge", call.data["current"]
+        )
         await coordinator.async_write_setting(
             target, "dischargeCurrent", call.data["current"]
         )
@@ -405,11 +433,19 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async def _handle_set_virtual_slot(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
         await _async_ensure_control_allowed(hass, call, serial)
-        if _find_coordinator(hass, serial) is None:
+        coordinator = _find_coordinator(hass, serial)
+        if coordinator is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
         scheduler = _find_virtual_slot_scheduler(hass, serial)
         if scheduler is None:
             raise ValueError("Virtual slot scheduler not initialised for this inverter")
+        if call.data["mode"] in (MODE_CHARGE, MODE_DISCHARGE):
+            _ensure_current_within_limit(
+                coordinator,
+                scheduler.serial,
+                call.data["mode"],
+                call.data.get("current"),
+            )
         weekdays = call.data.get("weekdays") or list(WEEKDAY_NAMES)
         slot = VirtualSlot(
             slot_id=call.data["slot_id"],

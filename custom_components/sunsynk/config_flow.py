@@ -51,6 +51,7 @@ from .const import (
     MAX_REFRESH_INTERVAL,
     MIN_REFRESH_INTERVAL,
 )
+from .current_limits import current_limit, describe_limit
 from .write_validation import MAX_CURRENT_A
 
 _LOGGER = logging.getLogger(__name__)
@@ -159,6 +160,7 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {}
         opts = self._config_entry.options
         data = self._config_entry.data
 
@@ -230,6 +232,8 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                         tariff_fields.update(self._parse_tariff_fields(user_input))
                     except (ValueError, TypeError):
                         errors["base"] = "invalid_tariff_config"
+                    else:
+                        self._check_current_limits(tariff_fields, errors, placeholders)
 
                 if not errors:
                     credentials_changed = (
@@ -454,7 +458,38 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             data_schema=schema,
             errors=errors,
+            description_placeholders=placeholders,
         )
+
+    def _check_current_limits(
+        self,
+        tariff_fields: dict[str, Any],
+        errors: dict[str, str],
+        placeholders: dict[str, str],
+    ) -> None:
+        """Refuse Tariff Manager currents above what the hardware will use.
+
+        Checked against the inverters' last poll, so only while the
+        integration is running; a value the hardware reports as unknown is
+        never a reason to refuse.
+        """
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id)
+        if coordinator is None:
+            return
+        serials = list(coordinator.write_target_serials)
+        for direction, fields in (
+            ("charge", (CONF_CHEAP_CHARGE_CURRENT, CONF_NORMAL_CHARGE_CURRENT)),
+            ("discharge", (CONF_PEAK_DISCHARGE_CURRENT, CONF_NORMAL_DISCHARGE_CURRENT)),
+        ):
+            limit = current_limit(coordinator.data, serials, direction)
+            if limit.maximum is None:
+                continue
+            for field in fields:
+                value = tariff_fields.get(field)
+                if value is not None and value > limit.maximum:
+                    errors[field] = f"{direction}_current_above_limit"
+                    placeholders[f"{direction}_max"] = str(limit.maximum)
+                    placeholders[f"{direction}_limits"] = describe_limit(limit)
 
     @staticmethod
     def _parse_tariff_fields(user_input: dict[str, Any]) -> dict[str, Any]:

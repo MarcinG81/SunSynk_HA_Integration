@@ -254,3 +254,64 @@ async def test_failed_platform_unload_restarts_listeners_without_restoring():
     tariff.async_shutdown.assert_not_awaited()
     scheduler.async_shutdown.assert_not_awaited()
     coordinator.async_close.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_services_refuse_currents_above_the_hardware_limit():
+    from homeassistant.exceptions import ServiceValidationError
+
+    coordinator = _coordinator()
+    coordinator.data["MASTER1"]["settings"] = {
+        "batteryMaxCurrentCharge": 120,
+        "batteryMaxCurrentDischarge": 120,
+    }
+    coordinator.data["MASTER1"]["battery"] = {"maxDischargeCurrentLimit": 100}
+    coordinator.async_write_setting = AsyncMock()
+    scheduler = MagicMock(serial="MASTER1", async_set_slot=AsyncMock())
+    handlers = {}
+    hass = MagicMock()
+    hass.data = {DOMAIN: {"entry": coordinator, "entry_vslots": {"MASTER1": scheduler}}}
+    hass.http.async_register_static_paths = AsyncMock()
+    hass.services.async_register.side_effect = (
+        lambda domain, service, handler, schema: handlers.setdefault(service, handler)
+    )
+    await async_setup(hass, {})
+
+    def slot(mode, current):
+        return SimpleNamespace(
+            data={
+                "serial": "SLAVE1",
+                "slot_id": 1,
+                "start": "16:00",
+                "end": "19:00",
+                "mode": mode,
+                "current": current,
+                "sell_power": 0,
+                "priority": 0,
+                "enabled": True,
+            }
+        )
+
+    with pytest.raises(ServiceValidationError, match="no more than 120 A"):
+        await handlers["force_charge"](
+            SimpleNamespace(data={"serial": "SLAVE1", "current": 150})
+        )
+    with pytest.raises(ServiceValidationError, match="battery BMS 100 A"):
+        await handlers["force_discharge"](
+            SimpleNamespace(data={"serial": "SLAVE1", "current": 101})
+        )
+    with pytest.raises(ServiceValidationError, match="discharges the battery"):
+        await handlers["set_virtual_slot"](slot("discharge", 200))
+    coordinator.async_write_setting.assert_not_awaited()
+    scheduler.async_set_slot.assert_not_awaited()
+
+    # Within the limit, stopping (0 A) and idle slots are never refused.
+    await handlers["force_discharge"](
+        SimpleNamespace(data={"serial": "SLAVE1", "current": 100})
+    )
+    await handlers["force_charge"](
+        SimpleNamespace(data={"serial": "SLAVE1", "current": 0})
+    )
+    await handlers["set_virtual_slot"](slot("idle", 200))
+    assert coordinator.async_write_setting.await_count == 2
+    scheduler.async_set_slot.assert_awaited_once()

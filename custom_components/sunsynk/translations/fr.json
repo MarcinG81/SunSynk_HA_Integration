@@ -88,7 +88,9 @@
       "already_configured": "This Sunsynk account is already configured.",
       "invalid_serials": "Numéro(s) de série invalide(s). Entrez au moins un numéro de série.",
       "invalid_forecast_config": "La prévision solaire nécessite une latitude, une longitude et une puissance kWc valides.",
-      "invalid_tariff_config": "Erreur de configuration tarifaire. La charge creuse nécessite seuil + courant de charge + courant normal (les trois). La décharge nécessite seuil + courant de pointe + courant normal (les trois)."
+      "invalid_tariff_config": "Erreur de configuration tarifaire. La charge creuse nécessite seuil + courant de charge + courant normal (les trois). La décharge nécessite seuil + courant de pointe + courant normal (les trois).",
+      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
+      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
     }
   },
   "issues": {
