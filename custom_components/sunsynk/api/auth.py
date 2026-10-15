@@ -68,12 +68,19 @@ class SunsynkAuth:
 
         url = f"https://{self._api_server}/oauth/token/new"
         try:
+            # Never follow a redirect with the login payload: it could carry
+            # the credentials to another host. Spotted by David (@davidatjourney).
             async with session.post(
                 url,
                 json=payload,
                 headers={"Content-Type": "application/json"},
                 timeout=aiohttp.ClientTimeout(total=15),
+                allow_redirects=False,
             ) as resp:
+                if 300 <= resp.status < 400:
+                    raise SunsynkAuthError(
+                        f"Login was redirected (HTTP {resp.status}); not following it"
+                    )
                 resp.raise_for_status()
                 data = await resp.json()
 
@@ -91,6 +98,9 @@ class SunsynkAuth:
 
         except aiohttp.ClientError as err:
             raise SunsynkAuthError(f"Connection error during authentication: {err}") from err
+        except TimeoutError as err:
+            # aiohttp's total timeout is not a ClientError.
+            raise SunsynkAuthError("Timed out during authentication") from err
 
     async def _async_get_public_key(self, session: aiohttp.ClientSession) -> str:
         nonce = _get_nonce()
@@ -108,7 +118,7 @@ class SunsynkAuth:
                 resp.raise_for_status()
                 data = await resp.json()
                 return data.get("data", "")
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.error("Failed to get public key: %s", err)
             return ""
 

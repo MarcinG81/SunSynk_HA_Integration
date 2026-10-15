@@ -732,3 +732,69 @@ class TestWriteTargetSerials:
         coordinator = _parallel_coordinator()
         coordinator.data["MASTER1"]["inverter"]["equipMode"] = 0
         assert self._get(coordinator) == ["SLAVE1", "MASTER1"]
+
+
+
+# ── Two parallel groups and write-confirmation timeouts (backported) ───────
+
+
+def _two_groups(plant_b=2):
+    return SimpleNamespace(
+        serials=["master_A", "slave_A", "master_B", "slave_B"],
+        data={
+            serial: {
+                "settings": {"parallel": 1, "equipMode": role},
+                "inverter": {"plant": {"id": plant}},
+            }
+            for serial, role, plant in [
+                ("master_A", 1, 1),
+                ("slave_A", 0, 1),
+                ("master_B", 1, plant_b),
+                ("slave_B", 0, plant_b),
+            ]
+        },
+    )
+
+
+def test_slave_routes_to_the_master_of_its_own_plant():
+    coordinator = _two_groups()
+
+    assert SunsynkCoordinator._resolve_parallel_write_target(coordinator, "slave_B", "x") == "master_B"
+    assert SunsynkCoordinator.write_target_serials.fget(coordinator) == ["master_A", "master_B"]
+
+
+def test_slave_with_two_possible_masters_is_not_redirected():
+    coordinator = _two_groups(plant_b=1)
+
+    assert SunsynkCoordinator._resolve_parallel_write_target(coordinator, "slave_B", "x") == "slave_B"
+    assert "slave_B" in SunsynkCoordinator.write_target_serials.fget(coordinator)
+
+
+# The autouse fixture above replaces confirmation with a mock; keep the real one.
+_REAL_CONFIRM_WRITE = SunsynkCoordinator._async_confirm_write
+
+
+@pytest.mark.asyncio
+async def test_failed_confirmation_never_leaves_an_overlay_behind():
+    obj = SimpleNamespace(data={"SN1": {"settings": {}}}, hass=MagicMock())
+    obj._unconfirmed_writes = {"SN1": {"chargeCurrent": (1, 100)}}
+    with (
+        patch("custom_components.sunsynk.coordinator._VERIFY_WRITE_OFFSETS", (0,)),
+        patch.object(
+            SunsynkCoordinator,
+            "_async_read_settings",
+            AsyncMock(side_effect=RuntimeError("unexpected")),
+        ),
+    ):
+        await _REAL_CONFIRM_WRITE(obj, "SN1", "chargeCurrent", 1, 100)
+
+    assert obj._unconfirmed_writes["SN1"] == {}
+
+
+
+def test_a_master_of_unknown_plant_is_not_chosen_once_plants_are_known():
+    coordinator = _two_groups()
+    coordinator.data["master_B"]["inverter"]["plant"] = {}
+
+    assert SunsynkCoordinator._resolve_parallel_write_target(coordinator, "slave_B", "x") == "slave_B"
+    assert SunsynkCoordinator._resolve_parallel_write_target(coordinator, "slave_A", "x") == "master_A"

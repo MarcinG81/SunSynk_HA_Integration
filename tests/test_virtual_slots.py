@@ -450,7 +450,9 @@ async def test_price_override_discharge_enables_sell_permission(mock_hass, mock_
     written = _written(mock_coordinator)
     assert sched.active_source == "price_override"
     assert ("sellTime1on", 1) in written
-    assert ("time6on", 0) in written
+    # Nothing scheduled to arm: both owned slots carry the live override,
+    # so neither can start something else while it is in force.
+    assert ("sellTime6on", 1) in written
 
 
 # ── Price-override discharge must not cap export at 0 W (#21) ───────────────
@@ -558,11 +560,59 @@ async def test_window_uses_deye_sell_flag_and_battery_low_capacity(mock_hass, mo
     await sched._async_bootstrap()
 
     windows = [c.args[1] for c in mock_coordinator.async_write_settings.call_args_list]
-    idle = next(w for w in windows if w.get("sellTime1") == "00:00")
-    discharge = next(w for w in windows if w.get("sellTime6") == "20:30")
-    assert idle["sellTime1En"] == 0
-    assert idle["cap1"] == 19
-    assert idle["sellTime1Pac"] == 3600
-    assert discharge["sellTime6En"] == 1
-    assert discharge["sellTime6Pac"] == 3000
+    # Idle since yesterday's window ended at 21:00: the idle slot starts then
+    # (slot 6, round to 20:30) and the discharge goes on slot 1.
+    idle = next(w for w in windows if w.get("sellTime6") == "21:00")
+    discharge = next(w for w in windows if w.get("sellTime1") == "20:30")
+    assert idle["sellTime6En"] == 0
+    assert idle["cap6"] == 19
+    assert idle["sellTime6Pac"] == 3600
+    assert discharge["sellTime1En"] == 1
+    assert discharge["sellTime1Pac"] == 3000
     assert not any("sellTime1on" in w or "sellTime6on" in w for w in windows)
+
+
+
+# ── The timer matches the resolver after a window ends (backported) ────────
+
+
+def _physical_mode(plan, now):
+    hhmm = now.strftime("%H:%M")
+    in_slot1 = plan.slot1_start <= hhmm < plan.slot6_start
+    return (plan.slot1 if in_slot1 else plan.slot6).mode
+
+
+@pytest.mark.parametrize(
+    ("weekdays", "hour"),
+    [
+        (frozenset(range(7)), 12),
+        (frozenset(range(7)), 13),
+        (frozenset(range(7)), 23),
+        (frozenset(range(7)), 9),
+        (frozenset({0}), 13),
+        (frozenset({4}), 13),
+    ],
+)
+def test_timers_are_idle_outside_the_window(mock_hass, mock_coordinator, weekdays, hour):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        1, "10:00", "12:00", MODE_DISCHARGE, weekdays=weekdays, target_soc=20
+    )
+    sched._slots[2] = VirtualSlot(3, "01:00", "02:00", MODE_CHARGE, enabled=False)
+    now = _dt(2024, 1, 4, hour, 0)
+
+    plan = sched._plan(now)
+
+    assert plan.active_resolution.mode == MODE_IDLE
+    assert _physical_mode(plan, now) == MODE_IDLE
+
+
+def test_window_more_than_a_day_away_is_not_armed(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        1, "10:00", "12:00", MODE_DISCHARGE, weekdays=frozenset({0}), target_soc=20
+    )
+
+    plan = sched._plan(_dt(2024, 1, 4, 13, 0))
+
+    assert plan.slot1.mode == plan.slot6.mode == MODE_IDLE

@@ -85,16 +85,15 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         write loop; keep using `self.serials` for reads (fetching data
         still needs every configured serial).
         """
-        roles = {
-            serial: SunsynkCoordinator._parallel_role(self, serial)
+        # A slave is dropped only when it has a master to cover it. With no
+        # confirmed master (e.g. a momentary bad poll) or an ambiguous one,
+        # it resolves to itself and stays.
+        return [
+            serial
             for serial in self.serials
-        }
-        if "master" not in roles.values():
-            # No confirmed master anywhere (e.g. a momentary bad poll) —
-            # don't guess at dropping a serial with nothing left to cover it.
-            return list(self.serials)
-
-        return [serial for serial in self.serials if roles[serial] != "slave"]
+            if SunsynkCoordinator._resolve_parallel_write_target(self, serial, "")
+            == serial
+        ]
 
     def _parallel_role(self, serial: str) -> str | None:
         """Return "master", "slave", or None outside a parallel group.
@@ -212,13 +211,39 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         if SunsynkCoordinator._parallel_role(self, serial) != "slave":
             return serial
 
-        for other_serial in self.serials:
-            if other_serial == serial:
-                continue
-            if SunsynkCoordinator._parallel_role(self, other_serial) == "master":
-                return other_serial
-
+        # Only a master of the slave's own plant can be its group's master;
+        # one account can hold several installations.
+        plant = SunsynkCoordinator._plant_id(self, serial)
+        all_masters = [
+            other_serial
+            for other_serial in self.serials
+            if other_serial != serial
+            and SunsynkCoordinator._parallel_role(self, other_serial) == "master"
+        ]
+        plants = {m: SunsynkCoordinator._plant_id(self, m) for m in all_masters}
+        if plant is None or all(p is None for p in plants.values()):
+            # Plants not known yet (e.g. before the first plant lookup).
+            masters = all_masters
+        else:
+            # Once plants are known, only an exact match counts: a master
+            # whose plant is unknown could belong to another installation.
+            masters = [m for m in all_masters if plants[m] == plant]
+        if len(masters) == 1:
+            return masters[0]
+        if masters:
+            # Never guess between groups: the slave's own write is reverted
+            # by its master, a write to another group's master is not.
+            _LOGGER.debug(
+                "Not redirecting %s: more than one possible master (%s)",
+                serial,
+                ", ".join(masters),
+            )
         return serial
+
+    def _plant_id(self, serial: str) -> str | None:
+        plant = (self.data or {}).get(serial, {}).get("inverter", {}).get("plant") or {}
+        plant_id = plant.get("id") if isinstance(plant, dict) else None
+        return str(plant_id) if plant_id not in (None, "") else None
 
     async def async_write_setting(
         self, serial: str, setting_key: str, value: Any
@@ -396,6 +421,22 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         after the last offset. A newer write of the same setting supersedes
         this confirmation.
         """
+        try:
+            await SunsynkCoordinator._async_confirm_write_until_settled(
+                self, serial, setting_key, write_id, value
+            )
+        except Exception:
+            _LOGGER.exception("Could not confirm write of %s for %s", setting_key, serial)
+        finally:
+            # Whatever ended the confirmation, never leave this value
+            # overlaying fresh polls with nothing left to settle it. A newer
+            # write of the same key has its own id and is left alone.
+            if SunsynkCoordinator._is_unconfirmed(self, serial, setting_key, write_id):
+                del self._unconfirmed_writes[serial][setting_key]
+
+    async def _async_confirm_write_until_settled(
+        self, serial: str, setting_key: str, write_id: int, value: Any
+    ) -> None:
         loop = asyncio.get_running_loop()
         started = loop.time()
         actual: Any = None

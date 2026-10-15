@@ -66,6 +66,9 @@ class SunsynkClient:
             raise SunsynkApiError(f"HTTP {err.status} for {url}") from err
         except aiohttp.ClientError as err:
             raise SunsynkApiError(f"Connection error for {url}: {err}") from err
+        except TimeoutError as err:
+            # aiohttp's total timeout is not a ClientError.
+            raise SunsynkApiError(f"Timed out waiting for {url}") from err
 
     async def _post(
         self,
@@ -75,13 +78,21 @@ class SunsynkClient:
         params: dict | None = None,
     ) -> dict[str, Any]:
         try:
+            # Writes carry the bearer token and a settings payload; don't let
+            # a redirect send either to another host.
             async with session.post(
                 url,
                 headers=self._headers(),
                 json=payload,
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=15),
+                allow_redirects=False,
             ) as resp:
+                if 300 <= resp.status < 400:
+                    raise SunsynkApiError(
+                        f"Write to {url} was redirected (HTTP {resp.status}); "
+                        "not following it"
+                    )
                 resp.raise_for_status()
                 data = await resp.json()
 
@@ -94,6 +105,9 @@ class SunsynkClient:
             raise SunsynkApiError(f"HTTP {err.status} for {url}") from err
         except aiohttp.ClientError as err:
             raise SunsynkApiError(f"Connection error for {url}: {err}") from err
+        except TimeoutError as err:
+            # aiohttp's total timeout is not a ClientError.
+            raise SunsynkApiError(f"Timed out waiting for {url}") from err
 
     async def async_get_inverter_info(
         self, session: aiohttp.ClientSession, serial: str

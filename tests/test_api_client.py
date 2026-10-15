@@ -79,6 +79,13 @@ class TestGet:
         with pytest.raises(SunsynkApiError, match="Connection error"):
             await client._get(session, "https://api.sunsynk.net/x")
 
+    @pytest.mark.asyncio
+    async def test_timeout_is_an_api_error(self, client):
+        session = fake_session()
+        session.get.side_effect = TimeoutError()
+        with pytest.raises(SunsynkApiError, match="Timed out"):
+            await client._get(session, "https://api.sunsynk.net/x")
+
 
 class TestPost:
     @pytest.mark.asyncio
@@ -152,6 +159,13 @@ class TestEndpointUrls:
             "https://api.sunsynk.net/api/v1/common/setting/SN1/set"
         )
         assert session.post.call_args.kwargs["json"] == {"chargeCurrent": 100}
+        assert session.post.call_args.kwargs["allow_redirects"] is False
+
+    @pytest.mark.asyncio
+    async def test_redirected_write_is_refused(self, client: SunsynkClient):
+        session = fake_session(post=FakeResponse({}, status=302))
+        with pytest.raises(SunsynkApiError, match="redirected"):
+            await client.async_write_settings(session, "SN1", {"chargeCurrent": 100})
 
     @pytest.mark.asyncio
     async def test_get_plant_info_url(self, client: SunsynkClient):

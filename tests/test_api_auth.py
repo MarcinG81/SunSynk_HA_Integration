@@ -161,6 +161,19 @@ class TestAsyncAuthenticate:
             await auth._async_authenticate(session)
 
     @pytest.mark.asyncio
+    async def test_redirected_login_is_not_followed(self):
+        _, public_body = _public_key_body()
+        auth = SunsynkAuth("api.sunsynk.net", "user", "pass")
+        session = fake_session(
+            get=FakeResponse({"msg": "Success", "data": public_body}),
+            post=FakeResponse({}, status=302),
+        )
+
+        with pytest.raises(SunsynkAuthError, match="redirected"):
+            await auth._async_authenticate(session)
+        assert session.post.call_args.kwargs["allow_redirects"] is False
+
+    @pytest.mark.asyncio
     async def test_raises_on_post_connection_error(self):
         _, public_body = _public_key_body()
         auth = SunsynkAuth("api.sunsynk.net", "user", "pass")
@@ -169,6 +182,16 @@ class TestAsyncAuthenticate:
         session.post.side_effect = aiohttp.ClientConnectionError("boom")
 
         with pytest.raises(SunsynkAuthError, match="Connection error"):
+            await auth._async_authenticate(session)
+
+    @pytest.mark.asyncio
+    async def test_login_timeout_is_an_auth_error(self):
+        _, public_body = _public_key_body()
+        auth = SunsynkAuth("api.sunsynk.net", "user", "pass")
+        session = fake_session(get=FakeResponse({"msg": "Success", "data": public_body}))
+        session.post.side_effect = TimeoutError()
+
+        with pytest.raises(SunsynkAuthError, match="Timed out"):
             await auth._async_authenticate(session)
 
 

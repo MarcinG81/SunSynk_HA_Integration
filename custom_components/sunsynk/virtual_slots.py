@@ -51,6 +51,10 @@ MAX_VIRTUAL_SLOTS = 10
 # The only pair of physical Sunsynk timer slots that can wrap past
 # midnight (Timer 6 -> Timer 1) — see module docstring.
 PHYSICAL_SLOTS = (1, 6)
+# A boundary is armed on the daily timers only once it is less than a day
+# away, and an idle slot starts at least this long after the previous day's
+# occurrence of the upcoming boundary.
+_ARM_MARGIN = timedelta(minutes=1)
 MODE_CHARGE = "charge"
 MODE_DISCHARGE = "discharge"
 MODE_IDLE = "idle"
@@ -440,6 +444,19 @@ class VirtualSlotScheduler:
                 continue
         return self._DEFAULT_UNCAPPED_SELL_POWER
 
+    def _last_window_end(self, at: datetime) -> datetime | None:
+        """End of the latest window that ended at or before `at`."""
+        ends = []
+        for slot in self._slots.values():
+            if not slot.enabled or not slot.weekdays:
+                continue
+            hh, mm = _parse_hhmm(slot.start)
+            start = max(_most_recent_occurrence(at, wd, hh, mm) for wd in slot.weekdays)
+            end = start + timedelta(minutes=slot.duration_minutes)
+            if end <= at:
+                ends.append(end)
+        return max(ends, default=None)
+
     def _plan(self, now: datetime) -> _TickPlan:
         """Decide what belongs on physical slot 1 vs slot 6.
 
@@ -452,13 +469,37 @@ class VirtualSlotScheduler:
         override = self._resolve_override()
 
         active_resolution = override if override is not None else virt_resolution
-        active_hhmm = window_start.strftime("%H:%M") if window_start is not None else "00:00"
 
-        if next_boundary is not None:
+        # The timers repeat daily, so a boundary more than a day away can't be
+        # armed yet: its time of day comes round before it does, and would
+        # start that window early. Until it is within a day, both slots hold
+        # whatever is in force now.
+        armable = (
+            next_boundary is not None
+            and next_boundary - now <= timedelta(days=1) - _ARM_MARGIN
+        )
+        if window_start is not None:
+            active_start = window_start
+        elif armable:
+            # Idle since the last window ended. The physical slot runs from
+            # its start to the upcoming one's, so that start must fall within
+            # the day before the upcoming boundary, or "now" lands in the
+            # upcoming slot's range instead.
+            active_start = max(
+                self._last_window_end(now) or datetime.min.replace(tzinfo=now.tzinfo),
+                next_boundary - timedelta(days=1) + _ARM_MARGIN,
+            )
+        else:
+            active_start = None
+        active_hhmm = (
+            active_start.strftime("%H:%M") if active_start is not None else "00:00"
+        )
+
+        if armable:
             upcoming_resolution, _, _ = self._resolve_virtual(next_boundary)
             upcoming_hhmm = next_boundary.strftime("%H:%M")
         else:
-            upcoming_resolution = _IDLE
+            upcoming_resolution = active_resolution
             upcoming_hhmm = "00:00"
 
         if active_hhmm <= upcoming_hhmm:

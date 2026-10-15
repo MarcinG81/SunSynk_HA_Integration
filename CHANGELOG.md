@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.13] - 2026-10-15
+
+### Fixed
+- **Tariff Manager could act on an old or missing battery SOC.** If the last update from Sunsynk failed, or the SOC was missing or out of range, it still made charge and discharge decisions from the old value. It now makes no decision without a current SOC and stops any forced charge or discharge it started.
+- **Turning Tariff Manager off could leave the inverter on forced currents.** If restoring the normal charge and discharge currents failed, it gave up and forgot what it had changed. It now keeps trying until the inverter accepts the normal currents.
+- **Changing the Tariff Manager charge or discharge current while it was already active did nothing** until the next time it activated. The new current is now sent straight away.
+- **Battery SOC from the BMS showed a bogus value when the BMS reported no voltage.** It now shows as unavailable.
+- **An infinite or "nan" price from a tariff sensor was treated as a real price.** It is now ignored.
+- **Logins and settings writes now refuse HTTP redirects**, so your credentials and settings are never sent to another address.
+- **Virtual Slot Scheduler could leave the last window running after it ended.** Between windows, the idle period was set to start at midnight. Once a window had ended, the next one was already armed on the inverter and took over immediately, e.g. a 10:00–12:00 discharge was still in force at 13:00 while the integration showed idle. The idle period now starts when the last window ended. A window more than a day away is only armed the day before, because the inverter's timer repeats every day.
+- **With two parallel groups in one integration entry, a slave's settings could be sent to the other group's master.** A slave is now only redirected to a master on the same plant. If more than one master qualifies, it isn't redirected. A master whose plant isn't known yet is only used before any plant is known.
+- **A Sunsynk cloud timeout could leave a setting showing a value the inverter never accepted.** Timeouts are now handled like any other connection error, and a write that can't be confirmed always gives way to the next refresh.
+
+Thanks to [@davidatjourney](https://github.com/davidatjourney) for the BMS SOC, price and redirect fixes.
+
 ## [1.9.12] - 2026-10-14
 
 ### Fixed

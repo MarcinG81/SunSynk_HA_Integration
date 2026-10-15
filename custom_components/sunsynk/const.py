@@ -1,6 +1,7 @@
 """Constants for the Sunsynk integration."""
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final
@@ -90,6 +91,24 @@ def _model_value(d: dict[str, Any]) -> str | None:
         except (TypeError, ValueError):
             pass
     return brand
+
+
+def _battery_bms_soc_value(d: dict[str, Any]) -> float | None:
+    """BMS SOC, or None when the BMS isn't actually reporting.
+
+    Without BMS communication the API still returns a placeholder bmsSoc
+    alongside a bmsVolt of 0; show that as unknown rather than a misleading
+    percentage. Fix by David (@davidatjourney).
+    """
+    try:
+        soc = float(d.get("bmsSoc"))
+        if "bmsVolt" in d:
+            voltage = float(d["bmsVolt"])
+            if not math.isfinite(voltage) or voltage <= 0:
+                return None
+    except (TypeError, ValueError):
+        return None
+    return soc if math.isfinite(soc) and 0 <= soc <= 100 else None
 
 
 def _battery_soh_value(d: dict[str, Any]) -> float | None:
@@ -384,6 +403,7 @@ BATTERY_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         name="Battery BMS SOC",
         endpoint="battery",
         data_key="bmsSoc",
+        value_fn=_battery_bms_soc_value,
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,

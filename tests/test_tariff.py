@@ -1,6 +1,8 @@
 """Tests for TariffChargingManager state machine."""
 from __future__ import annotations
 
+import asyncio
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -308,7 +310,8 @@ async def test_evaluate_stops_discharging_when_price_drops(mock_hass, mock_coord
 # ── set_enabled ──────────────────────────────────────────────────────────────
 
 
-def test_set_enabled_false_restores_currents(mock_hass, mock_coordinator):
+@pytest.mark.asyncio
+async def test_set_enabled_false_restores_currents(mock_hass, mock_coordinator):
     tasks = []
     mock_hass.async_create_task = lambda coro: tasks.append(coro)
     mgr = _make_manager(mock_hass, mock_coordinator, normal_charge=50, normal_discharge=50)
@@ -317,11 +320,15 @@ def test_set_enabled_false_restores_currents(mock_hass, mock_coordinator):
     mgr._discharging_active = True
 
     mgr.set_enabled(False)
-
     assert not mgr.is_enabled
+    for task in tasks:
+        if asyncio.iscoroutine(task):
+            await task
+
     assert not mgr._charging_active
     assert not mgr._discharging_active
-    assert len(tasks) >= 2  # at least charge + discharge restore tasks created
+    mock_coordinator.async_write_setting.assert_any_await("TEST123", "chargeCurrent", 50)
+    mock_coordinator.async_write_setting.assert_any_await("TEST123", "dischargeCurrent", 50)
 
 
 def test_set_enabled_notifies_listeners(mock_hass, mock_coordinator):
@@ -528,3 +535,97 @@ def test_equal_start_and_end_hour_means_the_whole_day(mock_hass, mock_coordinato
         return_value=datetime(2026, 10, 12, hour, 30, tzinfo=timezone.utc),
     ):
         assert mgr._is_in_schedule() is True
+
+
+
+# ── 1.9.13: SOC safety, restore retries, mid-mode currents, prices ─────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("battery", [{}, {"soc": None}, {"soc": "bad"}, {"soc": "nan"}, {"soc": 150}])
+async def test_unusable_soc_never_reads_as_empty(mock_hass, mock_coordinator, battery):
+    """A missing SOC used to read as 0% and could start a grid charge."""
+    mock_hass.states.get.return_value = _price_state("0.05")
+    mock_coordinator.data["TEST123"]["battery"] = battery
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    mgr._enabled = True
+
+    await mgr._evaluate()
+
+    mock_coordinator.async_write_setting.assert_not_awaited()
+    assert not mgr._charging_active
+
+
+@pytest.mark.asyncio
+async def test_no_decision_on_soc_kept_from_a_failed_refresh(mock_hass, mock_coordinator):
+    mock_hass.states.get.return_value = _price_state("0.05")
+    mock_coordinator.data["TEST123"]["battery"] = {"soc": 50}
+    mock_coordinator.last_update_success = False
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    mgr._enabled = True
+
+    await mgr._evaluate()
+
+    mock_coordinator.async_write_setting.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_active_charge_stops_when_soc_becomes_unavailable(mock_hass, mock_coordinator):
+    mock_hass.states.get.return_value = _price_state("0.05")
+    mock_coordinator.data["TEST123"]["battery"] = {"soc": 50}
+    mgr = _make_manager(mock_hass, mock_coordinator, normal_charge=50)
+    mgr._enabled = True
+    await mgr._evaluate()
+    assert mgr._charging_active
+
+    mock_coordinator.last_update_success = False
+    await mgr._evaluate()
+
+    assert not mgr._charging_active
+    mock_coordinator.async_write_setting.assert_awaited_with("TEST123", "chargeCurrent", 50)
+
+
+@pytest.mark.asyncio
+async def test_failed_restore_is_kept_and_retried(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator, normal_charge=50)
+    mgr._charging_active = True
+    mock_coordinator.async_write_setting.side_effect = [RuntimeError("API down"), None]
+
+    assert await mgr._async_restore_normal_currents() is False
+    assert mgr._charging_active
+
+    await mgr._evaluate()  # next update, Tariff Manager disabled
+
+    assert not mgr._charging_active
+    assert mock_coordinator.async_write_setting.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_changed_currents_are_applied_mid_mode(mock_hass, mock_coordinator):
+    mock_coordinator.data["TEST123"]["battery"] = {"soc": 50}
+    mock_hass.states.get.return_value = _price_state("0.05")
+    mgr = _make_manager(mock_hass, mock_coordinator, cheap_current=100)
+    mgr._enabled = True
+    await mgr._evaluate()
+    mgr._cheap_current = 80
+    await mgr._evaluate()
+    mock_coordinator.async_write_setting.assert_awaited_with("TEST123", "chargeCurrent", 80)
+
+    mock_hass.states.get.return_value = _price_state("0.40")
+    await mgr._evaluate()  # charging stops, discharging starts
+    mgr._peak_discharge_current = 60
+    await mgr._evaluate()
+    mock_coordinator.async_write_setting.assert_awaited_with(
+        "TEST123", "dischargeCurrent", 60
+    )
+
+
+@pytest.mark.parametrize("value", ["inf", "-inf", "nan"])
+def test_non_finite_price_is_invalid(mock_hass, mock_coordinator, value):
+    mock_hass.states.get.return_value = _price_state(value)
+    mgr = _make_manager(mock_hass, mock_coordinator)
+
+    quality, _ = mgr._compute_price_quality()
+
+    assert quality == QUALITY_INVALID
+    assert mgr._read_price("sensor.electricity_price") is None
