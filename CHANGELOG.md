@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0-beta.11] - 2026-10-15
 
 ### Added
 - **Option: allow only administrators to use control actions.** A new tick in **Configure**, off by default. When ticked, the Sunsynk actions (`force_charge`, `force_discharge`, `set_work_mode`, `set_virtual_slot`, `clear_virtual_slot`) can only be run by Home Assistant administrators; automations and scripts are unaffected. Only administrators can open Configure, so only they can change it.
