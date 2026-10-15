@@ -33,6 +33,9 @@ CONF_CREATE_DASHBOARD: Final = "create_dashboard"
 # Home Assistant administrators. Only an administrator can open Configure, so
 # only an administrator can change it. Suggested by David (@davidatjourney).
 CONF_ADMIN_ONLY_CONTROL: Final = "admin_only_control"
+# Most the whole system may export to the grid, in W (e.g. a G99 limit). A
+# parallel group shares it between its inverters. Blank = no limit set here.
+CONF_MAX_EXPORT_POWER: Final = "max_export_power"
 
 API_SERVER_SUNSYNK: Final = "api.sunsynk.net"
 API_SERVER_INTELESS: Final = "pv.inteless.com"

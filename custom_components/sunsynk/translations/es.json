@@ -52,6 +52,7 @@
           "peak_discharge_current": "Corriente de descarga con tarifa cara (A)",
           "normal_discharge_current": "Corriente de descarga normal a restaurar (A)",
           "discharge_min_soc": "Detener descarga al bajar SOC (%)",
+          "max_export_power": "Potencia máxima de exportación, sistema completo (W)",
           "tariff_start_hour": "Horario activo — hora de inicio (0–23)",
           "tariff_end_hour": "Horario activo — hora de fin (0–23)",
           "price_stale_check": "Detener cuando los datos de precio parezcan desactualizados",
@@ -75,6 +76,7 @@
           "peak_discharge_current": "Corriente de descarga de la batería durante el período caro (p. ej. 100 A).",
           "normal_discharge_current": "Corriente de descarga restaurada al finalizar el período caro.",
           "discharge_min_soc": "La descarga se detiene automáticamente cuando la batería alcanza este SOC. Por defecto 10.",
+          "max_export_power": "Opcional. La potencia máxima que su sistema puede exportar a la red, p. ej., su límite de conexión (11000 para 11 kW). En un sistema en paralelo, introduzca el total: se reparte entre los inversores (11000 W → 5500 W cada uno). Las ranuras de venta del Virtual Slot Scheduler, incluidas las descargas del Gestor de tarifas, nunca la superan. El límite de exportación propio del inversor sigue aplicándose. Déjelo en blanco para no fijar límite.",
           "tariff_start_hour": "Hora del día (0–23) en que se activa la gestión de tarifas. Dejar en blanco para modo siempre activo.",
           "tariff_end_hour": "Hora del día (0–23) en que se desactiva la gestión de tarifas. Puede cruzar la medianoche (p. ej. inicio 22, fin 6).",
           "price_stale_check": "Desactivado por defecto. Si está activado, el Gestor de tarifas detiene cualquier carga o descarga activa si el sensor de precio de importación no ha informado durante más tiempo que Antigüedad máxima de los datos de precio. Déjelo desactivado si su precio se mantiene igual durante largos periodos o lo fija un ayudante.",
@@ -90,7 +92,8 @@
       "invalid_forecast_config": "La previsión solar requiere latitud, longitud y kWp de paneles válidos.",
       "invalid_tariff_config": "Error de configuración de tarifa. La carga barata necesita umbral + corriente de carga + corriente normal (los tres). La descarga necesita umbral + corriente pico + corriente normal (los tres).",
       "charge_current_above_limit": "Demasiado alto: su sistema carga la batería con un máximo de {charge_max} A ({charge_limits}). Un valor mayor no tiene efecto.",
-      "discharge_current_above_limit": "Demasiado alto: su sistema descarga la batería con un máximo de {discharge_max} A ({discharge_limits}). Un valor mayor no tiene efecto."
+      "discharge_current_above_limit": "Demasiado alto: su sistema descarga la batería con un máximo de {discharge_max} A ({discharge_limits}). Un valor mayor no tiene efecto.",
+      "invalid_export_power": "La potencia máxima de exportación debe ser un número entero de vatios entre 1 y 30000."
     }
   },
   "issues": {

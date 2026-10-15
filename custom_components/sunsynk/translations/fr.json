@@ -52,6 +52,7 @@
           "peak_discharge_current": "Courant de décharge au tarif haut (A)",
           "normal_discharge_current": "Courant de décharge normal à restaurer (A)",
           "discharge_min_soc": "Arrêter la décharge à l'état de charge (%)",
+          "max_export_power": "Puissance d'export maximale, système complet (W)",
           "tariff_start_hour": "Plage horaire — heure de début (0–23)",
           "tariff_end_hour": "Plage horaire — heure de fin (0–23)",
           "price_stale_check": "Arrêter lorsque les données de prix semblent obsolètes",
@@ -75,6 +76,7 @@
           "peak_discharge_current": "Courant de décharge pendant la période de pointe (ex. 100 A).",
           "normal_discharge_current": "Courant de décharge restauré à la fin de la période de pointe.",
           "discharge_min_soc": "La décharge s'arrête automatiquement quand la batterie atteint cet état de charge. Défaut 10.",
+          "max_export_power": "Facultatif. La puissance maximale que votre système peut injecter sur le réseau, p. ex. votre limite de raccordement (11000 pour 11 kW). Pour un système en parallèle, saisissez le total : il est réparti entre les onduleurs (11000 W → 5500 W chacun). Les créneaux de vente définis par le Virtual Slot Scheduler, y compris les décharges du Gestionnaire de tarifs, ne la dépassent jamais. La limite d'export propre à l'onduleur s'applique toujours. Laissez vide pour aucune limite.",
           "tariff_start_hour": "Heure de la journée (0–23) à laquelle la gestion tarifaire s'active. Laisser vide pour une activation permanente.",
           "tariff_end_hour": "Heure de la journée (0–23) à laquelle la gestion tarifaire se désactive. Peut chevaucher minuit (ex. début 22, fin 6).",
           "price_stale_check": "Désactivé par défaut. Lorsqu'il est activé, le Gestionnaire de tarifs arrête toute charge ou décharge en cours si le capteur de prix d'achat n'a rien signalé depuis plus longtemps que Âge maximal des données de prix. Laissez-le désactivé si votre prix reste identique pendant de longues périodes ou est défini par une entrée d'aide.",
@@ -90,7 +92,8 @@
       "invalid_forecast_config": "La prévision solaire nécessite une latitude, une longitude et une puissance kWc valides.",
       "invalid_tariff_config": "Erreur de configuration tarifaire. La charge creuse nécessite seuil + courant de charge + courant normal (les trois). La décharge nécessite seuil + courant de pointe + courant normal (les trois).",
       "charge_current_above_limit": "Trop élevé : votre système charge la batterie à {charge_max} A au maximum ({charge_limits}). Une valeur plus élevée n'a aucun effet.",
-      "discharge_current_above_limit": "Trop élevé : votre système décharge la batterie à {discharge_max} A au maximum ({discharge_limits}). Une valeur plus élevée n'a aucun effet."
+      "discharge_current_above_limit": "Trop élevé : votre système décharge la batterie à {discharge_max} A au maximum ({discharge_limits}). Une valeur plus élevée n'a aucun effet.",
+      "invalid_export_power": "La puissance d'export maximale doit être un nombre entier de watts entre 1 et 30000."
     }
   },
   "issues": {

@@ -29,6 +29,7 @@ from .const import (
     CONF_EXPORT_PRICE_ENTITY,
     CONF_LATITUDE,
     CONF_LONGITUDE,
+    CONF_MAX_EXPORT_POWER,
     CONF_NORMAL_CHARGE_CURRENT,
     CONF_NORMAL_DISCHARGE_CURRENT,
     CONF_PANEL_KWP,
@@ -52,7 +53,7 @@ from .const import (
     MIN_REFRESH_INTERVAL,
 )
 from .current_limits import current_limit, describe_limit, group_sizes
-from .write_validation import MAX_CURRENT_A
+from .write_validation import MAX_CURRENT_A, MAX_POWER_W
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -221,6 +222,17 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     except (ValueError, TypeError):
                         errors["base"] = "invalid_forecast_config"
 
+                export_fields: dict[str, Any] = {}
+                export_raw = str(user_input.get(CONF_MAX_EXPORT_POWER, "")).strip()
+                if export_raw:
+                    try:
+                        export_power = int(export_raw)
+                        if not 1 <= export_power <= MAX_POWER_W:
+                            raise ValueError
+                        export_fields[CONF_MAX_EXPORT_POWER] = export_power
+                    except ValueError:
+                        errors[CONF_MAX_EXPORT_POWER] = "invalid_export_power"
+
                 tariff_fields: dict[str, Any] = {}
                 price_entity = user_input.get(CONF_PRICE_ENTITY, "")
                 if price_entity:
@@ -294,6 +306,7 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                                 CONF_ADMIN_ONLY_CONTROL, False
                             ),
                             **forecast_fields,
+                            **export_fields,
                             **tariff_fields,
                             # Saved by the Tariff Manager switch, not a form field.
                             **(
@@ -433,6 +446,10 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     CONF_DISCHARGE_MIN_SOC,
                     default=_opt(CONF_DISCHARGE_MIN_SOC, DEFAULT_DISCHARGE_MIN_SOC),
                 ): vol.All(vol.Coerce(int), vol.Range(min=0, max=90)),
+                vol.Optional(
+                    CONF_MAX_EXPORT_POWER,
+                    description={"suggested_value": _opt_str(CONF_MAX_EXPORT_POWER)},
+                ): str,
                 # Scheduler (both blank = always active)
                 vol.Optional(
                     CONF_TARIFF_START_HOUR,

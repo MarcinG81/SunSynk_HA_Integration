@@ -52,6 +52,7 @@
           "peak_discharge_current": "Vybíjecí proud při drahém tarifu (A)",
           "normal_discharge_current": "Normální vybíjecí proud k obnovení (A)",
           "discharge_min_soc": "Zastavit vybíjení při SOC (%)",
+          "max_export_power": "Maximální výkon exportu, celý systém (W)",
           "tariff_start_hour": "Aktivní plán — hodina začátku (0–23)",
           "tariff_end_hour": "Aktivní plán — hodina konce (0–23)",
           "price_stale_check": "Zastavit, když se data o ceně zdají zastaralá",
@@ -75,6 +76,7 @@
           "peak_discharge_current": "Vybíjecí proud baterie v drahém období (např. 100 A).",
           "normal_discharge_current": "Vybíjecí proud obnovený po skončení drahého období.",
           "discharge_min_soc": "Vybíjení se automaticky zastaví, jakmile baterie dosáhne tohoto SOC. Výchozí 10.",
+          "max_export_power": "Volitelné. Nejvyšší výkon, který smí váš systém dodávat do sítě, např. limit distributora (11000 pro 11 kW). U paralelního systému zadejte součet: rozdělí se mezi střídače (11000 W → 5500 W na každý). Prodejní sloty nastavené Virtual Slot Schedulerem, včetně vybíjení Správcem tarifů, jej nikdy nepřekročí. Vlastní limit exportu střídače platí i nadále. Ponechte prázdné pro žádný limit.",
           "tariff_start_hour": "Hodina dne (0–23), kdy se správa tarifů aktivuje. Ponechte prázdné pro vždy zapnutý režim.",
           "tariff_end_hour": "Hodina dne (0–23), kdy se správa tarifů deaktivuje. Může přesahovat půlnoc (např. začátek 22, konec 6).",
           "price_stale_check": "Ve výchozím stavu vypnuto. Je-li zapnuto, Správce tarifů zastaví aktivní nabíjení nebo vybíjení, pokud senzor nákupní ceny nehlásil déle než Maximální stáří dat o ceně. Nechte vypnuté, pokud vaše cena zůstává dlouho stejná nebo ji nastavuje pomocník.",
@@ -90,7 +92,8 @@
       "invalid_forecast_config": "Solární předpověď vyžaduje platnou zeměpisnou šířku, délku a výkon panelů v kWp.",
       "invalid_tariff_config": "Chyba konfigurace tarifu. Levné nabíjení vyžaduje práh + nabíjecí proud + normální proud (všechny tři). Vybíjení vyžaduje práh + špičkový proud + normální proud (všechny tři).",
       "charge_current_above_limit": "Příliš vysoké: váš systém nabíjí baterii nejvýše {charge_max} A ({charge_limits}). Vyšší hodnota nemá žádný účinek.",
-      "discharge_current_above_limit": "Příliš vysoké: váš systém vybíjí baterii nejvýše {discharge_max} A ({discharge_limits}). Vyšší hodnota nemá žádný účinek."
+      "discharge_current_above_limit": "Příliš vysoké: váš systém vybíjí baterii nejvýše {discharge_max} A ({discharge_limits}). Vyšší hodnota nemá žádný účinek.",
+      "invalid_export_power": "Maximální výkon exportu musí být celé číslo ve wattech od 1 do 30000."
     }
   },
   "issues": {

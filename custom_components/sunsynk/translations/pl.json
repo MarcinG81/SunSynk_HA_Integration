@@ -52,6 +52,7 @@
           "peak_discharge_current": "Prąd rozładowania przy drogiej taryfie (A)",
           "normal_discharge_current": "Normalny prąd rozładowania do przywrócenia (A)",
           "discharge_min_soc": "Zatrzymaj rozładowanie przy SOC (%)",
+          "max_export_power": "Maksymalna moc eksportu, cały system (W)",
           "tariff_start_hour": "Harmonogram — godzina rozpoczęcia (0–23)",
           "tariff_end_hour": "Harmonogram — godzina zakończenia (0–23)",
           "price_stale_check": "Zatrzymaj, gdy dane cenowe wyglądają na nieaktualne",
@@ -75,6 +76,7 @@
           "peak_discharge_current": "Prąd rozładowania baterii w czasie drogiej taryfy (np. 100 A).",
           "normal_discharge_current": "Prąd rozładowania przywracany po zakończeniu drogiej taryfy.",
           "discharge_min_soc": "Rozładowanie zatrzymuje się automatycznie gdy bateria osiągnie ten SOC. Domyślnie 10.",
+          "max_export_power": "Opcjonalne. Najwyższa moc, jaką system może oddać do sieci, np. limit G99/G100 (11000 dla 11 kW). W układzie równoległym wpisz sumę: zostanie podzielona między falowniki (11000 W → 5500 W na każdy). Sloty sprzedaży ustawiane przez Virtual Slot Scheduler, także przy rozładowaniu przez Tariff Managera, nigdy jej nie przekroczą. Własny limit eksportu falownika nadal obowiązuje. Zostaw puste, aby nie ustawiać limitu.",
           "tariff_start_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się aktywuje. Pozostaw puste dla trybu zawsze aktywnego.",
           "tariff_end_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się dezaktywuje. Może przekraczać północ (np. start 22, koniec 6).",
           "price_stale_check": "Domyślnie wyłączone. Po włączeniu Menedżer taryf zatrzymuje aktywne ładowanie lub rozładowanie, jeśli czujnik ceny zakupu nie zgłaszał danych dłużej niż Maksymalny wiek danych cenowych. Zostaw wyłączone, jeśli cena długo się nie zmienia albo ustawia ją pomocnik.",
@@ -90,7 +92,8 @@
       "invalid_forecast_config": "Prognoza słoneczna wymaga prawidłowej szerokości, długości geograficznej i mocy paneli kWp.",
       "invalid_tariff_config": "Błąd konfiguracji taryfy. Ładowanie wymaga progu + prądu ładowania + normalnego prądu (wszystkich trzech). Rozładowanie wymaga progu + szczytowego prądu + normalnego prądu.",
       "charge_current_above_limit": "Za dużo: Twój system ładuje baterię prądem najwyżej {charge_max} A ({charge_limits}). Wyższa wartość nic nie zmienia.",
-      "discharge_current_above_limit": "Za dużo: Twój system rozładowuje baterię prądem najwyżej {discharge_max} A ({discharge_limits}). Wyższa wartość nic nie zmienia."
+      "discharge_current_above_limit": "Za dużo: Twój system rozładowuje baterię prądem najwyżej {discharge_max} A ({discharge_limits}). Wyższa wartość nic nie zmienia.",
+      "invalid_export_power": "Maksymalna moc eksportu musi być liczbą całkowitą watów od 1 do 30000."
     }
   },
   "issues": {

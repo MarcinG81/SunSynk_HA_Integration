@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **Maximum export power.** A new optional field in **Configure**, e.g. your G99/G100 permitted export (11000 for 11 kW). Enter the total for the whole system: in a parallel group it is shared between the inverters, because each one applies its slot's sell power on its own, so two inverters at 12 kW could otherwise export 24 kW. A Tariff Manager discharge used to sell at the inverter's full rated power when the Virtual Slot Scheduler was on. It now sells at most each inverter's share, e.g. 5500 W each for 11 kW on a pair, and a virtual discharge window set higher is lowered to it. Idle and charge slots aren't affected, because they don't export. Your inverter's own export limit still applies on top. (#21)
+
+### Fixed
+- **A virtual discharge window could be set above what the inverter can deliver**, e.g. 20000 W on a 12 kW inverter. Its sell power is now lowered to the inverter's rated power.
+
 ## [2.0.0-beta.12] - 2026-10-15
 
 ### Added

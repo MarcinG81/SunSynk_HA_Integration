@@ -46,7 +46,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
-from .current_limits import battery_safe_current
+from .current_limits import battery_safe_current, group_sizes
 
 if TYPE_CHECKING:
     from .tariff import TariffChargingManager
@@ -270,6 +270,7 @@ class VirtualSlotScheduler:
         tariff_manager: TariffChargingManager | None = None,
         normal_charge_current: int | None = None,
         normal_discharge_current: int | None = None,
+        max_export_power: int | None = None,
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
@@ -278,6 +279,7 @@ class VirtualSlotScheduler:
         self._tariff_manager = tariff_manager
         self._normal_charge_current = normal_charge_current
         self._normal_discharge_current = normal_discharge_current
+        self._max_export_power = max_export_power
 
         serial_key = sha256(serial.encode("utf-8")).hexdigest()[:16]
         self._store: Store = Store(
@@ -661,7 +663,7 @@ class VirtualSlotScheduler:
                 mode=MODE_DISCHARGE,
                 current=None,  # tariff manager owns dischargeCurrent
                 target_soc=tm.discharge_min_soc,
-                sell_power=self._uncapped_sell_power(),
+                sell_power=self._export_share() or self._uncapped_sell_power(),
                 source="price_override",
             )
         return None
@@ -672,8 +674,9 @@ class VirtualSlotScheduler:
         """Best-effort "no artificial cap" sell power for a price-override
         discharge.
 
-        Tariff Manager has no config option of its own for max export
-        power — unlike a virtual slot's `sell_power` field, which the user
+        Used when no maximum export power is configured (see
+        `_export_share`). Tariff Manager has no sell power of its own —
+        unlike a virtual slot's `sell_power` field, which the user
         sets explicitly. Previously this resolved to a hardcoded 0, which
         wrote `sellTime{n}Pac` = 0 W onto the active physical slot — a
         price-driven discharge would correctly raise `dischargeCurrent`
@@ -685,16 +688,30 @@ class VirtualSlotScheduler:
         to a generous default if rated power isn't known yet (e.g. right
         after startup, before the first successful poll).
         """
+        return self._rated_power() or self._DEFAULT_UNCAPPED_SELL_POWER
+
+    def _rated_power(self) -> int | None:
+        """The inverter's rated power in W, None until it is known."""
         inverter_info = (
             (self._coordinator.data or {}).get(self._serial, {}).get("inverter", {})
         )
-        rate = inverter_info.get("ratePower")
         try:
-            if rate:
-                return int(rate)
+            rate = int(inverter_info.get("ratePower") or 0)
         except (TypeError, ValueError):
-            pass
-        return self._DEFAULT_UNCAPPED_SELL_POWER
+            return None
+        return rate if rate > 0 else None
+
+    def _export_share(self) -> int | None:
+        """This inverter's share of the configured maximum export, in W.
+
+        Each inverter in a parallel group applies its slot's sell power on its
+        own, so the system exports that times the number of inverters: an
+        11 kW limit is 5500 W each on a pair (#21). None if no limit is set.
+        """
+        if not self._max_export_power:
+            return None
+        inverters = max(1, group_sizes(self._coordinator).get(self._serial, 1))
+        return max(1, int(self._max_export_power) // inverters)
 
     _DEFAULT_SOC_FLOOR = 20
 
@@ -879,6 +896,31 @@ class VirtualSlotScheduler:
             if resolution.mode == MODE_DISCHARGE
             else self._uncapped_sell_power()
         )
+        rated = self._rated_power()
+        if resolution.mode == MODE_DISCHARGE and rated is not None and pac > rated:
+            # More than the inverter can deliver means nothing, and would
+            # hide what the slot really does.
+            _LOGGER.warning(
+                "Virtual slots [%s]: lowering sell power from %s W to the "
+                "inverter's rated %s W",
+                self._serial,
+                pac,
+                rated,
+            )
+            pac = rated
+        share = self._export_share()
+        if resolution.mode == MODE_DISCHARGE and share is not None and pac > share:
+            # Only a selling slot exports. An idle or charge slot's power is
+            # the battery's cap for the house, so it is left uncapped.
+            _LOGGER.warning(
+                "Virtual slots [%s]: lowering sell power from %s W to %s W, "
+                "this inverter's share of the %s W maximum export",
+                self._serial,
+                pac,
+                share,
+                self._max_export_power,
+            )
+            pac = share
         sell_en = resolution.mode == MODE_DISCHARGE
         cache_key = (on, cap, pac, start, sell_en)
         if self._last_written.get(index) == cache_key:

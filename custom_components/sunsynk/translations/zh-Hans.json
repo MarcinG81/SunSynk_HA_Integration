@@ -52,6 +52,7 @@
           "peak_discharge_current": "峰电放电电流（A）",
           "normal_discharge_current": "恢复正常放电电流（A）",
           "discharge_min_soc": "放至最低 SOC（%）后停止放电",
+          "max_export_power": "最大上网功率，整个系统（W）",
           "tariff_start_hour": "计划开始时间（0–23 时）",
           "tariff_end_hour": "计划结束时间（0–23 时）",
           "price_stale_check": "电价数据看起来过时时停止",
@@ -75,6 +76,7 @@
           "peak_discharge_current": "峰电时段的电池放电电流（如 100 A）。",
           "normal_discharge_current": "峰电时段结束后恢复的放电电流。",
           "discharge_min_soc": "电池达到此 SOC 后自动停止放电，默认 10。",
+          "max_export_power": "可选。系统向电网输出的最大功率，例如您的并网限额（11 kW 填 11000）。并联系统请填写总值：它会在各逆变器之间平分（11000 W → 每台 5500 W）。Virtual Slot Scheduler 设置的售电时段，包括电价管理器触发的放电，都不会超过该值。逆变器自身的上网限制仍然有效。留空表示不在此设置限制。",
           "tariff_start_hour": "电价管理激活的时刻（0–23 时）。留空则全天激活。",
           "tariff_end_hour": "电价管理停止的时刻（0–23 时），可跨越午夜（如开始 22 时，结束 6 时）。",
           "price_stale_check": "默认关闭。开启后，如果购电电价传感器在超过“电价数据最大有效时长”的时间内没有上报，电价管理器将停止任何正在进行的充电或放电。如果您的电价长时间不变或由辅助实体设置，请保持关闭。",
@@ -90,7 +92,8 @@
       "invalid_forecast_config": "光伏发电预测需要有效的纬度、经度和组件峰值功率（kWp）。",
       "invalid_tariff_config": "电价配置错误。谷电充电需要阈值 + 充电电流 + 正常电流（三者缺一不可）。放电需要阈值 + 峰值电流 + 正常电流（三者缺一不可）。",
       "charge_current_above_limit": "过高：您的系统为电池充电的电流最高为 {charge_max} A（{charge_limits}）。更高的值不会生效。",
-      "discharge_current_above_limit": "过高：您的系统为电池放电的电流最高为 {discharge_max} A（{discharge_limits}）。更高的值不会生效。"
+      "discharge_current_above_limit": "过高：您的系统为电池放电的电流最高为 {discharge_max} A（{discharge_limits}）。更高的值不会生效。",
+      "invalid_export_power": "最大上网功率必须是 1 到 30000 之间的整数瓦数。"
     }
   },
   "issues": {

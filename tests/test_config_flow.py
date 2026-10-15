@@ -425,3 +425,37 @@ async def test_options_flow_accepts_currents_when_limits_are_unknown():
 
     assert result["type"] == "create_entry"
     assert result["data"]["peak_discharge_current"] == 200
+
+
+# ── Maximum export power (#21) ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw", ["bad", "0", "-1", "30001", "11000.5"])
+async def test_options_flow_refuses_an_invalid_export_power(raw):
+    flow = _options_flow()
+
+    result = await flow.async_step_init(_user_input(password="", max_export_power=raw))
+
+    assert result["errors"] == {"max_export_power": "invalid_export_power"}
+
+
+@pytest.mark.asyncio
+async def test_options_flow_saves_export_power_without_a_tariff():
+    flow = _options_flow()
+
+    result = await flow.async_step_init(
+        _user_input(password="", max_export_power=" 11000 ")
+    )
+
+    assert result["type"] == "create_entry"
+    assert result["data"]["max_export_power"] == 11000
+
+
+@pytest.mark.asyncio
+async def test_options_flow_blank_export_power_means_no_limit():
+    flow = _options_flow()
+
+    result = await flow.async_step_init(_user_input(password="", max_export_power=""))
+
+    assert "max_export_power" not in result["data"]

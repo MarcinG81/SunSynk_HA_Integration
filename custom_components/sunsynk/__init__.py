@@ -37,6 +37,7 @@ from .const import (
     CONF_EXPORT_PRICE_ENTITY,
     CONF_LATITUDE,
     CONF_LONGITUDE,
+    CONF_MAX_EXPORT_POWER,
     CONF_NORMAL_CHARGE_CURRENT,
     CONF_NORMAL_DISCHARGE_CURRENT,
     CONF_PANEL_KWP,
@@ -650,6 +651,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             tariff_manager=hass.data[DOMAIN].get(f"{entry.entry_id}_tariff"),
             normal_charge_current=_opt(CONF_NORMAL_CHARGE_CURRENT),
             normal_discharge_current=_opt(CONF_NORMAL_DISCHARGE_CURRENT),
+            max_export_power=_opt(CONF_MAX_EXPORT_POWER),
         )
         await scheduler.async_load(legacy_slots=legacy_slots)
         vslot_schedulers[target_serial] = scheduler

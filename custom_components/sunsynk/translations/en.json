@@ -52,6 +52,7 @@
           "peak_discharge_current": "Discharge current at expensive rate (A)",
           "normal_discharge_current": "Normal discharge current to restore (A)",
           "discharge_min_soc": "Stop discharging when SOC drops below (%)",
+          "max_export_power": "Maximum export power, whole system (W)",
           "tariff_start_hour": "Active schedule — start hour (0–23)",
           "tariff_end_hour": "Active schedule — end hour (0–23)",
           "price_stale_check": "Stop when price data looks out of date",
@@ -75,6 +76,7 @@
           "peak_discharge_current": "Battery discharge current during expensive period (e.g. 100 A).",
           "normal_discharge_current": "Discharge current restored when expensive period ends.",
           "discharge_min_soc": "Discharging stops automatically when battery reaches this SOC. Default 10.",
+          "max_export_power": "Optional. The most your system may export to the grid, e.g. your G99/G100 limit (11000 for 11 kW). In a parallel system enter the total: it is shared between the inverters (11000 W → 5500 W each). Selling slots set by the Virtual Slot Scheduler, including Tariff Manager discharges, never go above it. Your inverter's own export limit still applies on top. Leave blank for no limit here.",
           "tariff_start_hour": "Hour of day (0–23) when tariff management activates. Leave blank for always-on.",
           "tariff_end_hour": "Hour of day (0–23) when tariff management deactivates. Can wrap midnight (e.g. start 22, end 6). The same start and end hour (e.g. 0 and 0) means all day.",
           "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
@@ -90,7 +92,8 @@
       "invalid_forecast_config": "Solar forecast requires valid latitude, longitude and panel kWp (all numeric, kWp > 0).",
       "invalid_tariff_config": "Tariff configuration error. Cheap charging needs threshold + charge current + normal current (all three). Discharge needs threshold + peak current + normal current (all three).",
       "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
-      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
+      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect.",
+      "invalid_export_power": "Maximum export power must be a whole number of watts between 1 and 30000."
     }
   },
   "issues": {
