@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.sunsynk.api.client import SunsynkApiError
+
 from custom_components.sunsynk.tariff import (
     QUALITY_INVALID,
     QUALITY_NOT_FOUND,
@@ -1202,3 +1204,27 @@ async def test_changed_discharge_current_is_applied_while_discharging(
     mock_coordinator.async_write_setting.assert_awaited_with(
         "TEST123", "dischargeCurrent", 60
     )
+
+
+@pytest.mark.asyncio
+async def test_failed_write_on_one_inverter_does_not_skip_the_next(
+    mock_hass, mock_coordinator
+):
+    """2.0 beta audit R6: A's API error must not leave B forced on."""
+    mock_hass.states.get.return_value = _price_state("0.05")
+    mock_coordinator.write_target_serials = ["A", "B"]
+    mock_coordinator.data = {"A": {"battery": {}}, "B": {"battery": {}}}
+
+    async def write(serial, key, value):
+        if serial == "A":
+            raise SunsynkApiError("only A is failing")
+
+    mock_coordinator.async_write_setting.side_effect = write
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    mgr._enabled = True
+    mgr._charging_active_serials = {"A", "B"}
+
+    await mgr._evaluate()
+
+    assert "B" in {c.args[0] for c in mock_coordinator.async_write_setting.call_args_list}
+    assert mgr._charging_active_serials == {"A"}

@@ -114,6 +114,9 @@ class SunsynkAuth:
             raise SunsynkAuthError(
                 f"Connection error during authentication: {err}"
             ) from err
+        except TimeoutError as err:
+            # aiohttp's total timeout is not a ClientError.
+            raise SunsynkAuthError("Timed out during authentication") from err
 
     async def _async_get_public_key(self, session: aiohttp.ClientSession) -> str:
         nonce = _get_nonce()
@@ -132,7 +135,7 @@ class SunsynkAuth:
                 resp.raise_for_status()
                 data = await resp.json()
                 return data.get("data", "")
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             _LOGGER.error("Failed to get public key: %s", err)
             return ""
 

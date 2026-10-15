@@ -99,6 +99,9 @@ class SunsynkClient:
             raise SunsynkApiError(f"HTTP {err.status} for {url}") from err
         except aiohttp.ClientError as err:
             raise SunsynkApiError(f"Connection error for {url}: {err}") from err
+        except TimeoutError as err:
+            # aiohttp's total timeout is not a ClientError.
+            raise SunsynkApiError(f"Timed out waiting for {url}") from err
 
     async def _post(
         self,
@@ -137,6 +140,9 @@ class SunsynkClient:
             raise SunsynkApiError(f"HTTP {err.status} for {url}") from err
         except aiohttp.ClientError as err:
             raise SunsynkApiError(f"Connection error for {url}: {err}") from err
+        except TimeoutError as err:
+            # aiohttp's total timeout is not a ClientError.
+            raise SunsynkApiError(f"Timed out waiting for {url}") from err
 
     async def async_get_inverter_info(
         self, session: aiohttp.ClientSession, serial: str

@@ -439,75 +439,90 @@ class TariffChargingManager:
         in_schedule = self._is_in_schedule()
 
         for serial in self._coordinator.write_target_serials:
-            battery = (self._coordinator.data or {}).get(serial, {}).get("battery", {})
-            soc, soc_quality = self._read_soc(battery)
-            if getattr(self._coordinator, "last_update_success", True) is False:
-                # A failed refresh keeps the previous data, so this SOC may be
-                # minutes or hours old. Never decide on it.
-                soc, soc_quality = None, QUALITY_STALE
-            previous_soc_quality = self._soc_quality_by_serial.get(serial)
-            if soc_quality != previous_soc_quality:
-                log = _LOGGER.info if soc_quality == QUALITY_OK else _LOGGER.warning
-                log(
-                    "Tariff: battery SOC quality changed [%s] %s → %s",
+            # One inverter's failed write must not stop the others being
+            # stopped or re-evaluated; it is tried again on the next update.
+            try:
+                await self._evaluate_serial(
                     serial,
-                    previous_soc_quality or "unknown",
-                    soc_quality,
+                    in_schedule,
+                    import_quality,
+                    import_detail,
+                    export_quality,
+                    export_detail,
                 )
-                self._soc_quality_by_serial[serial] = soc_quality
-                self._notify_listeners()
+            except Exception:
+                _LOGGER.exception("Tariff Manager: evaluation failed for %s", serial)
 
-            import_price = self._read_price(self._price_entity)
-            export_price = self._read_price(self._export_price_entity)
-            decision: dict[str, Any] = {
-                "battery_soc": soc,
-                "import_price": import_price,
-                "export_price": export_price,
-            }
+    async def _evaluate_serial(
+        self,
+        serial: str,
+        in_schedule: bool,
+        import_quality: str,
+        import_detail: str,
+        export_quality: str,
+        export_detail: str,
+    ) -> None:
+        battery = (self._coordinator.data or {}).get(serial, {}).get("battery", {})
+        soc, soc_quality = self._read_soc(battery)
+        if getattr(self._coordinator, "last_update_success", True) is False:
+            # A failed refresh keeps the previous data, so this SOC may be
+            # minutes or hours old. Never decide on it.
+            soc, soc_quality = None, QUALITY_STALE
+        previous_soc_quality = self._soc_quality_by_serial.get(serial)
+        if soc_quality != previous_soc_quality:
+            log = _LOGGER.info if soc_quality == QUALITY_OK else _LOGGER.warning
+            log(
+                "Tariff: battery SOC quality changed [%s] %s → %s",
+                serial,
+                previous_soc_quality or "unknown",
+                soc_quality,
+            )
+            self._soc_quality_by_serial[serial] = soc_quality
+            self._notify_listeners()
 
-            if soc is None:
-                # Missing, non-finite or out-of-range SOC is never equivalent
-                # to 0%.  Stop anything this manager owns and do not make a
-                # new charge/discharge decision until trustworthy SOC returns.
-                reason = f"battery SOC quality: {soc_quality}"
-                await self._stop_charging(serial, reason)
-                await self._stop_discharging(serial, reason)
-                decision["charging"] = decision["discharging"] = (
-                    f"battery SOC unavailable ({soc_quality})"
-                )
-                self._record_decision(serial, decision)
-                continue
+        import_price = self._read_price(self._price_entity)
+        export_price = self._read_price(self._export_price_entity)
+        decision: dict[str, Any] = {
+            "battery_soc": soc,
+            "import_price": import_price,
+            "export_price": export_price,
+        }
 
-            if import_quality == QUALITY_OK:
-                if import_price is not None:
-                    await self._evaluate_charging(
-                        serial, import_price, soc, in_schedule
-                    )
-                decision["charging"] = self._charge_reason(
-                    serial, import_price, soc, in_schedule
-                )
-            else:
-                await self._stop_charging(
-                    serial, f"import price quality: {import_detail}"
-                )
-                decision["charging"] = f"import price {import_quality}: {import_detail}"
-
-            if export_quality == QUALITY_OK:
-                if export_price is not None:
-                    await self._evaluate_discharging(
-                        serial, export_price, soc, in_schedule
-                    )
-                decision["discharging"] = self._discharge_reason(
-                    serial, export_price, soc, in_schedule
-                )
-            else:
-                await self._stop_discharging(
-                    serial, f"export price quality: {export_detail}"
-                )
-                decision["discharging"] = (
-                    f"export price {export_quality}: {export_detail}"
-                )
+        if soc is None:
+            # Missing, non-finite or out-of-range SOC is never equivalent
+            # to 0%.  Stop anything this manager owns and do not make a
+            # new charge/discharge decision until trustworthy SOC returns.
+            reason = f"battery SOC quality: {soc_quality}"
+            await self._stop_charging(serial, reason)
+            await self._stop_discharging(serial, reason)
+            decision["charging"] = decision["discharging"] = (
+                f"battery SOC unavailable ({soc_quality})"
+            )
             self._record_decision(serial, decision)
+            return
+
+        if import_quality == QUALITY_OK:
+            if import_price is not None:
+                await self._evaluate_charging(serial, import_price, soc, in_schedule)
+            decision["charging"] = self._charge_reason(
+                serial, import_price, soc, in_schedule
+            )
+        else:
+            await self._stop_charging(serial, f"import price quality: {import_detail}")
+            decision["charging"] = f"import price {import_quality}: {import_detail}"
+
+        if export_quality == QUALITY_OK:
+            if export_price is not None:
+                await self._evaluate_discharging(serial, export_price, soc, in_schedule)
+            decision["discharging"] = self._discharge_reason(
+                serial, export_price, soc, in_schedule
+            )
+        else:
+            await self._stop_discharging(
+                serial, f"export price quality: {export_detail}"
+            )
+            decision["discharging"] = f"export price {export_quality}: {export_detail}"
+        self._record_decision(serial, decision)
 
     def _record_decision(self, serial: str, decision: dict[str, Any]) -> None:
         if self._decisions.get(serial) != decision:

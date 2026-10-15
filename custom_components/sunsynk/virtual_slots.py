@@ -55,6 +55,11 @@ _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 
 MAX_VIRTUAL_SLOTS = 10
+# A boundary is armed on the daily timers only once it is less than a day
+# away, and an idle slot starts at least this long after the previous day's
+# occurrence of the upcoming boundary.
+_ARM_MARGIN = timedelta(minutes=1)
+
 # The only pair of physical Sunsynk timer slots that can wrap past
 # midnight (Timer 6 -> Timer 1) — see module docstring.
 PHYSICAL_SLOTS = (1, 6)
@@ -289,6 +294,9 @@ class VirtualSlotScheduler:
         self._last_current_key: tuple[str, int] | _CurrentState | None = None
         self._last_written_slot2_boundary: str | None = None
         self._original_settings: dict[str, Any] | None = None
+        # Normal currents a shutdown could not write back yet; retried until
+        # the inverter accepts them, also across restarts.
+        self._pending_current_restore: dict[str, Any] | None = None
         # The user's on/off choice, kept across restarts. Unload/reload stops
         # the scheduler without changing it.
         self._wanted_enabled = False
@@ -342,6 +350,7 @@ class VirtualSlotScheduler:
         # Settings captured before taking ownership survive a restart, so a
         # later disable restores the user's timer, not the scheduler's own.
         self._original_settings = data.get("original_settings") or None
+        self._pending_current_restore = data.get("pending_current_restore") or None
         if migrated:
             await self._async_persist()
 
@@ -351,6 +360,7 @@ class VirtualSlotScheduler:
                 "slots": [s.to_dict() for s in self._slots.values()],
                 "enabled": self._wanted_enabled,
                 "original_settings": self._original_settings,
+                "pending_current_restore": self._pending_current_restore,
             }
         )
 
@@ -458,8 +468,13 @@ class VirtualSlotScheduler:
         """Restore the exact settings captured before taking ownership."""
         success = True
         async with self._operation_lock:
-            had_ownership = self._original_settings is not None or force_disable
+            had_ownership = (
+                self._original_settings is not None
+                or self._pending_current_restore is not None
+                or force_disable
+            )
             pending: dict[str, Any] = {}
+            pending_currents: dict[str, Any] = {}
             if self._original_settings:
                 try:
                     await self._coordinator.async_write_settings(
@@ -498,7 +513,8 @@ class VirtualSlotScheduler:
                     normal_discharge_current = (
                         self._tariff_manager.normal_discharge_current
                     )
-                current_restores = {
+                current_restores = dict(self._pending_current_restore or {})
+                current_restores |= {
                     key: value
                     for key, value in (
                         ("chargeCurrent", normal_charge_current),
@@ -513,6 +529,7 @@ class VirtualSlotScheduler:
                         )
                     except Exception as err:  # noqa: BLE001
                         success = False
+                        pending_currents = current_restores
                         _LOGGER.error(
                             "Virtual slots shutdown [%s]: could not restore currents: %s",
                             self._serial,
@@ -520,6 +537,7 @@ class VirtualSlotScheduler:
                         )
 
             self._original_settings = pending or None
+            self._pending_current_restore = pending_currents or None
             self._last_written = {}
             self._last_current_key = None
             self._last_written_slot2_boundary = None
@@ -607,6 +625,19 @@ class VirtualSlotScheduler:
         )
         return resolution, chosen[1], next_boundary
 
+    def _last_window_end(self, at: datetime) -> datetime | None:
+        """End of the latest window that ended at or before `at`."""
+        ends = []
+        for slot in self._slots.values():
+            if not slot.enabled or not slot.weekdays:
+                continue
+            hh, mm = _parse_hhmm(slot.start)
+            start = max(_most_recent_occurrence(at, wd, hh, mm) for wd in slot.weekdays)
+            end = start + timedelta(minutes=slot.duration_minutes)
+            if end <= at:
+                ends.append(end)
+        return max(ends, default=None)
+
     def _resolve_override(self) -> Resolution | None:
         """Live price-driven decision from the Tariff Manager, if any."""
         tm = self._tariff_manager
@@ -691,15 +722,37 @@ class VirtualSlotScheduler:
         override = self._resolve_override()
 
         active_resolution = override if override is not None else virt_resolution
+
+        # The timers repeat daily, so a boundary more than a day away can't be
+        # armed yet: its time of day comes round before it does, and would
+        # start that window early. Until it is within a day, both slots hold
+        # whatever is in force now.
+        armable = (
+            next_boundary is not None
+            and next_boundary - now <= timedelta(days=1) - _ARM_MARGIN
+        )
+        if window_start is not None:
+            active_start = window_start
+        elif armable:
+            # Idle since the last window ended. The physical slot runs from
+            # its start to the upcoming one's, so that start must fall within
+            # the day before the upcoming boundary, or "now" lands in the
+            # upcoming slot's range instead (#21 audit R1).
+            active_start = max(
+                self._last_window_end(now) or datetime.min.replace(tzinfo=now.tzinfo),
+                next_boundary - timedelta(days=1) + _ARM_MARGIN,
+            )
+        else:
+            active_start = None
         active_hhmm = (
-            window_start.strftime("%H:%M") if window_start is not None else "00:00"
+            active_start.strftime("%H:%M") if active_start is not None else "00:00"
         )
 
-        if next_boundary is not None:
+        if armable:
             upcoming_resolution, _, _ = self._resolve_virtual(next_boundary)
             upcoming_hhmm = next_boundary.strftime("%H:%M")
         else:
-            upcoming_resolution = _IDLE
+            upcoming_resolution = active_resolution
             upcoming_hhmm = "00:00"
 
         if active_hhmm <= upcoming_hhmm:
@@ -727,6 +780,15 @@ class VirtualSlotScheduler:
     # ── Tick ─────────────────────────────────────────────────────────────
 
     async def _async_tick(self) -> None:
+        if (
+            not self._enabled
+            and not self._wanted_enabled
+            and (self._original_settings or self._pending_current_restore)
+        ):
+            # Switched off, but a restore failed: keep retrying it on every
+            # update until the inverter has the user's settings back.
+            await self._async_shutdown(force_disable=False)
+            return
         async with self._operation_lock:
             await self._async_tick_locked()
 
@@ -873,6 +935,9 @@ class VirtualSlotScheduler:
         TariffChargingManager already owns those registers in that case.
         """
         if resolution.source == "price_override":
+            # The Tariff Manager now owns the currents and leaves its own
+            # values behind, so whatever this scheduler last wrote is gone.
+            self._last_current_key = None
             return False
 
         if resolution.mode == MODE_CHARGE and resolution.current is not None:

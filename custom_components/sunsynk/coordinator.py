@@ -102,16 +102,14 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         write loop; keep using `self.serials` for reads (fetching data
         still needs every configured serial).
         """
-        roles = {
-            serial: SunsynkCoordinator._parallel_role(self, serial)
+        # A slave is dropped only when it has a master to cover it. With no
+        # confirmed master (e.g. a momentary bad poll) or an ambiguous one,
+        # it resolves to itself and stays.
+        return [
+            serial
             for serial in self.serials
-        }
-        if "master" not in roles.values():
-            # No confirmed master anywhere (e.g. a momentary bad poll) —
-            # don't guess at dropping a serial with nothing left to cover it.
-            return list(self.serials)
-
-        return [serial for serial in self.serials if roles[serial] != "slave"]
+            if SunsynkCoordinator.resolve_write_target(self, serial) == serial
+        ]
 
     def _parallel_role(self, serial: str) -> str | None:
         """Return "master", "slave", or None outside a parallel group.
@@ -269,13 +267,35 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         if SunsynkCoordinator._parallel_role(self, serial) != "slave":
             return serial
 
-        for other_serial in self.serials:
-            if other_serial == serial:
-                continue
-            if SunsynkCoordinator._parallel_role(self, other_serial) == "master":
-                return other_serial
-
+        # Only a master of the slave's own plant can be its group's master;
+        # one account can hold several installations.
+        plant = SunsynkCoordinator._plant_id(self, serial)
+        masters = [
+            other_serial
+            for other_serial in self.serials
+            if other_serial != serial
+            and SunsynkCoordinator._parallel_role(self, other_serial) == "master"
+            and (
+                plant is None
+                or SunsynkCoordinator._plant_id(self, other_serial) in (None, plant)
+            )
+        ]
+        if len(masters) == 1:
+            return masters[0]
+        if masters:
+            # Never guess between groups: the slave's own write is reverted
+            # by its master, a write to another group's master is not.
+            _LOGGER.debug(
+                "Not redirecting %s: more than one possible master (%s)",
+                serial,
+                ", ".join(masters),
+            )
         return serial
+
+    def _plant_id(self, serial: str) -> str | None:
+        plant = (self.data or {}).get(serial, {}).get("inverter", {}).get("plant") or {}
+        plant_id = plant.get("id") if isinstance(plant, dict) else None
+        return str(plant_id) if plant_id not in (None, "") else None
 
     def _resolve_parallel_write_target(self, serial: str, setting_key: str) -> str:
         """Backward-compatible internal wrapper for write routing."""
@@ -595,6 +615,23 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         after the last offset. A newer write of the same setting supersedes
         this confirmation.
         """
+        try:
+            await SunsynkCoordinator._async_confirm_writes_until_settled(
+                self, serial, write_ids, expected
+            )
+        except Exception:
+            _LOGGER.exception("Could not confirm writes for %s", serial)
+        finally:
+            # Whatever ended the confirmation, never leave this batch's values
+            # overlaying fresh polls with nothing left to settle them. A newer
+            # write of the same key has its own id and is left alone.
+            for key, write_id in write_ids.items():
+                if SunsynkCoordinator._is_unconfirmed(self, serial, key, write_id):
+                    del self._unconfirmed_writes[serial][key]
+
+    async def _async_confirm_writes_until_settled(
+        self, serial: str, write_ids: dict[str, int], expected: dict[str, Any]
+    ) -> None:
         loop = asyncio.get_running_loop()
         started = loop.time()
         remaining = dict(expected)

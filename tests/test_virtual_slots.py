@@ -11,6 +11,7 @@ from custom_components.sunsynk.virtual_slots import (
     MODE_CHARGE,
     MODE_DISCHARGE,
     MODE_IDLE,
+    Resolution,
     VirtualSlot,
     VirtualSlotScheduler,
 )
@@ -658,7 +659,9 @@ async def test_price_override_discharge_enables_sell_permission(mock_hass, mock_
     written = _written(mock_coordinator)
     assert sched.active_source == "price_override"
     assert ("sellTime1on", 1) in written
-    assert ("time6on", 0) in written
+    # Nothing scheduled to arm: both owned slots carry the live override,
+    # so neither can start something else while it is in force.
+    assert ("sellTime6on", 1) in written
 
 
 @pytest.mark.asyncio
@@ -899,15 +902,17 @@ async def test_idle_window_before_discharge_keeps_house_on_battery(
 
     await sched._async_bootstrap()
 
-    idle = _slot_batch(mock_coordinator, 1)
-    assert idle["time1on"] == 0
-    assert idle["sellTime1"] == "00:00"
-    assert idle["sellTime1Pac"] == 12000
-    assert idle["cap1"] == 15
-    discharge = _slot_batch(mock_coordinator, 6)
-    assert discharge["sellTime6"] == "20:30"
-    assert discharge["sellTime6Pac"] == 5000
-    assert discharge["cap6"] == 20
+    # Idle since yesterday's window ended at 21:00, so the idle slot starts
+    # then and runs round to 20:30 on slot 6; the discharge goes on slot 1.
+    idle = _slot_batch(mock_coordinator, 6)
+    assert idle["time6on"] == 0
+    assert idle["sellTime6"] == "21:00"
+    assert idle["sellTime6Pac"] == 12000
+    assert idle["cap6"] == 15
+    discharge = _slot_batch(mock_coordinator, 1)
+    assert discharge["sellTime1"] == "20:30"
+    assert discharge["sellTime1Pac"] == 5000
+    assert discharge["cap1"] == 20
 
 
 @pytest.mark.asyncio
@@ -1121,3 +1126,150 @@ def test_a_failing_vss_listener_does_not_stop_the_others(mock_hass, mock_coordin
 
     other.assert_called_once()
     assert "a listener failed to update" in caplog.text
+
+
+# ── 2.0 beta audit: what the timers do right now matches the resolver ──────
+#
+# Slot 1 runs from its start to slot 6's start, slot 6 from its start round
+# past midnight to slot 1's. Idle used to be planned from 00:00, so after a
+# 10:00-12:00 discharge slot 6 = 10:00 discharge was in force at 13:00 while
+# the integration reported idle (R1).
+
+
+def _physical_mode(plan, now: datetime) -> str:
+    hhmm = now.strftime("%H:%M")
+    in_slot1 = plan.slot1_start <= hhmm < plan.slot6_start
+    return (plan.slot1 if in_slot1 else plan.slot6).mode
+
+
+@pytest.mark.parametrize(
+    ("weekdays", "hour"),
+    [
+        (frozenset(range(7)), 12),
+        (frozenset(range(7)), 13),
+        (frozenset(range(7)), 23),
+        (frozenset(range(7)), 9),
+        (frozenset({0}), 13),  # Monday-only window, checked on Thursday
+        (frozenset({4}), 13),  # Friday-only: armed the day before
+    ],
+)
+def test_timers_are_idle_outside_the_window(mock_hass, mock_coordinator, weekdays, hour):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        1, "10:00", "12:00", MODE_DISCHARGE, weekdays=weekdays, target_soc=20
+    )
+    sched._slots[2] = VirtualSlot(3, "01:00", "02:00", MODE_CHARGE, enabled=False)
+    now = _dt(2024, 1, 4, hour, 0)  # Thursday
+
+    plan = sched._plan(now)
+
+    assert plan.active_resolution.mode == MODE_IDLE
+    assert _physical_mode(plan, now) == MODE_IDLE
+
+
+def test_window_within_a_day_is_armed_ahead(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(1, "10:00", "12:00", MODE_DISCHARGE, target_soc=20)
+
+    plan = sched._plan(_dt(2024, 1, 4, 13, 0))
+
+    assert _physical_mode(plan, _dt(2024, 1, 5, 10, 30)) == MODE_DISCHARGE
+    assert plan.slot1_start == "10:00"
+    assert plan.slot6_start == "12:00"
+
+
+def test_window_more_than_a_day_away_is_not_armed(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        1, "10:00", "12:00", MODE_DISCHARGE, weekdays=frozenset({0}), target_soc=20
+    )
+
+    plan = sched._plan(_dt(2024, 1, 4, 13, 0))  # Thursday; next start Monday
+
+    assert plan.slot1.mode == plan.slot6.mode == MODE_IDLE
+
+
+def test_price_override_while_idle_is_in_force_now(mock_hass, mock_coordinator):
+    tariff_manager = MagicMock()
+    tariff_manager.is_charging_active_for.return_value = True
+    tariff_manager.target_soc = 90
+    sched = _make_scheduler(mock_hass, mock_coordinator, tariff_manager=tariff_manager)
+    sched._slots[1] = VirtualSlot(1, "10:00", "12:00", MODE_DISCHARGE, target_soc=20)
+    now = _dt(2024, 1, 4, 13, 0)
+
+    plan = sched._plan(now)
+
+    assert _physical_mode(plan, now) == MODE_CHARGE
+
+
+@pytest.mark.asyncio
+async def test_window_current_is_reapplied_after_price_override(
+    mock_hass, mock_coordinator
+):
+    """R4: the Tariff Manager leaves its own current behind when it stops."""
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    window = Resolution(MODE_CHARGE, 40, 90, 0, "virtual_slot:1")
+    override = Resolution(MODE_CHARGE, None, 90, 0, "price_override")
+
+    await sched._apply_current_if_changed(window)
+    await sched._apply_current_if_changed(override)
+    mock_coordinator.async_write_setting.reset_mock()
+    await sched._apply_current_if_changed(window)
+
+    mock_coordinator.async_write_setting.assert_awaited_once_with(
+        "TEST123", "chargeCurrent", 40
+    )
+
+
+@pytest.mark.asyncio
+async def test_failed_current_restore_is_kept_and_retried(mock_hass, mock_coordinator):
+    """R5: timers restored but currents not; the next attempt must write them."""
+    sched = _make_scheduler(mock_hass, mock_coordinator, normal_charge_current=40)
+    sched._original_settings = {"time1on": 0}
+
+    async def write(serial, settings):
+        if "chargeCurrent" in settings:
+            raise RuntimeError("temporary current-write failure")
+
+    mock_coordinator.async_write_settings.side_effect = write
+    assert await sched._async_shutdown(force_disable=False) is False
+    assert sched._original_settings is None
+    assert sched._pending_current_restore == {"chargeCurrent": 40}
+    saved = sched._store.async_save.call_args.args[0]
+    assert saved["pending_current_restore"] == {"chargeCurrent": 40}
+
+    mock_coordinator.async_write_settings.reset_mock()
+    mock_coordinator.async_write_settings.side_effect = None
+    sched._enabled = sched._wanted_enabled = False
+    await sched._async_tick()  # switched off: a coordinator update retries
+
+    mock_coordinator.async_write_settings.assert_awaited_once_with(
+        "TEST123", {"chargeCurrent": 40}
+    )
+    assert sched._pending_current_restore is None
+
+
+@pytest.mark.asyncio
+async def test_pending_current_restore_survives_a_restart(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._store.async_load.return_value = {
+        "slots": [],
+        "enabled": False,
+        "pending_current_restore": {"dischargeCurrent": 30},
+    }
+
+    await sched.async_load()
+
+    assert sched._pending_current_restore == {"dischargeCurrent": 30}
+
+
+@pytest.mark.asyncio
+async def test_disabled_scheduler_with_nothing_to_restore_does_nothing(
+    mock_hass, mock_coordinator
+):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+
+    await sched._async_tick()
+
+    mock_coordinator.async_write_settings.assert_not_called()
+    mock_coordinator.async_write_setting.assert_not_called()

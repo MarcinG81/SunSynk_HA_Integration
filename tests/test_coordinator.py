@@ -1519,3 +1519,77 @@ async def test_auth_failure_on_the_fresh_read_fails_the_write(fake_coordinator):
 
     fake_coordinator._auth.invalidate_token.assert_called_once_with()
     assert mock_client.sent == []
+
+
+# ── Two parallel groups in one entry (2.0 beta audit R2) ────────────────────
+
+
+def _two_groups(plant_b=2) -> SimpleNamespace:
+    return SimpleNamespace(
+        serials=["master_A", "slave_A", "master_B", "slave_B"],
+        data={
+            serial: {
+                "settings": {"parallel": 1, "equipMode": role},
+                "inverter": {"plant": {"id": plant}},
+            }
+            for serial, role, plant in [
+                ("master_A", 1, 1),
+                ("slave_A", 0, 1),
+                ("master_B", 1, plant_b),
+                ("slave_B", 0, plant_b),
+            ]
+        },
+    )
+
+
+def test_slave_routes_to_the_master_of_its_own_plant():
+    coordinator = _two_groups()
+
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "slave_A") == "master_A"
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "slave_B") == "master_B"
+    assert SunsynkCoordinator.write_target_serials.fget(coordinator) == [
+        "master_A",
+        "master_B",
+    ]
+
+
+def test_slave_with_two_possible_masters_is_not_redirected():
+    """Two groups in one plant: never guess which master is the slave's."""
+    coordinator = _two_groups(plant_b=1)
+
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "slave_B") == "slave_B"
+    assert "slave_B" in SunsynkCoordinator.write_target_serials.fget(coordinator)
+
+
+def test_unknown_plant_still_routes_to_the_only_master():
+    coordinator = _real_shape_parallel()
+    coordinator.data["2406060181"]["inverter"]["plant"] = {"id": ""}
+
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "2406060175") == "2406060181"
+
+
+# ── Write confirmation ending abnormally (2.0 beta audit R3) ────────────────
+
+
+@pytest.mark.asyncio
+async def test_failed_confirmation_never_leaves_an_overlay_behind():
+    obj = SimpleNamespace(data={"SN1": {"settings": {}}}, hass=MagicMock())
+    SunsynkCoordinator._ensure_write_state(obj)
+    obj._unconfirmed_writes = {"SN1": {"chargeCurrent": (1, 100), "cap1": (2, 50)}}
+    with (
+        patch("custom_components.sunsynk.coordinator._VERIFY_WRITE_OFFSETS", (0,)),
+        patch.object(
+            SunsynkCoordinator,
+            "_async_read_settings",
+            AsyncMock(side_effect=RuntimeError("unexpected")),
+        ),
+    ):
+        await SunsynkCoordinator._async_confirm_writes(
+            obj, "SN1", {"chargeCurrent": 1, "cap1": 3}, {"chargeCurrent": 100, "cap1": 50}
+        )
+
+    # This batch's own value is released; a newer write (id 2 != 3) is kept.
+    assert obj._unconfirmed_writes["SN1"] == {"cap1": (2, 50)}
+    fresh_poll = {"settings": {"chargeCurrent": 50}}
+    SunsynkCoordinator._overlay_unconfirmed_writes(obj, "SN1", fresh_poll)
+    assert fresh_poll["settings"]["chargeCurrent"] == 50

@@ -91,6 +91,14 @@ class TestGet:
         with pytest.raises(SunsynkApiError, match="Connection error"):
             await client._get(session, "https://api.sunsynk.net/x")
 
+    @pytest.mark.asyncio
+    async def test_timeout_is_an_api_error(self, client: SunsynkClient):
+        """aiohttp's total timeout is a TimeoutError, not a ClientError."""
+        session = fake_session()
+        session.get.side_effect = TimeoutError()
+        with pytest.raises(SunsynkApiError, match="Timed out"):
+            await client._get(session, "https://api.sunsynk.net/x")
+
 
 class TestPost:
     @pytest.mark.asyncio
@@ -110,6 +118,13 @@ class TestPost:
         session = fake_session()
         session.post.side_effect = aiohttp.ClientConnectionError("boom")
         with pytest.raises(SunsynkApiError, match="Connection error"):
+            await client._post(session, "https://api.sunsynk.net/x", {})
+
+    @pytest.mark.asyncio
+    async def test_timeout_is_an_api_error(self, client: SunsynkClient):
+        session = fake_session()
+        session.post.side_effect = TimeoutError()
+        with pytest.raises(SunsynkApiError, match="Timed out"):
             await client._post(session, "https://api.sunsynk.net/x", {})
 
     @pytest.mark.asyncio
