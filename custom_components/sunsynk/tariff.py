@@ -355,7 +355,13 @@ class TariffChargingManager:
     async def _evaluate(self) -> None:
         """Serialize evaluations triggered by price and coordinator updates."""
         async with self._evaluate_lock:
-            await self._evaluate_locked()
+            try:
+                await self._evaluate_locked()
+            except Exception:
+                # Runs as a fire-and-forget task on every price change and
+                # refresh; log it properly rather than as "Task exception was
+                # never retrieved" (#21).
+                _LOGGER.exception("Tariff Manager: evaluation failed")
         # Refresh the Tariff Mode / Price Quality sensors even when the mode
         # didn't change, so their price attributes show the price just read.
         self._notify_listeners()

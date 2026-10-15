@@ -459,27 +459,35 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             }
             payload.update(group_updates)
             payload["sn"] = serial
+            # Siblings are the inverter's own current values (from the fresh
+            # read) and are resent exactly as reported, as the Sunsynk portal
+            # and Predbat do. An out-of-range one is the inverter's business,
+            # not something to refuse over: a parallel master reporting
+            # chargeCurrent 1040 blocked every battery write and with it all
+            # of Tariff Manager (#21), as battMode -1 had before (#32). Only
+            # the values being changed must pass validation.
             try:
-                # Group writes also resend cached sibling values. Validate all
-                # writable siblings, not just the caller's changed fields, so
-                # a corrupt cached current/SOC/power cannot hitch a ride.
-                # Siblings are then sent exactly as the inverter reported
-                # them ("true", "17:00"), as the Sunsynk portal and 1.8 did.
-                for key in payload.keys() & WRITABLE_SETTING_KEYS:
-                    if key in group_updates:
-                        payload[key] = SunsynkCoordinator._as_reported(
-                            validate_setting_value(key, payload[key]),
-                            current_settings.get(key),
-                        )
-                    else:
-                        validate_cached_sibling(key, payload[key])
+                for key in group_updates.keys() & WRITABLE_SETTING_KEYS:
+                    payload[key] = SunsynkCoordinator._as_reported(
+                        validate_setting_value(key, payload[key]),
+                        current_settings.get(key),
+                    )
             except SunsynkSettingValidationError as err:
                 error = UpdateFailed(
-                    f"Unsafe cached setting blocks write of "
-                    f"{', '.join(group_updates)}: {err}"
+                    f"Refusing to write {', '.join(group_updates)}: {err}"
                 )
                 failures.update({key: error for key in group_updates})
                 continue
+            for key in (payload.keys() & WRITABLE_SETTING_KEYS) - group_updates.keys():
+                try:
+                    validate_cached_sibling(key, payload[key])
+                except SunsynkSettingValidationError as err:
+                    _LOGGER.debug(
+                        "Inverter %s reports an unusual %s, resent unchanged: %s",
+                        serial,
+                        key,
+                        err,
+                    )
             try:
                 await client.async_write_settings(session, serial, payload)
             except SunsynkAuthenticationError as err:

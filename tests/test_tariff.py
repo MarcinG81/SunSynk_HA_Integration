@@ -1071,3 +1071,16 @@ def test_a_failing_listener_does_not_stop_the_others(mock_hass, mock_coordinator
 
     switch.assert_called()
     assert "a listener failed to update" in caplog.text
+
+
+
+@pytest.mark.asyncio
+async def test_evaluation_error_is_logged_not_left_unretrieved(
+    mock_hass, mock_coordinator, caplog
+):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    mgr._enabled = True
+    with patch.object(mgr, "_evaluate_locked", AsyncMock(side_effect=RuntimeError("x"))):
+        await mgr._evaluate()
+
+    assert "Tariff Manager: evaluation failed" in caplog.text

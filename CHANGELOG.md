@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Tariff Manager couldn't discharge on some inverters: "Unsafe cached setting blocks write of dischargeCurrent".** Since beta.1 the integration refused to send a battery setting change if any *other* battery setting your inverter reports looked out of range. A parallel master reporting a charge current of 1040 therefore blocked every battery change, including Tariff Manager's discharge current, the moment the export price crossed the threshold. Other settings are your inverter's own values and are now sent back exactly as it reports them, as the Sunsynk portal does; only the value being changed is checked. Stable 1.9 was never affected. (#21)
+- **Tariff Manager errors were logged as "Task exception was never retrieved"** on every refresh. They're now logged once per evaluation with a clear message. (#21)
+
 ## [2.0.0-beta.10] - 2026-10-14
 
 ### Fixed

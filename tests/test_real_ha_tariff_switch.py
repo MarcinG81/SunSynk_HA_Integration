@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.helpers import entity_registry as er
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.sunsynk.const import DOMAIN
@@ -149,6 +150,7 @@ async def _setup_parallel(hass, options):
     )
     entry.add_to_hass(hass)
     hass.config.components.update({"frontend", "lovelace", "http"})
+    assert await async_setup_component(hass, "persistent_notification", {})
     hass.states.async_set("sensor.import_price", "26.38")
     hass.states.async_set("input_number.export_rate", "0.15")
     patches = (
@@ -202,3 +204,45 @@ async def test_tariff_switch_on_parallel_system_after_being_switched_off(hass):
     finally:
         for p in patches:
             p.stop()
+
+
+@pytest.mark.asyncio
+async def test_switch_stays_on_when_the_export_price_crosses_the_threshold(hass):
+    """#21: the reporter's master reports chargeCurrent 1040. Crossing the
+    export threshold made Tariff Manager write dischargeCurrent, which the
+    sibling check blocked, and the switch ended up off."""
+    options = {**PAY4PROPERTY_OPTIONS, "serials": [SLAVE, SERIAL], "tariff_enabled": False}
+    original = _parallel_data
+
+    def _with_reported_1040(serial):
+        data = original(serial)
+        data["settings"]["chargeCurrent"] = 1040
+        return data
+
+    with patch(f"{__name__}._parallel_data", side_effect=_with_reported_1040):
+        entry, patches = await _setup_parallel(hass, options)
+        try:
+            registry = er.async_get(hass)
+            switch = registry.async_get_entity_id(
+                "switch", DOMAIN, f"{entry.entry_id}_tariff_enabled"
+            )
+            mode = registry.async_get_entity_id(
+                "sensor", DOMAIN, f"{entry.entry_id}_tariff_mode"
+            )
+            await hass.services.async_call(
+                "switch", "turn_on", {"entity_id": switch}, blocking=True
+            )
+            await hass.async_block_till_done()
+            hass.states.async_set("input_number.export_rate", "0.18")
+            await hass.async_block_till_done()
+
+            assert hass.states.get(switch).state == "on"
+            assert hass.states.get(mode).state == "discharging"
+            decision = hass.states.get(mode).attributes["decisions"][SERIAL]
+            assert decision["discharging"] == "discharging"
+            assert decision["export_price"] == 0.18
+            await hass.config_entries.async_unload(entry.entry_id)
+            await hass.async_block_till_done()
+        finally:
+            for p in patches:
+                p.stop()

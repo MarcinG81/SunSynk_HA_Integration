@@ -162,24 +162,43 @@ async def test_invalid_batch_is_rejected_before_queue_or_api(fake_coordinator):
 
 
 @pytest.mark.asyncio
-async def test_invalid_cached_sibling_cannot_hitchhike_in_payload(fake_coordinator):
+async def test_inverter_reported_out_of_range_sibling_is_resent_unchanged(
+    fake_coordinator,
+):
+    """#21: a parallel master reports chargeCurrent 1040. Refusing to resend
+    it blocked every battery write, so Tariff Manager could never discharge.
+    Siblings are the inverter's own values and go back exactly as reported."""
     fake_coordinator.data["TEST123"]["settings"].update(
-        {"chargeCurrent": 40, "dischargeCurrent": 1040}
+        {"chargeCurrent": 1040, "dischargeCurrent": 50}
     )
-    mock_client = MagicMock()
-    mock_client.async_write_settings = AsyncMock()
+    sent_payloads: list[dict] = []
+    mock_client = _echoing_client(sent_payloads)
 
-    with (
-        patch(
-            "custom_components.sunsynk.coordinator.SunsynkClient",
-            return_value=mock_client,
-        ),
-        pytest.raises(UpdateFailed, match="Unsafe cached setting.*dischargeCurrent"),
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient",
+        return_value=mock_client,
     ):
         await SunsynkCoordinator.async_write_setting(
-            fake_coordinator, "TEST123", "chargeCurrent", 50
+            fake_coordinator, "TEST123", "dischargeCurrent", 27
         )
 
+    assert sent_payloads[0]["chargeCurrent"] == 1040
+    assert sent_payloads[0]["dischargeCurrent"] == 27
+
+
+@pytest.mark.asyncio
+async def test_invalid_changed_value_is_still_refused(fake_coordinator):
+    mock_client = _echoing_client([])
+
+    with patch(
+        "custom_components.sunsynk.coordinator.SunsynkClient",
+        return_value=mock_client,
+    ):
+        failures = await SunsynkCoordinator._async_execute_setting_batch(
+            fake_coordinator, "TEST123", {"chargeCurrent": 1040}
+        )
+
+    assert "Refusing to write chargeCurrent" in str(failures["chargeCurrent"])
     mock_client.async_write_settings.assert_not_awaited()
 
 
