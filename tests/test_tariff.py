@@ -747,10 +747,12 @@ async def test_shutdown_attempts_every_inverter_after_restore_failure(
     mock_hass, mock_coordinator
 ):
     mock_coordinator.write_target_serials = ["INV1", "INV2"]
-    mock_coordinator.async_write_settings.side_effect = [
-        RuntimeError("INV1 offline"),
-        None,
-    ]
+
+    async def _write(serial, settings):
+        if serial == "INV1":
+            raise RuntimeError("INV1 offline")
+
+    mock_coordinator.async_write_settings.side_effect = _write
     mgr = _make_manager(mock_hass, mock_coordinator, normal_charge=50)
     mgr._enabled = True
     mgr._charging_active_serials.update({"INV1", "INV2"})
@@ -762,7 +764,9 @@ async def test_shutdown_attempts_every_inverter_after_restore_failure(
     mock_coordinator.async_write_settings.assert_any_await(
         "INV2", {"chargeCurrent": 50}
     )
-    assert not mgr.is_charging_active
+    # INV2 was restored and released; INV1 still owes a restore.
+    assert mgr.is_charging_active_for("INV1")
+    assert not mgr.is_charging_active_for("INV2")
 
 
 # ── Export price staleness (#16, #21, #30) ──────────────────────────────────
@@ -1098,3 +1102,103 @@ def test_non_finite_price_is_invalid(mock_hass, mock_coordinator, value):
 
     assert quality == QUALITY_INVALID
     assert mgr._read_price("sensor.electricity_price") is None
+
+
+
+# ── Safety review: stale SOC, failed restore, mid-mode current change ──────
+
+
+@pytest.mark.asyncio
+async def test_no_decision_on_soc_kept_from_a_failed_refresh(mock_hass, mock_coordinator):
+    """A failed refresh keeps the previous data: a 50% SOC that may be hours
+    old must not start a 100 A charge."""
+    mock_hass.states.get.return_value = _price_state("0.05")
+    mock_coordinator.data["TEST123"]["battery"]["soc"] = 50
+    mock_coordinator.last_update_success = False
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    mgr._enabled = True
+
+    await mgr._evaluate()
+
+    mock_coordinator.async_write_setting.assert_not_awaited()
+    assert not mgr.is_charging_active_for("TEST123")
+    assert mgr.decisions["TEST123"]["charging"] == "battery SOC unavailable (stale)"
+
+
+@pytest.mark.asyncio
+async def test_active_charge_stops_when_refreshes_start_failing(mock_hass, mock_coordinator):
+    mock_hass.states.get.return_value = _price_state("0.05")
+    mgr = _make_manager(mock_hass, mock_coordinator, normal_charge=50)
+    mgr._enabled = True
+    await mgr._evaluate()
+    assert mgr.is_charging_active_for("TEST123")
+
+    mock_coordinator.last_update_success = False
+    await mgr._evaluate()
+
+    assert not mgr.is_charging_active_for("TEST123")
+    mock_coordinator.async_write_setting.assert_awaited_with("TEST123", "chargeCurrent", 50)
+
+
+@pytest.mark.asyncio
+async def test_failed_restore_is_retried_on_the_next_update(mock_hass, mock_coordinator):
+    """Disabling while charging: a failed restore must keep ownership and be
+    retried, not report success without sending anything."""
+    _consume_created_tasks(mock_hass)
+    mgr = _make_manager(mock_hass, mock_coordinator, normal_charge=50)
+    mgr._charging_active_serials.add("TEST123")
+    mock_coordinator.async_write_settings.side_effect = [RuntimeError("API down"), None]
+
+    assert await mgr._async_restore_active_currents() is False
+    assert mgr.is_charging_active_for("TEST123")
+
+    mgr._enabled = False
+    await mgr._evaluate()  # next coordinator update, Tariff Manager disabled
+
+    assert not mgr.is_charging_active_for("TEST123")
+    assert mock_coordinator.async_write_settings.await_count == 2
+    mock_coordinator.async_write_settings.assert_awaited_with(
+        "TEST123", {"chargeCurrent": 50}
+    )
+
+
+@pytest.mark.asyncio
+async def test_disabled_without_owned_currents_does_nothing(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    await mgr._evaluate()
+    mock_coordinator.async_write_settings.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_changed_charge_current_is_applied_while_charging(mock_hass, mock_coordinator):
+    mock_hass.states.get.return_value = _price_state("0.05")
+    mgr = _make_manager(mock_hass, mock_coordinator, cheap_current=100)
+    mgr._enabled = True
+    await mgr._evaluate()
+    mock_coordinator.async_write_setting.assert_awaited_with("TEST123", "chargeCurrent", 100)
+
+    mgr._cheap_current = 80
+    await mgr._evaluate()
+
+    mock_coordinator.async_write_setting.assert_awaited_with("TEST123", "chargeCurrent", 80)
+    mock_coordinator.async_write_setting.reset_mock()
+    await mgr._evaluate()  # unchanged: nothing sent
+    mock_coordinator.async_write_setting.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_changed_discharge_current_is_applied_while_discharging(
+    mock_hass, mock_coordinator
+):
+    mock_hass.states.get.return_value = _price_state("0.40")
+    mgr = _make_manager(mock_hass, mock_coordinator, peak_discharge=100)
+    mgr._enabled = True
+    await mgr._evaluate()
+    assert mgr.is_discharging_active_for("TEST123")
+
+    mgr._peak_discharge_current = 60
+    await mgr._evaluate()
+
+    mock_coordinator.async_write_setting.assert_awaited_with(
+        "TEST123", "dischargeCurrent", 60
+    )

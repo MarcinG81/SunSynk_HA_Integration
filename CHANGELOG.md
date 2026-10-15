@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Tariff Manager could act on an old battery SOC.** When every inverter failed to refresh, Home Assistant kept the previous data, and a price change could then start charging or discharging based on a SOC that might be hours old. Tariff Manager now treats the SOC as unavailable until a refresh succeeds: it stops anything it's doing and makes no new decision.
+- **A failed restore of the normal currents was forgotten.** When Tariff Manager was switched off or stopped and putting the normal charge or discharge current back failed (e.g. the Sunsynk cloud was down), it still marked that inverter as restored, so the tariff current could stay in place with no retry. It now keeps track of it and retries on the next refresh, even while switched off.
+- **Changing the cheap-rate charge current or peak discharge current while it was active had no effect** until the next time charging or discharging started. The new current is now sent straight away.
+
 ## [2.0.0-beta.11] - 2026-10-15
 
 ### Added

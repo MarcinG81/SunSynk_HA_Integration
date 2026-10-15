@@ -108,6 +108,10 @@ class TariffChargingManager:
         # remaining ones.
         self._charging_active_serials: set[str] = set()
         self._discharging_active_serials: set[str] = set()
+        # The current last written while each mode is active, so a changed
+        # setting is applied mid-mode rather than only on the next entry.
+        self._applied_charge_current: dict[str, int] = {}
+        self._applied_discharge_current: dict[str, int] = {}
         self._price_quality: str = QUALITY_NOT_FOUND
         self._export_price_quality: str = QUALITY_NOT_FOUND
         self._soc_quality_by_serial: dict[str, str] = {}
@@ -201,36 +205,54 @@ class TariffChargingManager:
 
     async def _async_restore_active_currents(self) -> bool:
         """Await restoration of all currents currently owned by the manager."""
-        success = True
         async with self._evaluate_lock:
-            charge_serials = set(self._charging_active_serials)
-            discharge_serials = set(self._discharging_active_serials)
-
-            for serial in self._coordinator.write_target_serials:
-                restores: dict[str, int] = {}
-                if serial in charge_serials and self._normal_charge_current is not None:
-                    restores["chargeCurrent"] = self._normal_charge_current
-                if (
-                    serial in discharge_serials
-                    and self._normal_discharge_current is not None
-                ):
-                    restores["dischargeCurrent"] = self._normal_discharge_current
-                if restores:
-                    try:
-                        await self._coordinator.async_write_settings(serial, restores)
-                    except Exception as err:  # noqa: BLE001
-                        success = False
-                        _LOGGER.error(
-                            "Tariff shutdown: could not restore currents for %s: %s",
-                            serial,
-                            err,
-                        )
-
-            self._charging_active_serials.clear()
-            self._discharging_active_serials.clear()
-
+            success = await self._restore_active_currents_locked()
         self._notify_listeners()
         return success
+
+    async def _restore_active_currents_locked(self) -> bool:
+        """Restore normal currents, keeping ownership of any that failed.
+
+        A target is only released once its restore was written: clearing it
+        on a failed write left the inverter at the tariff current with
+        nothing left to retry it. A failed restore is retried on the next
+        coordinator update, even while Tariff Manager is disabled.
+        """
+        success = True
+        for serial in set(self._charging_active_serials) | set(
+            self._discharging_active_serials
+        ):
+            restores: dict[str, int] = {}
+            if (
+                serial in self._charging_active_serials
+                and self._normal_charge_current is not None
+            ):
+                restores["chargeCurrent"] = self._normal_charge_current
+            if (
+                serial in self._discharging_active_serials
+                and self._normal_discharge_current is not None
+            ):
+                restores["dischargeCurrent"] = self._normal_discharge_current
+            if restores:
+                try:
+                    await self._coordinator.async_write_settings(serial, restores)
+                except Exception as err:  # noqa: BLE001
+                    success = False
+                    _LOGGER.error(
+                        "Tariff Manager: could not restore currents for %s, "
+                        "will retry: %s",
+                        serial,
+                        err,
+                    )
+                    continue
+            self._release(serial)
+        return success
+
+    def _release(self, serial: str) -> None:
+        self._charging_active_serials.discard(serial)
+        self._discharging_active_serials.discard(serial)
+        self._applied_charge_current.pop(serial, None)
+        self._applied_discharge_current.pop(serial, None)
 
     async def async_shutdown(self) -> bool:
         """Stop callbacks and restore owned currents before unload/reload."""
@@ -309,6 +331,7 @@ class TariffChargingManager:
                 serial, "chargeCurrent", self._normal_charge_current
             )
         self._charging_active_serials.discard(serial)
+        self._applied_charge_current.pop(serial, None)
         self._send_notification(
             "Tariff: Charging stopped", f"Inverter {serial}: {reason.capitalize()}."
         )
@@ -324,6 +347,7 @@ class TariffChargingManager:
                 serial, "dischargeCurrent", self._normal_discharge_current
             )
         self._discharging_active_serials.discard(serial)
+        self._applied_discharge_current.pop(serial, None)
         self._send_notification(
             "Tariff: Discharging stopped", f"Inverter {serial}: {reason.capitalize()}."
         )
@@ -383,6 +407,9 @@ class TariffChargingManager:
         current value.
         """
         if not self._enabled:
+            if self._charging_active_serials or self._discharging_active_serials:
+                await self._restore_active_currents_locked()
+                self._notify_listeners()
             return
 
         import_quality, import_detail = self._compute_price_quality(self._price_entity)
@@ -414,6 +441,10 @@ class TariffChargingManager:
         for serial in self._coordinator.write_target_serials:
             battery = (self._coordinator.data or {}).get(serial, {}).get("battery", {})
             soc, soc_quality = self._read_soc(battery)
+            if getattr(self._coordinator, "last_update_success", True) is False:
+                # A failed refresh keeps the previous data, so this SOC may be
+                # minutes or hours old. Never decide on it.
+                soc, soc_quality = None, QUALITY_STALE
             previous_soc_quality = self._soc_quality_by_serial.get(serial)
             if soc_quality != previous_soc_quality:
                 log = _LOGGER.info if soc_quality == QUALITY_OK else _LOGGER.warning
@@ -571,11 +602,23 @@ class TariffChargingManager:
                 serial, "chargeCurrent", self._cheap_current
             )
             self._charging_active_serials.add(serial)
+            self._applied_charge_current[serial] = self._cheap_current
             self._send_notification(
                 "Tariff: Charging started",
                 f"Inverter {serial}: price {price:.4f} ≤ threshold {self._cheap_threshold}. "
                 f"Charging at {self._cheap_current} A until {self._target_soc}% SOC.",
             )
+            self._notify_listeners()
+
+        elif (
+            should_charge
+            and self._applied_charge_current.get(serial) != self._cheap_current
+        ):
+            # The cheap-rate current was changed while charging.
+            await self._coordinator.async_write_setting(
+                serial, "chargeCurrent", self._cheap_current
+            )
+            self._applied_charge_current[serial] = self._cheap_current
             self._notify_listeners()
 
         elif not should_charge and serial in self._charging_active_serials:
@@ -616,12 +659,26 @@ class TariffChargingManager:
                 serial, "dischargeCurrent", self._peak_discharge_current
             )
             self._discharging_active_serials.add(serial)
+            self._applied_discharge_current[serial] = self._peak_discharge_current
             self._send_notification(
                 "Tariff: Discharging started",
                 f"Inverter {serial}: price {price:.4f} ≥ threshold {self._expensive_threshold}. "
                 f"Discharging at {self._peak_discharge_current} A "
                 f"(min SOC {self._discharge_min_soc}%).",
             )
+            self._notify_listeners()
+
+        elif (
+            should_discharge
+            and serial in self._discharging_active_serials
+            and self._applied_discharge_current.get(serial)
+            != self._peak_discharge_current
+        ):
+            # The peak discharge current was changed while discharging.
+            await self._coordinator.async_write_setting(
+                serial, "dischargeCurrent", self._peak_discharge_current
+            )
+            self._applied_discharge_current[serial] = self._peak_discharge_current
             self._notify_listeners()
 
         elif not should_discharge and serial in self._discharging_active_serials:
