@@ -170,12 +170,15 @@ async def test_sell_power_is_not_capped_by_the_battery():
 # ── set_virtual_slot refuses a current above the inverter's Max A ──────────
 
 
-def _real_coordinator(inverters: int, *, max_a: int, rated_bms: int | None):
+def _real_coordinator(
+    inverters: int, *, max_a: int, rated_bms: int | None, rated_w: int = 12000
+):
     coordinator = object.__new__(SunsynkCoordinator)
     slaves = [f"SLAVE{n}" for n in range(1, inverters)]
     coordinator.serials = [*slaves, MASTER]
     coordinator.data = {
         MASTER: {
+            "inverter": {"ratePower": rated_w},
             "settings": {
                 "parallel": int(inverters > 1),
                 "equipMode": 1,
@@ -189,9 +192,23 @@ def _real_coordinator(inverters: int, *, max_a: int, rated_bms: int | None):
     return coordinator
 
 
-async def _set_virtual_slot(inverters, *, max_a, rated_bms, current):
-    coordinator = _real_coordinator(inverters, max_a=max_a, rated_bms=rated_bms)
-    scheduler = MagicMock(serial=MASTER, async_set_slot=AsyncMock())
+async def _set_virtual_slot(
+    inverters,
+    *,
+    max_a=240,
+    rated_bms=None,
+    current=100,
+    sell_power=5000,
+    rated_w=12000,
+    max_export_power=None,
+):
+    coordinator = _real_coordinator(
+        inverters, max_a=max_a, rated_bms=rated_bms, rated_w=rated_w
+    )
+    scheduler = VirtualSlotScheduler(
+        MagicMock(), coordinator, "entry", MASTER, max_export_power=max_export_power
+    )
+    scheduler.async_set_slot = AsyncMock()
     handlers = {}
     hass = MagicMock()
     hass.data = {DOMAIN: {"entry": coordinator, "entry_vslots": {MASTER: scheduler}}}
@@ -209,7 +226,7 @@ async def _set_virtual_slot(inverters, *, max_a, rated_bms, current):
                 "end": "19:00",
                 "mode": "discharge",
                 "current": current,
-                "sell_power": 5000,
+                "sell_power": sell_power,
                 "priority": 0,
                 "enabled": True,
             }
@@ -252,6 +269,90 @@ async def test_set_virtual_slot_accepts_a_current_within_both(
 ):
     scheduler = await _set_virtual_slot(
         inverters, max_a=max_a, rated_bms=rated_bms, current=current
+    )
+
+    scheduler.async_set_slot.assert_awaited_once()
+
+
+# ── set_virtual_slot refuses more sell power than may be exported ──────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("inverters", "rated_w", "export", "sell_power", "message"),
+    [
+        (1, 12000, None, 12001, "at most 12000 W \\(inverter rated 12000 W\\)"),
+        (2, 12000, None, 20000, "at most 12000 W"),  # rated is per inverter
+        (1, 12000, 11000, 11001, "maximum export 11000 W\\)"),
+        (
+            2,
+            12000,
+            11000,
+            6000,
+            "maximum export 11000 W shared by 2 inverters = 5500 W each",
+        ),
+        (2, 5000, 11000, 5001, "at most 5000 W"),  # rated below the share
+    ],
+)
+async def test_set_virtual_slot_refuses_sell_power_above_what_may_be_exported(
+    inverters, rated_w, export, sell_power, message
+):
+    with pytest.raises(ServiceValidationError, match=message):
+        await _set_virtual_slot(
+            inverters, rated_w=rated_w, max_export_power=export, sell_power=sell_power
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("inverters", "rated_w", "export", "sell_power"),
+    [
+        (1, 12000, None, 12000),
+        (1, 12000, 11000, 11000),
+        (2, 12000, 11000, 5500),  # #21: exactly the share
+        (2, 0, None, 30000),  # rated power not known yet: nothing to check
+    ],
+)
+async def test_set_virtual_slot_accepts_sell_power_within_the_limits(
+    inverters, rated_w, export, sell_power
+):
+    scheduler = await _set_virtual_slot(
+        inverters, rated_w=rated_w, max_export_power=export, sell_power=sell_power
+    )
+
+    scheduler.async_set_slot.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["idle", "charge"])
+async def test_sell_power_of_non_selling_windows_is_not_checked(mode):
+    coordinator = _real_coordinator(2, max_a=240, rated_bms=None)
+    scheduler = VirtualSlotScheduler(
+        MagicMock(), coordinator, "entry", MASTER, max_export_power=11000
+    )
+    scheduler.async_set_slot = AsyncMock()
+    handlers = {}
+    hass = MagicMock()
+    hass.data = {DOMAIN: {"entry": coordinator, "entry_vslots": {MASTER: scheduler}}}
+    hass.http.async_register_static_paths = AsyncMock()
+    hass.services.async_register.side_effect = lambda domain, service, handler, schema: (
+        handlers.setdefault(service, handler)
+    )
+    await async_setup(hass, {})
+
+    await handlers["set_virtual_slot"](
+        SimpleNamespace(
+            data={
+                "serial": MASTER,
+                "slot_id": 1,
+                "start": "16:00",
+                "end": "19:00",
+                "mode": mode,
+                "sell_power": 30000,
+                "priority": 0,
+                "enabled": True,
+            }
+        )
     )
 
     scheduler.async_set_slot.assert_awaited_once()

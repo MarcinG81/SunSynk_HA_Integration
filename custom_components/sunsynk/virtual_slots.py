@@ -713,6 +713,30 @@ class VirtualSlotScheduler:
         inverters = max(1, group_sizes(self._coordinator).get(self._serial, 1))
         return max(1, int(self._max_export_power) // inverters)
 
+    def sell_power_limit(self) -> tuple[int | None, str]:
+        """Most a discharge window may sell on this inverter, in W, and why.
+
+        The lower of the inverter's rated power and its share of the maximum
+        export power. (None, "") while neither is known.
+        """
+        rated = self._rated_power()
+        share = self._export_share()
+        parts = []
+        if rated is not None:
+            parts.append(f"inverter rated {rated} W")
+        if share is not None:
+            inverters = max(1, group_sizes(self._coordinator).get(self._serial, 1))
+            parts.append(
+                f"maximum export {self._max_export_power} W"
+                + (
+                    f" shared by {inverters} inverters = {share} W each"
+                    if inverters > 1
+                    else ""
+                )
+            )
+        known = [value for value in (rated, share) if value is not None]
+        return (min(known) if known else None), ", ".join(parts)
+
     _DEFAULT_SOC_FLOOR = 20
 
     def _soc_floor(self) -> int:

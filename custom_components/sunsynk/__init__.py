@@ -449,6 +449,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 call.data["mode"],
                 call.data.get("current"),
             )
+        if call.data["mode"] == MODE_DISCHARGE:
+            max_sell, why = scheduler.sell_power_limit()
+            if max_sell is not None and call.data["sell_power"] > max_sell:
+                raise ServiceValidationError(
+                    f"Sell power {call.data['sell_power']} W is too high: "
+                    f"inverter {scheduler.serial} may sell at most {max_sell} W "
+                    f"({why})"
+                )
         weekdays = call.data.get("weekdays") or list(WEEKDAY_NAMES)
         slot = VirtualSlot(
             slot_id=call.data["slot_id"],
