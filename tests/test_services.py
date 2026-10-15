@@ -265,7 +265,8 @@ async def test_services_refuse_currents_above_the_hardware_limit():
         "batteryMaxCurrentCharge": 120,
         "batteryMaxCurrentDischarge": 120,
     }
-    coordinator.data["MASTER1"]["battery"] = {"maxDischargeCurrentLimit": 100}
+    # SLAVE1 + MASTER1 share one bank: 200 A between two is 100 A each.
+    coordinator.data["MASTER1"]["battery"] = {"maxDischargeCurrentLimit": 200}
     coordinator.async_write_setting = AsyncMock()
     scheduler = MagicMock(serial="MASTER1", async_set_slot=AsyncMock())
     handlers = {}
@@ -296,7 +297,9 @@ async def test_services_refuse_currents_above_the_hardware_limit():
         await handlers["force_charge"](
             SimpleNamespace(data={"serial": "SLAVE1", "current": 150})
         )
-    with pytest.raises(ServiceValidationError, match="battery BMS 100 A"):
+    with pytest.raises(
+        ServiceValidationError, match="battery BMS 200 A shared by 2 inverters"
+    ):
         await handlers["force_discharge"](
             SimpleNamespace(data={"serial": "SLAVE1", "current": 101})
         )

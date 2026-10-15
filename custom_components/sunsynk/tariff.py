@@ -13,6 +13,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
 from .coordinator import SunsynkCoordinator
+from .current_limits import battery_safe_current
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -227,12 +228,16 @@ class TariffChargingManager:
                 serial in self._charging_active_serials
                 and self._normal_charge_current is not None
             ):
-                restores["chargeCurrent"] = self._normal_charge_current
+                restores["chargeCurrent"] = self._safe(
+                    serial, "charge", self._normal_charge_current
+                )
             if (
                 serial in self._discharging_active_serials
                 and self._normal_discharge_current is not None
             ):
-                restores["dischargeCurrent"] = self._normal_discharge_current
+                restores["dischargeCurrent"] = self._safe(
+                    serial, "discharge", self._normal_discharge_current
+                )
             if restores:
                 try:
                     await self._coordinator.async_write_settings(serial, restores)
@@ -247,6 +252,15 @@ class TariffChargingManager:
                     continue
             self._release(serial)
         return success
+
+    def _safe(self, serial: str, direction: str, amps: int) -> int:
+        """`amps`, lowered if the parallel group would exceed the battery BMS.
+
+        Checked when a current is written, not on every refresh: the BMS
+        limit moves a few amps at a time, and each change would otherwise be
+        another write to the master.
+        """
+        return battery_safe_current(self._coordinator, serial, direction, amps)
 
     def _release(self, serial: str) -> None:
         self._charging_active_serials.discard(serial)
@@ -328,7 +342,9 @@ class TariffChargingManager:
         _LOGGER.warning("Tariff: stopping charging [%s] — %s", serial, reason)
         if self._normal_charge_current is not None:
             await self._coordinator.async_write_setting(
-                serial, "chargeCurrent", self._normal_charge_current
+                serial,
+                "chargeCurrent",
+                self._safe(serial, "charge", self._normal_charge_current),
             )
         self._charging_active_serials.discard(serial)
         self._applied_charge_current.pop(serial, None)
@@ -344,7 +360,9 @@ class TariffChargingManager:
         _LOGGER.warning("Tariff: stopping discharging [%s] — %s", serial, reason)
         if self._normal_discharge_current is not None:
             await self._coordinator.async_write_setting(
-                serial, "dischargeCurrent", self._normal_discharge_current
+                serial,
+                "dischargeCurrent",
+                self._safe(serial, "discharge", self._normal_discharge_current),
             )
         self._discharging_active_serials.discard(serial)
         self._applied_discharge_current.pop(serial, None)
@@ -613,15 +631,14 @@ class TariffChargingManager:
                 soc,
                 self._target_soc,
             )
-            await self._coordinator.async_write_setting(
-                serial, "chargeCurrent", self._cheap_current
-            )
+            amps = self._safe(serial, "charge", self._cheap_current)
+            await self._coordinator.async_write_setting(serial, "chargeCurrent", amps)
             self._charging_active_serials.add(serial)
             self._applied_charge_current[serial] = self._cheap_current
             self._send_notification(
                 "Tariff: Charging started",
                 f"Inverter {serial}: price {price:.4f} ≤ threshold {self._cheap_threshold}. "
-                f"Charging at {self._cheap_current} A until {self._target_soc}% SOC.",
+                f"Charging at {amps} A until {self._target_soc}% SOC.",
             )
             self._notify_listeners()
 
@@ -631,7 +648,9 @@ class TariffChargingManager:
         ):
             # The cheap-rate current was changed while charging.
             await self._coordinator.async_write_setting(
-                serial, "chargeCurrent", self._cheap_current
+                serial,
+                "chargeCurrent",
+                self._safe(serial, "charge", self._cheap_current),
             )
             self._applied_charge_current[serial] = self._cheap_current
             self._notify_listeners()
@@ -670,15 +689,16 @@ class TariffChargingManager:
                 soc,
                 self._discharge_min_soc,
             )
+            amps = self._safe(serial, "discharge", self._peak_discharge_current)
             await self._coordinator.async_write_setting(
-                serial, "dischargeCurrent", self._peak_discharge_current
+                serial, "dischargeCurrent", amps
             )
             self._discharging_active_serials.add(serial)
             self._applied_discharge_current[serial] = self._peak_discharge_current
             self._send_notification(
                 "Tariff: Discharging started",
                 f"Inverter {serial}: price {price:.4f} ≥ threshold {self._expensive_threshold}. "
-                f"Discharging at {self._peak_discharge_current} A "
+                f"Discharging at {amps} A "
                 f"(min SOC {self._discharge_min_soc}%).",
             )
             self._notify_listeners()
@@ -691,7 +711,9 @@ class TariffChargingManager:
         ):
             # The peak discharge current was changed while discharging.
             await self._coordinator.async_write_setting(
-                serial, "dischargeCurrent", self._peak_discharge_current
+                serial,
+                "dischargeCurrent",
+                self._safe(serial, "discharge", self._peak_discharge_current),
             )
             self._applied_discharge_current[serial] = self._peak_discharge_current
             self._notify_listeners()

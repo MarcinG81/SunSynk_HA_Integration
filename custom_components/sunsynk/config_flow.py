@@ -51,7 +51,7 @@ from .const import (
     MAX_REFRESH_INTERVAL,
     MIN_REFRESH_INTERVAL,
 )
-from .current_limits import current_limit, describe_limit
+from .current_limits import current_limit, describe_limit, group_sizes
 from .write_validation import MAX_CURRENT_A
 
 _LOGGER = logging.getLogger(__name__)
@@ -481,7 +481,9 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
             ("charge", (CONF_CHEAP_CHARGE_CURRENT, CONF_NORMAL_CHARGE_CURRENT)),
             ("discharge", (CONF_PEAK_DISCHARGE_CURRENT, CONF_NORMAL_DISCHARGE_CURRENT)),
         ):
-            limit = current_limit(coordinator.data, serials, direction)
+            limit = current_limit(
+                coordinator.data, serials, direction, group_sizes(coordinator)
+            )
             if limit.maximum is None:
                 continue
             for field in fields:

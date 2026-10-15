@@ -46,6 +46,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
+from .current_limits import battery_safe_current
 
 if TYPE_CHECKING:
     from .tariff import TariffChargingManager
@@ -525,7 +526,11 @@ class VirtualSlotScheduler:
                 if current_restores:
                     try:
                         await self._coordinator.async_write_settings(
-                            self._serial, current_restores
+                            self._serial,
+                            {
+                                key: self._safe(key, value)
+                                for key, value in current_restores.items()
+                            },
                         )
                     except Exception as err:  # noqa: BLE001
                         success = False
@@ -951,14 +956,16 @@ class VirtualSlotScheduler:
                 return False
             if self._normal_charge_current is not None:
                 await self._coordinator.async_write_setting(
-                    self._serial, "chargeCurrent", self._normal_charge_current
+                    self._serial,
+                    "chargeCurrent",
+                    self._safe("chargeCurrent", self._normal_charge_current),
                 )
                 wrote = True
             if self._normal_discharge_current is not None:
                 await self._coordinator.async_write_setting(
                     self._serial,
                     "dischargeCurrent",
-                    self._normal_discharge_current,
+                    self._safe("dischargeCurrent", self._normal_discharge_current),
                 )
                 wrote = True
             self._last_current_key = _CurrentState.IDLE
@@ -969,9 +976,16 @@ class VirtualSlotScheduler:
         current_key = (key, value)
         if current_key == self._last_current_key:
             return False
-        await self._coordinator.async_write_setting(self._serial, key, value)
+        await self._coordinator.async_write_setting(
+            self._serial, key, self._safe(key, value)
+        )
         self._last_current_key = current_key
         return True
+
+    def _safe(self, key: str, amps: int) -> int:
+        """`amps`, lowered if the parallel group would exceed the battery BMS."""
+        direction = "charge" if key == "chargeCurrent" else "discharge"
+        return battery_safe_current(self._coordinator, self._serial, direction, amps)
 
     # ── Properties ───────────────────────────────────────────────────────
 

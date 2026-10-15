@@ -58,7 +58,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
-from .current_limits import current_limit, describe_limit
+from .current_limits import current_limit, describe_limit, group_sizes
 from .dashboard import build_dashboard
 from .helpers import options_snapshot_key
 from .tariff import TariffChargingManager
@@ -273,7 +273,9 @@ def _ensure_current_within_limit(
     """Refuse a current the inverter or battery won't use, saying what will."""
     if not current:
         return
-    limit = current_limit(coordinator.data, [target], direction)
+    limit = current_limit(
+        coordinator.data, [target], direction, group_sizes(coordinator)
+    )
     if limit.maximum is not None and current > limit.maximum:
         raise ServiceValidationError(
             f"{current} A is too high: inverter {target} {direction}s the battery "

@@ -3,10 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0-beta.12] - 2026-10-15
 
 ### Added
 - **Charge and discharge currents are checked against what your hardware will actually use.** A current above your inverter's own battery limit (its "Max A" charge or discharge setting) or the limit your lithium battery's BMS reports was accepted before and simply had no effect. **Configure** now refuses a Tariff Manager current above the lower of the two and shows the maximum, e.g. "no more than 100 A (inverter 120 A, battery BMS 100 A)". The `force_charge`, `force_discharge` and `set_virtual_slot` actions refuse it in the same way. A limit your inverter doesn't report, or reports as an implausible value, is never used to refuse a current.
+- **Parallel systems no longer ask a shared battery for more than its BMS allows.** In a parallel group, each inverter applies the same current to the same battery bank, so the bank supplies that current times the number of inverters: two inverters at 240 A draw 480 A. When Tariff Manager or the Virtual Slot Scheduler sets a current, it now checks the total against what the battery's BMS allows at that moment. If the total is too high, it lowers the current to the BMS limit divided by the number of inverters and logs that it did. For example, two inverters set to charge at 120 A each, with a BMS limit of 192 A, are each set to 96 A. Configure and the actions use the same per-inverter share of a fixed BMS limit. (#21)
 - **Every language now has a full translation of Configure and of the setting repair.** Several newer options, including "Allow only administrators to use control actions", were still in English in Afrikaans, Czech, German, Spanish, French, Polish, Russian and Chinese.
 
 ### Fixed
