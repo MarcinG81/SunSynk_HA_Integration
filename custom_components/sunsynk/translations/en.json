@@ -37,6 +37,7 @@
           "serials": "Inverter Serial Number(s)",
           "refresh_interval": "Refresh Interval (seconds)",
           "create_dashboard": "Create and maintain Sunsynk dashboard",
+          "admin_only_control": "Allow only administrators to use control actions",
           "latitude": "Latitude (Solar Forecast)",
           "longitude": "Longitude (Solar Forecast)",
           "panel_kwp": "Panel Peak Power (kWp)",
@@ -59,6 +60,7 @@
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "create_dashboard": "Opt in to creating a Lovelace dashboard, registering the bundled card resource, and updating that dashboard on each integration reload. Disabled by default.",
+          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
           "latitude": "Optional — defaults to your HA home location",
           "longitude": "Optional — defaults to your HA home location",
           "panel_kwp": "Total installed panel capacity in kilowatt-peak. Leave blank to disable solar forecast.",

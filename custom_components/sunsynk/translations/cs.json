@@ -37,6 +37,7 @@
           "serials": "Sériové číslo/čísla měniče",
           "refresh_interval": "Interval aktualizace (sekundy)",
           "create_dashboard": "Create and maintain Sunsynk dashboard",
+          "admin_only_control": "Allow only administrators to use control actions",
           "latitude": "Zeměpisná šířka (solární předpověď)",
           "longitude": "Zeměpisná délka (solární předpověď)",
           "panel_kwp": "Špičkový výkon panelů (kWp)",
@@ -59,6 +60,7 @@
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
+          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
           "latitude": "Volitelné — výchozí je poloha domova v HA",
           "longitude": "Volitelné — výchozí je poloha domova v HA",
           "panel_kwp": "Celkový instalovaný výkon panelů v kilowattech špičkových. Ponechte prázdné pro deaktivaci solární předpovědi.",

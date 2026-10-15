@@ -246,3 +246,74 @@ async def test_switch_stays_on_when_the_export_price_crosses_the_threshold(hass)
         finally:
             for p in patches:
                 p.stop()
+
+
+# ── "Administrators only" for the control actions ──────────────────────────
+
+
+async def _call_force_charge(hass, user=None):
+    from homeassistant.core import Context
+
+    await hass.services.async_call(
+        DOMAIN,
+        "force_charge",
+        {"serial": SERIAL, "current": 30},
+        blocking=True,
+        context=Context(user_id=user.id) if user else None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_admin_only_control_refuses_non_administrators(
+    hass, hass_admin_user, hass_read_only_user
+):
+    from homeassistant.exceptions import Unauthorized
+
+    options = {**PAY4PROPERTY_OPTIONS, "serials": [SLAVE, SERIAL], "admin_only_control": True}
+    entry, patches = await _setup_parallel(hass, options)
+    try:
+        with pytest.raises(Unauthorized):
+            await _call_force_charge(hass, hass_read_only_user)
+        await _call_force_charge(hass, hass_admin_user)
+        await _call_force_charge(hass)  # automations and scripts
+        await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_control_actions_are_open_to_everyone_by_default(hass, hass_read_only_user):
+    options = {**PAY4PROPERTY_OPTIONS, "serials": [SLAVE, SERIAL]}
+    entry, patches = await _setup_parallel(hass, options)
+    try:
+        await _call_force_charge(hass, hass_read_only_user)
+        await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.mark.asyncio
+async def test_admin_only_control_with_a_deleted_user(hass):
+    from homeassistant.core import Context
+    from homeassistant.exceptions import UnknownUser
+
+    options = {**PAY4PROPERTY_OPTIONS, "serials": [SLAVE, SERIAL], "admin_only_control": True}
+    entry, patches = await _setup_parallel(hass, options)
+    try:
+        with pytest.raises(UnknownUser):
+            await hass.services.async_call(
+                DOMAIN,
+                "force_charge",
+                {"serial": SERIAL, "current": 30},
+                blocking=True,
+                context=Context(user_id="no-such-user"),
+            )
+        await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+    finally:
+        for p in patches:
+            p.stop()

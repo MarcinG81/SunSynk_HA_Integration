@@ -37,6 +37,7 @@
           "serials": "Серийный номер(а) инвертора",
           "refresh_interval": "Интервал обновления (секунды)",
           "create_dashboard": "Create and maintain Sunsynk dashboard",
+          "admin_only_control": "Allow only administrators to use control actions",
           "latitude": "Широта (прогноз солнечной генерации)",
           "longitude": "Долгота (прогноз солнечной генерации)",
           "panel_kwp": "Пиковая мощность панелей (кВп)",
@@ -59,6 +60,7 @@
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
+          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
           "latitude": "Необязательно — по умолчанию используется местоположение HA",
           "longitude": "Необязательно — по умолчанию используется местоположение HA",
           "panel_kwp": "Общая установленная мощность панелей в кВп. Оставьте пустым, чтобы отключить прогноз солнечной генерации.",

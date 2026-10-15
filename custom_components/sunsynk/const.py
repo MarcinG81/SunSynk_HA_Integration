@@ -28,6 +28,10 @@ CONF_API_SERVER: Final = "api_server"
 CONF_SERIALS: Final = "serials"
 CONF_REFRESH_INTERVAL: Final = "refresh_interval"
 CONF_CREATE_DASHBOARD: Final = "create_dashboard"
+# Restrict the control actions (force_charge, set_virtual_slot, ...) to
+# Home Assistant administrators. Only an administrator can open Configure, so
+# only an administrator can change it. Suggested by David (@davidatjourney).
+CONF_ADMIN_ONLY_CONTROL: Final = "admin_only_control"
 
 API_SERVER_SUNSYNK: Final = "api.sunsynk.net"
 API_SERVER_INTELESS: Final = "pv.inteless.com"

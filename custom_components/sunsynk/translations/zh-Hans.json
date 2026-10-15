@@ -37,6 +37,7 @@
           "serials": "逆变器序列号",
           "refresh_interval": "刷新间隔（秒）",
           "create_dashboard": "Create and maintain Sunsynk dashboard",
+          "admin_only_control": "Allow only administrators to use control actions",
           "latitude": "纬度（光伏发电预测）",
           "longitude": "经度（光伏发电预测）",
           "panel_kwp": "组件峰值功率（kWp）",
@@ -59,6 +60,7 @@
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
           "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
+          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
           "latitude": "可选，默认使用 HA 家庭位置",
           "longitude": "可选，默认使用 HA 家庭位置",
           "panel_kwp": "已安装组件的总峰值功率（kWp）。留空则禁用光伏发电预测。",

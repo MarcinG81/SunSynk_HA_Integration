@@ -37,6 +37,7 @@
           "serials": "Numer(y) seryjny falownika",
           "refresh_interval": "Interwał odświeżania (sekundy)",
           "create_dashboard": "Utwórz i utrzymuj dashboard Sunsynk",
+          "admin_only_control": "Allow only administrators to use control actions",
           "latitude": "Szerokość geograficzna (prognoza słoneczna)",
           "longitude": "Długość geograficzna (prognoza słoneczna)",
           "panel_kwp": "Szczytowa moc paneli (kWp)",
@@ -59,6 +60,7 @@
         "data_description": {
           "password": "Zostaw puste, aby zachować zapisane hasło. Wpisz nowe hasło po zmianie w portalu Sunsynk lub Deye.",
           "create_dashboard": "Opcjonalnie utwórz dashboard Lovelace, zarejestruj dołączoną kartę i aktualizuj dashboard po każdym przeładowaniu integracji. Domyślnie wyłączone.",
+          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
           "latitude": "Opcjonalne — domyślnie lokalizacja HA",
           "longitude": "Opcjonalne — domyślnie lokalizacja HA",
           "panel_kwp": "Łączna moc zainstalowanych paneli w kWp. Pozostaw puste, aby wyłączyć prognozę słoneczną.",

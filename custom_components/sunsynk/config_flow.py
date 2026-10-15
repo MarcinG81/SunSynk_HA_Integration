@@ -18,6 +18,7 @@ from .api.auth import SunsynkAuth, SunsynkAuthError
 from .const import (
     API_SERVER_SUNSYNK,
     API_SERVERS,
+    CONF_ADMIN_ONLY_CONTROL,
     CONF_API_SERVER,
     CONF_CHEAP_CHARGE_CURRENT,
     CONF_CHEAP_TARGET_SOC,
@@ -285,6 +286,9 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                             CONF_CREATE_DASHBOARD: user_input.get(
                                 CONF_CREATE_DASHBOARD, False
                             ),
+                            CONF_ADMIN_ONLY_CONTROL: user_input.get(
+                                CONF_ADMIN_ONLY_CONTROL, False
+                            ),
                             **forecast_fields,
                             **tariff_fields,
                             # Saved by the Tariff Manager switch, not a form field.
@@ -344,6 +348,10 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_CREATE_DASHBOARD,
                     default=bool(_opt(CONF_CREATE_DASHBOARD, False)),
+                ): cv.boolean,
+                vol.Optional(
+                    CONF_ADMIN_ONLY_CONTROL,
+                    default=bool(_opt(CONF_ADMIN_ONLY_CONTROL, False)),
                 ): cv.boolean,
                 # Solar Forecast
                 vol.Optional(

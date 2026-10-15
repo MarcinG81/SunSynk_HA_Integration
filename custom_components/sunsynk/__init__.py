@@ -14,13 +14,14 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ConfigEntryError
+from homeassistant.exceptions import ConfigEntryError, Unauthorized, UnknownUser
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 
 from .api.auth import SunsynkAuth
 from .calibration import PerformanceRatioCalibrator
 from .const import (
+    CONF_ADMIN_ONLY_CONTROL,
     CONF_API_SERVER,
     CONF_CHEAP_CHARGE_CURRENT,
     CONF_CHEAP_TARGET_SOC,
@@ -235,6 +236,29 @@ def _find_entry_id_for_serial(hass: HomeAssistant, serial: str) -> str | None:
     return None
 
 
+async def _async_ensure_control_allowed(
+    hass: HomeAssistant, call: ServiceCall, serial: str
+) -> None:
+    """Refuse a control action from a non-administrator when the owning
+    entry is set to "administrators only".
+
+    Automations and scripts run without a user and are always allowed.
+    Same check as Home Assistant's own admin services; suggested by David
+    (@davidatjourney).
+    """
+    entry_id = _find_entry_id_for_serial(hass, serial)
+    entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
+    if entry is None or entry.options.get(CONF_ADMIN_ONLY_CONTROL) is not True:
+        return
+    if call.context.user_id is None:
+        return
+    user = await hass.auth.async_get_user(call.context.user_id)
+    if user is None:
+        raise UnknownUser(context=call.context)
+    if not user.is_admin:
+        raise Unauthorized(context=call.context)
+
+
 def _find_virtual_slot_scheduler(
     hass: HomeAssistant, serial: str
 ) -> VirtualSlotScheduler | None:
@@ -349,6 +373,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_force_charge(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         coordinator = _find_coordinator(hass, serial)
         if coordinator is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
@@ -359,6 +384,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_force_discharge(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         coordinator = _find_coordinator(hass, serial)
         if coordinator is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
@@ -369,6 +395,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_set_work_mode(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         coordinator = _find_coordinator(hass, serial)
         if coordinator is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
@@ -377,6 +404,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_set_virtual_slot(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         if _find_coordinator(hass, serial) is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
         scheduler = _find_virtual_slot_scheduler(hass, serial)
@@ -399,6 +427,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_clear_virtual_slot(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         if _find_coordinator(hass, serial) is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
         scheduler = _find_virtual_slot_scheduler(hass, serial)
