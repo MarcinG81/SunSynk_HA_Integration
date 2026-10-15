@@ -254,9 +254,13 @@ class TariffChargingManager:
         if state.state in ("unknown", "unavailable"):
             return QUALITY_UNAVAILABLE, f"State is '{state.state}'"
         try:
-            float(state.state)
+            value = float(state.state)
         except (ValueError, TypeError):
             return QUALITY_INVALID, f"Non-numeric state '{state.state}'"
+        if not math.isfinite(value):
+            # "inf" would read as above every threshold and start a
+            # discharge. Spotted by David (@davidatjourney).
+            return QUALITY_INVALID, f"Non-finite state '{state.state}'"
         # Only the import price is age-checked. Export rates are often fixed
         # for months (e.g. Octopus Outgoing), so their sensor rarely updates
         # and always looked stale, which silently blocked every discharge
@@ -290,9 +294,10 @@ class TariffChargingManager:
         if state is None or state.state in ("unknown", "unavailable"):
             return None
         try:
-            return float(state.state)
+            price = float(state.state)
         except (ValueError, TypeError):
             return None
+        return price if math.isfinite(price) else None
 
     async def _stop_charging(self, serial: str, reason: str) -> None:
         """Stop charging (no-op if already stopped)."""

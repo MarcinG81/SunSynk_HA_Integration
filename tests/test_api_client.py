@@ -183,6 +183,14 @@ class TestEndpointUrls:
             "https://api.sunsynk.net/api/v1/common/setting/SN1/set"
         )
         assert session.post.call_args.kwargs["json"] == {"chargeCurrent": 100}
+        # A redirect is never followed with the token and payload.
+        assert session.post.call_args.kwargs["allow_redirects"] is False
+
+    @pytest.mark.asyncio
+    async def test_redirected_write_is_refused(self, client: SunsynkClient):
+        session = fake_session(post=FakeResponse({}, status=302))
+        with pytest.raises(SunsynkApiError, match="redirected"):
+            await client.async_write_settings(session, "SN1", {"chargeCurrent": 100})
 
     @pytest.mark.asyncio
     async def test_get_plant_info_url(self, client: SunsynkClient):

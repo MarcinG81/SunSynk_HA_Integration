@@ -1084,3 +1084,17 @@ async def test_evaluation_error_is_logged_not_left_unretrieved(
         await mgr._evaluate()
 
     assert "Tariff Manager: evaluation failed" in caplog.text
+
+
+
+@pytest.mark.parametrize("value", ["inf", "-inf", "nan"])
+def test_non_finite_price_is_invalid(mock_hass, mock_coordinator, value):
+    """An "inf" price would read as above every threshold and start a
+    discharge. Spotted by David (@davidatjourney)."""
+    mock_hass.states.get.return_value = _price_state(value)
+    mgr = _make_manager(mock_hass, mock_coordinator)
+
+    quality, _ = mgr._compute_price_quality()
+
+    assert quality == QUALITY_INVALID
+    assert mgr._read_price("sensor.electricity_price") is None

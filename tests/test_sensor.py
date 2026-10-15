@@ -59,3 +59,26 @@ def test_no_generator_or_micro_inverter_sensors_when_flags_false():
     keys = {d.key for d in descriptions}
     assert "generator_power" not in keys
     assert "micro_inverter_power" not in keys
+
+
+
+import pytest  # noqa: E402
+
+from custom_components.sunsynk.const import _battery_bms_soc_value  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({"bmsSoc": "87", "bmsVolt": "52.1"}, 87.0),
+        ({"bmsSoc": "87"}, 87.0),  # no voltage reported: keep the reading
+        ({"bmsSoc": "0", "bmsVolt": "0"}, None),  # BMS not talking: placeholder
+        ({"bmsSoc": "50", "bmsVolt": "nan"}, None),
+        ({"bmsSoc": "150", "bmsVolt": "52"}, None),
+        ({"bmsSoc": "bad"}, None),
+        ({}, None),
+    ],
+)
+def test_bms_soc_ignores_placeholders(data, expected):
+    """Fix by David (@davidatjourney)."""
+    assert _battery_bms_soc_value(data) == expected

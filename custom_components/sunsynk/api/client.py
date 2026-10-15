@@ -108,13 +108,21 @@ class SunsynkClient:
         params: dict | None = None,
     ) -> dict[str, Any]:
         try:
+            # Writes carry the bearer token and a settings payload; don't let
+            # a redirect send either to another host.
             async with session.post(
                 url,
                 headers=self._headers(),
                 json=payload,
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=15),
+                allow_redirects=False,
             ) as resp:
+                if 300 <= resp.status < 400:
+                    raise SunsynkApiError(
+                        f"Write to {url} was redirected (HTTP {resp.status}); "
+                        "not following it"
+                    )
                 resp.raise_for_status()
                 data = await resp.json()
 

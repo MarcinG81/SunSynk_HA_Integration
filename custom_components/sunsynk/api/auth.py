@@ -79,12 +79,20 @@ class SunsynkAuth:
 
         url = f"https://{self._api_server}/oauth/token/new"
         try:
+            # Never follow a redirect with the login payload: a redirected
+            # request could carry the credentials to another host. Spotted by
+            # David (@davidatjourney).
             async with session.post(
                 url,
                 json=payload,
                 headers={"Content-Type": "application/json"},
                 timeout=aiohttp.ClientTimeout(total=15),
+                allow_redirects=False,
             ) as resp:
+                if 300 <= resp.status < 400:
+                    raise SunsynkAuthError(
+                        f"Login was redirected (HTTP {resp.status}); not following it"
+                    )
                 resp.raise_for_status()
                 data = await resp.json()
 
