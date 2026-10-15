@@ -32,18 +32,18 @@
         "title": "Sunsynk Opsies",
         "data": {
           "api_server": "API Server",
-          "username": "Sunsynk Account Email",
-          "password": "New Sunsynk Account Password",
+          "username": "Sunsynk-rekening e-pos",
+          "password": "Nuwe Sunsynk-rekening wagwoord",
           "serials": "Omvormer reeksnommer(s)",
           "refresh_interval": "Verfrissinginterval (sekondes)",
-          "create_dashboard": "Create and maintain Sunsynk dashboard",
-          "admin_only_control": "Allow only administrators to use control actions",
+          "create_dashboard": "Skep en onderhou Sunsynk-paneelbord",
+          "admin_only_control": "Laat slegs administrateurs toe om beheeraksies te gebruik",
           "latitude": "Breedtegraad (Sonsenergie-voorspelling)",
           "longitude": "Lengtegraad (Sonsenergie-voorspelling)",
           "panel_kwp": "Paneel piekdrywing (kWp)",
           "performance_ratio": "Prestasie-verhouding (0–1)",
           "price_entity": "Elektrisite-pryssensor",
-          "export_price_entity": "Export/Sell Price Sensor (optional)",
+          "export_price_entity": "Uitvoer-/verkoopprys-sensor (opsioneel)",
           "cheap_threshold": "Laai onder prys (goedkoop-tarief drempel)",
           "cheap_charge_current": "Laaistroomsterkte by goedkoop tarief (A)",
           "normal_charge_current": "Normale laaistroomsterkte om te herstel (A)",
@@ -54,19 +54,19 @@
           "discharge_min_soc": "Stop ontlaai by SOC (%)",
           "tariff_start_hour": "Aktiewe skedule — beginuur (0–23)",
           "tariff_end_hour": "Aktiewe skedule — einduur (0–23)",
-          "price_stale_check": "Stop when price data looks out of date",
+          "price_stale_check": "Stop wanneer prysdata verouderd lyk",
           "price_max_age": "Maksimum ouderdom van prysdata (minute)"
         },
         "data_description": {
-          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
-          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
-          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
+          "password": "Laat leeg om die gestoorde wagwoord te behou. Voer 'n nuwe wagwoord in nadat jy dit in die Sunsynk- of Deye-portaal verander het.",
+          "create_dashboard": "Skep opsioneel 'n Lovelace-paneelbord, registreer die ingeslote kaart en werk die paneelbord by elke herlaai van die integrasie by. By verstek af.",
+          "admin_only_control": "Wanneer gemerk, kan die Sunsynk-beheeraksies (dwing laai/ontlaai, werkmodus, virtuele gleuwe) slegs deur Home Assistant-administrateurs uitgevoer word. Outomatiserings en skrips word nie geraak nie. Slegs administrateurs kan hierdie instelling verander.",
           "latitude": "Opsioneel — verstekwaarde is HA-tuisligging",
           "longitude": "Opsioneel — verstekwaarde is HA-tuisligging",
           "panel_kwp": "Totale geïnstalleerde paneelkapasiteit in kilowatt-piek. Los leeg om sonsenergie-voorspelling te deaktiveer.",
           "performance_ratio": "Stelsel-doeltreffendheidsfaktor, verstek 0.80",
           "price_entity": "Enige sensor wat die elektrisite-prys rapporteer (bv. Octopus Agile, NordPool, Tibber). Los leeg om tariefbestuur te deaktiveer.",
-          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
+          "export_price_entity": "Bepaal ontlaai-/verkoopbesluite in plaas van die invoerprys hierbo — vir tariewe waar invoer- en uitvoertariewe nie gekoppel is nie (bv. Octopus Intelligent Go + Outgoing). Laat leeg om die invoerprys vir albei te gebruik.",
           "cheap_threshold": "Wanneer prys ≤ hierdie waarde, laai die battery. Los leeg om goedkoop-tarieflaaing te deaktiveer.",
           "cheap_charge_current": "Battery laaistroomsterkte tydens goedkoop periode (bv. 100 A).",
           "normal_charge_current": "Laaistroomsterkte herstel wanneer goedkoop periode eindig.",
@@ -77,20 +77,20 @@
           "discharge_min_soc": "Ontlaaing stop outomaties wanneer battery hierdie SOC bereik. Verstek 10.",
           "tariff_start_hour": "Uur van dag (0–23) wanneer tariefbestuur aktiveer. Los leeg vir altyd-aan.",
           "tariff_end_hour": "Uur van dag (0–23) wanneer tariefbestuur deaktiveer. Kan middernag oorskry (bv. begin 22, einde 6).",
-          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
+          "price_stale_check": "By verstek af. Wanneer aan, stop die Tariefbestuurder enige aktiewe laai of ontlaai as die invoerprys-sensor langer as Maksimum ouderdom van prysdata nie gerapporteer het nie. Laat dit af as jou prys vir lang tydperke dieselfde bly of deur 'n helper gestel word.",
           "price_max_age": "As die pryssensor nie binne hierdie aantal minute opgedateer het nie, word die aktiewe modus as veiligheidsmaatreel gestop. Verstek 90."
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
-      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
-      "already_configured": "This Sunsynk account is already configured.",
+      "invalid_auth": "Ongeldige aanmeldbesonderhede. Kontroleer u Sunsynk e-posadres en wagwoord.",
+      "cannot_connect": "Kan nie aan die Sunsynk-API koppel nie. Kontroleer die API-bediener en internetverbinding.",
+      "already_configured": "Hierdie Sunsynk-rekening is reeds opgestel.",
       "invalid_serials": "Ongeldige reeksnommer(s). Voer ten minste een reeksnommer in.",
       "invalid_forecast_config": "Sonsenergie-voorspelling vereis geldige breedtegraad, lengtegraad en paneel-kWp.",
       "invalid_tariff_config": "Tariefkonfigurasie-fout. Goedkoop laaing benodig drempel + laaistroomsterkte + normale stroomsterkte (al drie). Ontlaaing benodig drempel + piekstroomsterkte + normale stroomsterkte (al drie).",
-      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
-      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
+      "charge_current_above_limit": "Te hoog: jou stelsel laai die battery met hoogstens {charge_max} A ({charge_limits}). 'n Hoër waarde het geen effek nie.",
+      "discharge_current_above_limit": "Te hoog: jou stelsel ontlaai die battery met hoogstens {discharge_max} A ({discharge_limits}). 'n Hoër waarde het geen effek nie."
     }
   },
   "issues": {
@@ -103,8 +103,8 @@
       "description": "Data vir omvormer **{serial}** kon nie opgeslaan word nie. Kontroleer of die dongle gekoppel is en die Sunsynk-program lewende data wys."
     },
     "setting_write_mismatch": {
-      "title": "Setting {setting_key} did not apply on {serial}",
-      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
+      "title": "Instelling {setting_key} is nie op {serial} toegepas nie",
+      "description": "Omsetter **{serial}** is opdrag gegee om **{setting_key}** op `{expected}` te stel, maar dit lees terug as `{actual}`. Die omsetter of dongle het die waarde dalk verwerp — kontroleer dit direk in die Sunsynk-toep. Dit verdwyn outomaties sodra 'n skryf na hierdie instelling bevestig is."
     }
   }
 }

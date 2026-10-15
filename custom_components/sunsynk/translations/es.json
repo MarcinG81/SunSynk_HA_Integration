@@ -32,18 +32,18 @@
         "title": "Opciones de Sunsynk",
         "data": {
           "api_server": "API Server",
-          "username": "Sunsynk Account Email",
-          "password": "New Sunsynk Account Password",
+          "username": "Correo electrónico de la cuenta Sunsynk",
+          "password": "Nueva contraseña de la cuenta Sunsynk",
           "serials": "Número(s) de serie del inversor",
           "refresh_interval": "Intervalo de actualización (segundos)",
-          "create_dashboard": "Create and maintain Sunsynk dashboard",
-          "admin_only_control": "Allow only administrators to use control actions",
+          "create_dashboard": "Crear y mantener el panel de Sunsynk",
+          "admin_only_control": "Permitir solo a los administradores usar las acciones de control",
           "latitude": "Latitud (previsión solar)",
           "longitude": "Longitud (previsión solar)",
           "panel_kwp": "Potencia pico de los paneles (kWp)",
           "performance_ratio": "Ratio de rendimiento (0–1)",
           "price_entity": "Sensor de precio de la electricidad",
-          "export_price_entity": "Export/Sell Price Sensor (optional)",
+          "export_price_entity": "Sensor de precio de exportación/venta (opcional)",
           "cheap_threshold": "Cargar por debajo del precio (umbral tarifa barata)",
           "cheap_charge_current": "Corriente de carga con tarifa barata (A)",
           "normal_charge_current": "Corriente de carga normal a restaurar (A)",
@@ -54,19 +54,19 @@
           "discharge_min_soc": "Detener descarga al bajar SOC (%)",
           "tariff_start_hour": "Horario activo — hora de inicio (0–23)",
           "tariff_end_hour": "Horario activo — hora de fin (0–23)",
-          "price_stale_check": "Stop when price data looks out of date",
+          "price_stale_check": "Detener cuando los datos de precio parezcan desactualizados",
           "price_max_age": "Antigüedad máxima de los datos de precio (minutos)"
         },
         "data_description": {
-          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
-          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
-          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
+          "password": "Déjelo en blanco para conservar la contraseña guardada. Introduzca una nueva contraseña después de cambiarla en el portal de Sunsynk o Deye.",
+          "create_dashboard": "Opcionalmente, crear un panel de Lovelace, registrar la tarjeta incluida y actualizar el panel cada vez que se recarga la integración. Desactivado por defecto.",
+          "admin_only_control": "Si está marcado, las acciones de control de Sunsynk (forzar carga/descarga, modo de trabajo, ranuras virtuales) solo pueden ejecutarlas los administradores de Home Assistant. Las automatizaciones y los scripts no se ven afectados. Solo los administradores pueden cambiar este ajuste.",
           "latitude": "Opcional — por defecto la ubicación del hogar en HA",
           "longitude": "Opcional — por defecto la ubicación del hogar en HA",
           "panel_kwp": "Capacidad total instalada de paneles en kilovatios pico. Dejar en blanco para desactivar la previsión solar.",
           "performance_ratio": "Factor de eficiencia del sistema, por defecto 0,80",
           "price_entity": "Cualquier sensor que informe el precio de la electricidad (p. ej. Octopus Agile, NordPool, Tibber). Dejar en blanco para desactivar la gestión de tarifas.",
-          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
+          "export_price_entity": "Determina las decisiones de descarga/venta en lugar del precio de importación anterior, para tarifas en las que los precios de importación y exportación no están vinculados (p. ej., Octopus Intelligent Go + Outgoing). Déjelo en blanco para usar el precio de importación para ambos.",
           "cheap_threshold": "Cuando el precio ≤ este valor, cargar la batería. Dejar en blanco para desactivar la carga con tarifa barata.",
           "cheap_charge_current": "Corriente de carga de la batería durante el período barato (p. ej. 100 A).",
           "normal_charge_current": "Corriente de carga restaurada al finalizar el período barato.",
@@ -77,20 +77,20 @@
           "discharge_min_soc": "La descarga se detiene automáticamente cuando la batería alcanza este SOC. Por defecto 10.",
           "tariff_start_hour": "Hora del día (0–23) en que se activa la gestión de tarifas. Dejar en blanco para modo siempre activo.",
           "tariff_end_hour": "Hora del día (0–23) en que se desactiva la gestión de tarifas. Puede cruzar la medianoche (p. ej. inicio 22, fin 6).",
-          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
+          "price_stale_check": "Desactivado por defecto. Si está activado, el Gestor de tarifas detiene cualquier carga o descarga activa si el sensor de precio de importación no ha informado durante más tiempo que Antigüedad máxima de los datos de precio. Déjelo desactivado si su precio se mantiene igual durante largos periodos o lo fija un ayudante.",
           "price_max_age": "Si el sensor de precio no se ha actualizado en este número de minutos, el modo activo se detiene como medida de seguridad. Por defecto 90."
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
-      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
-      "already_configured": "This Sunsynk account is already configured.",
+      "invalid_auth": "Credenciales inválidas. Compruebe su correo electrónico y contraseña de Sunsynk.",
+      "cannot_connect": "No se puede conectar a la API de Sunsynk. Compruebe el servidor API y la conexión a Internet.",
+      "already_configured": "Esta cuenta de Sunsynk ya está configurada.",
       "invalid_serials": "Número(s) de serie inválido(s). Introduzca al menos un número de serie.",
       "invalid_forecast_config": "La previsión solar requiere latitud, longitud y kWp de paneles válidos.",
       "invalid_tariff_config": "Error de configuración de tarifa. La carga barata necesita umbral + corriente de carga + corriente normal (los tres). La descarga necesita umbral + corriente pico + corriente normal (los tres).",
-      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
-      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
+      "charge_current_above_limit": "Demasiado alto: su sistema carga la batería con un máximo de {charge_max} A ({charge_limits}). Un valor mayor no tiene efecto.",
+      "discharge_current_above_limit": "Demasiado alto: su sistema descarga la batería con un máximo de {discharge_max} A ({discharge_limits}). Un valor mayor no tiene efecto."
     }
   },
   "issues": {
@@ -103,8 +103,8 @@
       "description": "No se pudieron obtener los datos del inversor **{serial}**. Compruebe que el dongle está conectado y que la aplicación Sunsynk muestra datos en tiempo real."
     },
     "setting_write_mismatch": {
-      "title": "Setting {setting_key} did not apply on {serial}",
-      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
+      "title": "El ajuste {setting_key} no se aplicó en {serial}",
+      "description": "Se indicó al inversor **{serial}** que estableciera **{setting_key}** en `{expected}`, pero al leerlo devuelve `{actual}`. Es posible que el inversor o el dongle hayan rechazado el valor; compruébelo directamente en la app de Sunsynk. Este aviso desaparecerá automáticamente cuando se confirme una escritura de este ajuste."
     }
   }
 }

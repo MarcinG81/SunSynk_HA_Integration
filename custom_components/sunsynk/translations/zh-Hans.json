@@ -32,18 +32,18 @@
         "title": "Sunsynk 选项",
         "data": {
           "api_server": "API Server",
-          "username": "Sunsynk Account Email",
-          "password": "New Sunsynk Account Password",
+          "username": "Sunsynk 账号邮箱",
+          "password": "新的 Sunsynk 账号密码",
           "serials": "逆变器序列号",
           "refresh_interval": "刷新间隔（秒）",
-          "create_dashboard": "Create and maintain Sunsynk dashboard",
-          "admin_only_control": "Allow only administrators to use control actions",
+          "create_dashboard": "创建并维护 Sunsynk 仪表板",
+          "admin_only_control": "仅允许管理员使用控制操作",
           "latitude": "纬度（光伏发电预测）",
           "longitude": "经度（光伏发电预测）",
           "panel_kwp": "组件峰值功率（kWp）",
           "performance_ratio": "性能比（0–1）",
           "price_entity": "电价传感器",
-          "export_price_entity": "Export/Sell Price Sensor (optional)",
+          "export_price_entity": "上网/售电电价传感器（可选）",
           "cheap_threshold": "低于此价格时充电（谷电阈值）",
           "cheap_charge_current": "谷电充电电流（A）",
           "normal_charge_current": "恢复正常充电电流（A）",
@@ -54,19 +54,19 @@
           "discharge_min_soc": "放至最低 SOC（%）后停止放电",
           "tariff_start_hour": "计划开始时间（0–23 时）",
           "tariff_end_hour": "计划结束时间（0–23 时）",
-          "price_stale_check": "Stop when price data looks out of date",
+          "price_stale_check": "电价数据看起来过时时停止",
           "price_max_age": "电价数据最大有效时长（分钟）"
         },
         "data_description": {
-          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
-          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
-          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
+          "password": "留空以保留已保存的密码。在 Sunsynk 或 Deye 门户中更改密码后，请在此输入新密码。",
+          "create_dashboard": "可选：创建 Lovelace 仪表板、注册随附的卡片，并在每次重新加载集成时更新该仪表板。默认关闭。",
+          "admin_only_control": "勾选后，Sunsynk 控制操作（强制充电/放电、工作模式、虚拟时段）只能由 Home Assistant 管理员执行。自动化和脚本不受影响。只有管理员可以更改此设置。",
           "latitude": "可选，默认使用 HA 家庭位置",
           "longitude": "可选，默认使用 HA 家庭位置",
           "panel_kwp": "已安装组件的总峰值功率（kWp）。留空则禁用光伏发电预测。",
           "performance_ratio": "系统效率系数，默认 0.80",
           "price_entity": "任意报告电价的传感器（如 Octopus Agile、NordPool、Tibber）。留空则禁用电价管理。",
-          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
+          "export_price_entity": "用于放电/售电决策，代替上方的购电电价——适用于购电和上网电价不挂钩的电价方案（例如 Octopus Intelligent Go + Outgoing）。留空则两者都使用购电电价。",
           "cheap_threshold": "当电价 ≤ 此值时为电池充电。留空则禁用谷电充电。",
           "cheap_charge_current": "谷电时段的电池充电电流（如 100 A）。",
           "normal_charge_current": "谷电时段结束后恢复的充电电流。",
@@ -77,20 +77,20 @@
           "discharge_min_soc": "电池达到此 SOC 后自动停止放电，默认 10。",
           "tariff_start_hour": "电价管理激活的时刻（0–23 时）。留空则全天激活。",
           "tariff_end_hour": "电价管理停止的时刻（0–23 时），可跨越午夜（如开始 22 时，结束 6 时）。",
-          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
+          "price_stale_check": "默认关闭。开启后，如果购电电价传感器在超过“电价数据最大有效时长”的时间内没有上报，电价管理器将停止任何正在进行的充电或放电。如果您的电价长时间不变或由辅助实体设置，请保持关闭。",
           "price_max_age": "若电价传感器在此分钟数内未更新，将停止当前充/放电模式以确保安全，默认 90。"
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
-      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
-      "already_configured": "This Sunsynk account is already configured.",
+      "invalid_auth": "凭据无效，请检查 Sunsynk 邮箱和密码。",
+      "cannot_connect": "无法连接到 Sunsynk API，请检查 API 服务器和网络连接。",
+      "already_configured": "此 Sunsynk 账号已配置。",
       "invalid_serials": "序列号无效，请至少输入一个序列号。",
       "invalid_forecast_config": "光伏发电预测需要有效的纬度、经度和组件峰值功率（kWp）。",
       "invalid_tariff_config": "电价配置错误。谷电充电需要阈值 + 充电电流 + 正常电流（三者缺一不可）。放电需要阈值 + 峰值电流 + 正常电流（三者缺一不可）。",
-      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
-      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
+      "charge_current_above_limit": "过高：您的系统为电池充电的电流最高为 {charge_max} A（{charge_limits}）。更高的值不会生效。",
+      "discharge_current_above_limit": "过高：您的系统为电池放电的电流最高为 {discharge_max} A（{discharge_limits}）。更高的值不会生效。"
     }
   },
   "issues": {
@@ -103,8 +103,8 @@
       "description": "无法获取逆变器 **{serial}** 的数据。请检查数据采集器是否已连接，并确认 Sunsynk 应用可显示实时数据。"
     },
     "setting_write_mismatch": {
-      "title": "Setting {setting_key} did not apply on {serial}",
-      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
+      "title": "设置 {setting_key} 未在 {serial} 上生效",
+      "description": "已要求逆变器 **{serial}** 将 **{setting_key}** 设置为 `{expected}`，但读回的值为 `{actual}`。逆变器或通讯棒可能拒绝了该值——请直接在 Sunsynk App 中检查。一旦该设置的写入得到确认，此提示将自动消失。"
     }
   }
 }

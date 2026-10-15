@@ -32,18 +32,18 @@
         "title": "Sunsynk Optionen",
         "data": {
           "api_server": "API Server",
-          "username": "Sunsynk Account Email",
-          "password": "New Sunsynk Account Password",
+          "username": "Sunsynk-Konto E-Mail",
+          "password": "Neues Sunsynk-Konto Passwort",
           "serials": "Seriennummer(n) des Wechselrichters",
           "refresh_interval": "Aktualisierungsintervall (Sekunden)",
-          "create_dashboard": "Create and maintain Sunsynk dashboard",
-          "admin_only_control": "Allow only administrators to use control actions",
+          "create_dashboard": "Sunsynk-Dashboard erstellen und pflegen",
+          "admin_only_control": "Steueraktionen nur für Administratoren erlauben",
           "latitude": "Breitengrad (Solarprognose)",
           "longitude": "Längengrad (Solarprognose)",
           "panel_kwp": "Spitzenleistung der Panels (kWp)",
           "performance_ratio": "Leistungsverhältnis (0–1)",
           "price_entity": "Strompreissensor",
-          "export_price_entity": "Export/Sell Price Sensor (optional)",
+          "export_price_entity": "Einspeise-/Verkaufspreissensor (optional)",
           "cheap_threshold": "Laden bei Preis unter (Günstiger-Tarif-Schwelle)",
           "cheap_charge_current": "Ladestrom beim günstigen Tarif (A)",
           "normal_charge_current": "Normaler Ladestrom nach Tarif-Ende (A)",
@@ -54,19 +54,19 @@
           "discharge_min_soc": "Entladen stoppen bei SOC (%)",
           "tariff_start_hour": "Zeitplan — Startstunde (0–23)",
           "tariff_end_hour": "Zeitplan — Endstunde (0–23)",
-          "price_stale_check": "Stop when price data looks out of date",
+          "price_stale_check": "Anhalten, wenn die Preisdaten veraltet wirken",
           "price_max_age": "Maximales Alter der Preisdaten (Minuten)"
         },
         "data_description": {
-          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
-          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
-          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
+          "password": "Leer lassen, um das gespeicherte Passwort zu behalten. Ein neues Passwort eingeben, nachdem es im Sunsynk- oder Deye-Portal geändert wurde.",
+          "create_dashboard": "Optional ein Lovelace-Dashboard erstellen, die mitgelieferte Karte registrieren und das Dashboard bei jedem Neuladen der Integration aktualisieren. Standardmäßig deaktiviert.",
+          "admin_only_control": "Wenn aktiviert, können die Sunsynk-Steueraktionen (Laden/Entladen erzwingen, Arbeitsmodus, virtuelle Slots) nur von Home-Assistant-Administratoren ausgeführt werden. Automatisierungen und Skripte sind nicht betroffen. Nur Administratoren können diese Einstellung ändern.",
           "latitude": "Optional — Standard: HA-Heimatstandort",
           "longitude": "Optional — Standard: HA-Heimatstandort",
           "panel_kwp": "Gesamte installierte Panelleistung in Kilowatt-Peak. Leer lassen, um die Solarprognose zu deaktivieren.",
           "performance_ratio": "Systemeffizienzfaktor, Standard 0,80",
           "price_entity": "Beliebiger Sensor, der den Strompreis meldet (z. B. Octopus Agile, NordPool, Tibber). Leer lassen, um die Tarifverwaltung zu deaktivieren.",
-          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
+          "export_price_entity": "Steuert Entlade-/Verkaufsentscheidungen anstelle des obigen Bezugspreises — für Tarife, bei denen Bezugs- und Einspeisepreis nicht gekoppelt sind (z. B. Octopus Intelligent Go + Outgoing). Leer lassen, um für beides den Bezugspreis zu verwenden.",
           "cheap_threshold": "Wenn Preis ≤ diesem Wert, Akku laden. Leer lassen, um günstiges Laden zu deaktivieren.",
           "cheap_charge_current": "Akku-Ladestrom während des günstigen Tarifs (z. B. 100 A).",
           "normal_charge_current": "Ladestrom, der nach Ende des günstigen Tarifs wiederhergestellt wird.",
@@ -77,20 +77,20 @@
           "discharge_min_soc": "Entladen stoppt automatisch, wenn der Akku diesen SOC erreicht. Standard 10.",
           "tariff_start_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung aktiviert wird. Leer lassen für Dauerbetrieb.",
           "tariff_end_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung deaktiviert wird. Kann Mitternacht überschreiten (z. B. Start 22, Ende 6).",
-          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
+          "price_stale_check": "Standardmäßig aus. Wenn aktiviert, stoppt der Tarif-Manager jedes aktive Laden oder Entladen, wenn der Bezugspreissensor länger als Maximales Alter der Preisdaten nichts gemeldet hat. Ausgeschaltet lassen, wenn Ihr Preis lange gleich bleibt oder von einem Helfer gesetzt wird.",
           "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90."
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
-      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
-      "already_configured": "This Sunsynk account is already configured.",
+      "invalid_auth": "Ungültige Anmeldedaten. Bitte E-Mail und Passwort des Sunsynk-Kontos prüfen.",
+      "cannot_connect": "Verbindung zur Sunsynk-API nicht möglich. API-Server und Internetverbindung prüfen.",
+      "already_configured": "Dieses Sunsynk-Konto ist bereits konfiguriert.",
       "invalid_serials": "Ungültige Seriennummer(n). Mindestens eine Seriennummer eingeben.",
       "invalid_forecast_config": "Solarprognose erfordert gültigen Breiten- und Längengrad sowie Panel-kWp.",
       "invalid_tariff_config": "Tarifkonfigurationsfehler. Günstiges Laden benötigt Schwelle + Ladestrom + Normalstrom (alle drei). Entladen benötigt Schwelle + Spitzenstrom + Normalstrom (alle drei).",
-      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
-      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
+      "charge_current_above_limit": "Zu hoch: Ihr System lädt die Batterie mit höchstens {charge_max} A ({charge_limits}). Ein höherer Wert hat keine Wirkung.",
+      "discharge_current_above_limit": "Zu hoch: Ihr System entlädt die Batterie mit höchstens {discharge_max} A ({discharge_limits}). Ein höherer Wert hat keine Wirkung."
     }
   },
   "issues": {
@@ -103,8 +103,8 @@
       "description": "Daten für Wechselrichter **{serial}** konnten nicht abgerufen werden. Prüfe, ob der Dongle angeschlossen ist und die Sunsynk-App Live-Daten anzeigt."
     },
     "setting_write_mismatch": {
-      "title": "Setting {setting_key} did not apply on {serial}",
-      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
+      "title": "Einstellung {setting_key} wurde auf {serial} nicht übernommen",
+      "description": "Wechselrichter **{serial}** sollte **{setting_key}** auf `{expected}` setzen, meldet beim Auslesen aber `{actual}`. Der Wechselrichter oder Dongle hat den Wert möglicherweise abgelehnt — prüfen Sie ihn direkt in der Sunsynk-App. Diese Meldung verschwindet automatisch, sobald ein Schreibvorgang für diese Einstellung bestätigt wird."
     }
   }
 }

@@ -32,18 +32,18 @@
         "title": "Параметры Sunsynk",
         "data": {
           "api_server": "API Server",
-          "username": "Sunsynk Account Email",
-          "password": "New Sunsynk Account Password",
+          "username": "Эл. почта учётной записи Sunsynk",
+          "password": "Новый пароль учётной записи Sunsynk",
           "serials": "Серийный номер(а) инвертора",
           "refresh_interval": "Интервал обновления (секунды)",
-          "create_dashboard": "Create and maintain Sunsynk dashboard",
-          "admin_only_control": "Allow only administrators to use control actions",
+          "create_dashboard": "Создавать и поддерживать панель Sunsynk",
+          "admin_only_control": "Разрешить действия управления только администраторам",
           "latitude": "Широта (прогноз солнечной генерации)",
           "longitude": "Долгота (прогноз солнечной генерации)",
           "panel_kwp": "Пиковая мощность панелей (кВп)",
           "performance_ratio": "Коэффициент производительности (0–1)",
           "price_entity": "Датчик цены электроэнергии",
-          "export_price_entity": "Export/Sell Price Sensor (optional)",
+          "export_price_entity": "Датчик цены экспорта/продажи (необязательно)",
           "cheap_threshold": "Заряжать ниже цены (порог дешёвого тарифа)",
           "cheap_charge_current": "Ток заряда при дешёвом тарифе (А)",
           "normal_charge_current": "Нормальный ток заряда для восстановления (А)",
@@ -54,19 +54,19 @@
           "discharge_min_soc": "Остановить разряд при SOC (%)",
           "tariff_start_hour": "Расписание — час начала (0–23)",
           "tariff_end_hour": "Расписание — час окончания (0–23)",
-          "price_stale_check": "Stop when price data looks out of date",
+          "price_stale_check": "Останавливать, если данные о цене выглядят устаревшими",
           "price_max_age": "Максимальный возраст данных о цене (минуты)"
         },
         "data_description": {
-          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
-          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
-          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
+          "password": "Оставьте пустым, чтобы сохранить текущий пароль. Введите новый пароль после его смены на портале Sunsynk или Deye.",
+          "create_dashboard": "По желанию создать панель Lovelace, зарегистрировать встроенную карточку и обновлять панель при каждой перезагрузке интеграции. По умолчанию выключено.",
+          "admin_only_control": "Если отмечено, действия управления Sunsynk (принудительный заряд/разряд, рабочий режим, виртуальные слоты) могут выполнять только администраторы Home Assistant. Автоматизации и скрипты не затрагиваются. Изменить этот параметр могут только администраторы.",
           "latitude": "Необязательно — по умолчанию используется местоположение HA",
           "longitude": "Необязательно — по умолчанию используется местоположение HA",
           "panel_kwp": "Общая установленная мощность панелей в кВп. Оставьте пустым, чтобы отключить прогноз солнечной генерации.",
           "performance_ratio": "Коэффициент эффективности системы, по умолчанию 0,80",
           "price_entity": "Любой датчик, сообщающий цену электроэнергии (например, Octopus Agile, NordPool, Tibber). Оставьте пустым, чтобы отключить управление тарифами.",
-          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
+          "export_price_entity": "Определяет решения о разряде/продаже вместо цены покупки выше — для тарифов, где цены покупки и продажи не связаны (например, Octopus Intelligent Go + Outgoing). Оставьте пустым, чтобы использовать цену покупки для обоих случаев.",
           "cheap_threshold": "Когда цена ≤ этого значения, заряжать аккумулятор. Оставьте пустым, чтобы отключить зарядку по дешёвому тарифу.",
           "cheap_charge_current": "Ток заряда аккумулятора в период дешёвого тарифа (например, 100 А).",
           "normal_charge_current": "Ток заряда, восстанавливаемый по окончании дешёвого тарифа.",
@@ -77,20 +77,20 @@
           "discharge_min_soc": "Разряд автоматически останавливается при достижении аккумулятором этого SOC. По умолчанию 10.",
           "tariff_start_hour": "Час суток (0–23), когда активируется управление тарифами. Оставьте пустым для постоянного режима.",
           "tariff_end_hour": "Час суток (0–23), когда деактивируется управление тарифами. Может переходить через полночь (например, начало 22, конец 6).",
-          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
+          "price_stale_check": "По умолчанию выключено. Если включено, менеджер тарифов останавливает активный заряд или разряд, когда датчик цены покупки не сообщал данные дольше, чем Максимальный возраст данных о цене. Оставьте выключенным, если ваша цена долго не меняется или задаётся вспомогательным объектом.",
           "price_max_age": "Если датчик цены не обновлялся в течение указанного числа минут, активный режим заряда/разряда останавливается в целях безопасности. По умолчанию 90."
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
-      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
-      "already_configured": "This Sunsynk account is already configured.",
+      "invalid_auth": "Неверные учётные данные. Проверьте e-mail и пароль Sunsynk.",
+      "cannot_connect": "Не удаётся подключиться к API Sunsynk. Проверьте API-сервер и подключение к интернету.",
+      "already_configured": "Эта учётная запись Sunsynk уже настроена.",
       "invalid_serials": "Неверный серийный номер(а). Введите хотя бы один серийный номер.",
       "invalid_forecast_config": "Прогноз солнечной генерации требует корректных широты, долготы и мощности панелей в кВп.",
       "invalid_tariff_config": "Ошибка конфигурации тарифа. Дешёвая зарядка требует порог + ток заряда + нормальный ток (все три). Разряд требует порог + пиковый ток + нормальный ток (все три).",
-      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
-      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
+      "charge_current_above_limit": "Слишком много: ваша система заряжает батарею током не более {charge_max} А ({charge_limits}). Большее значение ни на что не влияет.",
+      "discharge_current_above_limit": "Слишком много: ваша система разряжает батарею током не более {discharge_max} А ({discharge_limits}). Большее значение ни на что не влияет."
     }
   },
   "issues": {
@@ -103,8 +103,8 @@
       "description": "Не удалось получить данные для инвертора **{serial}**. Убедитесь, что донгл подключён, а приложение Sunsynk отображает текущие данные."
     },
     "setting_write_mismatch": {
-      "title": "Setting {setting_key} did not apply on {serial}",
-      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
+      "title": "Параметр {setting_key} не применился на {serial}",
+      "description": "Инвертору **{serial}** было отправлено значение `{expected}` для **{setting_key}**, но при чтении он сообщает `{actual}`. Инвертор или донгл могли отклонить значение — проверьте его напрямую в приложении Sunsynk. Сообщение исчезнет автоматически, как только запись этого параметра будет подтверждена."
     }
   }
 }

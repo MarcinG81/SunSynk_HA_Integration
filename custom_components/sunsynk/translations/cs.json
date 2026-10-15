@@ -32,18 +32,18 @@
         "title": "Možnosti Sunsynk",
         "data": {
           "api_server": "API Server",
-          "username": "Sunsynk Account Email",
-          "password": "New Sunsynk Account Password",
+          "username": "E-mail účtu Sunsynk",
+          "password": "Nové heslo účtu Sunsynk",
           "serials": "Sériové číslo/čísla měniče",
           "refresh_interval": "Interval aktualizace (sekundy)",
-          "create_dashboard": "Create and maintain Sunsynk dashboard",
-          "admin_only_control": "Allow only administrators to use control actions",
+          "create_dashboard": "Vytvořit a udržovat řídicí panel Sunsynk",
+          "admin_only_control": "Povolit ovládací akce pouze administrátorům",
           "latitude": "Zeměpisná šířka (solární předpověď)",
           "longitude": "Zeměpisná délka (solární předpověď)",
           "panel_kwp": "Špičkový výkon panelů (kWp)",
           "performance_ratio": "Výkonnostní koeficient (0–1)",
           "price_entity": "Senzor ceny elektřiny",
-          "export_price_entity": "Export/Sell Price Sensor (optional)",
+          "export_price_entity": "Senzor výkupní ceny (volitelné)",
           "cheap_threshold": "Nabíjet pod cenou (práh levného tarifu)",
           "cheap_charge_current": "Nabíjecí proud při levném tarifu (A)",
           "normal_charge_current": "Normální nabíjecí proud k obnovení (A)",
@@ -54,19 +54,19 @@
           "discharge_min_soc": "Zastavit vybíjení při SOC (%)",
           "tariff_start_hour": "Aktivní plán — hodina začátku (0–23)",
           "tariff_end_hour": "Aktivní plán — hodina konce (0–23)",
-          "price_stale_check": "Stop when price data looks out of date",
+          "price_stale_check": "Zastavit, když se data o ceně zdají zastaralá",
           "price_max_age": "Maximální stáří dat o ceně (minuty)"
         },
         "data_description": {
-          "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
-          "create_dashboard": "Opt in to creating and maintaining the bundled Lovelace dashboard. Disabled by default.",
-          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
+          "password": "Ponechte prázdné, chcete-li zachovat uložené heslo. Nové heslo zadejte po jeho změně na portálu Sunsynk nebo Deye.",
+          "create_dashboard": "Volitelně vytvořit řídicí panel Lovelace, zaregistrovat přiloženou kartu a aktualizovat panel při každém opětovném načtení integrace. Ve výchozím stavu vypnuto.",
+          "admin_only_control": "Je-li zaškrtnuto, mohou ovládací akce Sunsynk (vynucené nabíjení/vybíjení, pracovní režim, virtuální sloty) spouštět pouze administrátoři Home Assistant. Automatizace a skripty nejsou ovlivněny. Toto nastavení mohou měnit pouze administrátoři.",
           "latitude": "Volitelné — výchozí je poloha domova v HA",
           "longitude": "Volitelné — výchozí je poloha domova v HA",
           "panel_kwp": "Celkový instalovaný výkon panelů v kilowattech špičkových. Ponechte prázdné pro deaktivaci solární předpovědi.",
           "performance_ratio": "Koeficient účinnosti systému, výchozí 0,80",
           "price_entity": "Libovolný senzor hlásící cenu elektřiny (např. Octopus Agile, NordPool, Tibber). Ponechte prázdné pro deaktivaci správy tarifů.",
-          "export_price_entity": "Drives discharge decisions instead of the import price. Leave blank to use the import price for both.",
+          "export_price_entity": "Řídí rozhodnutí o vybíjení/prodeji místo nákupní ceny výše — pro tarify, kde nákupní a výkupní sazby nejsou propojené (např. Octopus Intelligent Go + Outgoing). Ponechte prázdné, chcete-li pro obojí použít nákupní cenu.",
           "cheap_threshold": "Pokud cena ≤ této hodnotě, nabíjet baterii. Ponechte prázdné pro deaktivaci levného nabíjení.",
           "cheap_charge_current": "Nabíjecí proud baterie v levném období (např. 100 A).",
           "normal_charge_current": "Nabíjecí proud obnovený po skončení levného období.",
@@ -77,20 +77,20 @@
           "discharge_min_soc": "Vybíjení se automaticky zastaví, jakmile baterie dosáhne tohoto SOC. Výchozí 10.",
           "tariff_start_hour": "Hodina dne (0–23), kdy se správa tarifů aktivuje. Ponechte prázdné pro vždy zapnutý režim.",
           "tariff_end_hour": "Hodina dne (0–23), kdy se správa tarifů deaktivuje. Může přesahovat půlnoc (např. začátek 22, konec 6).",
-          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
+          "price_stale_check": "Ve výchozím stavu vypnuto. Je-li zapnuto, Správce tarifů zastaví aktivní nabíjení nebo vybíjení, pokud senzor nákupní ceny nehlásil déle než Maximální stáří dat o ceně. Nechte vypnuté, pokud vaše cena zůstává dlouho stejná nebo ji nastavuje pomocník.",
           "price_max_age": "Pokud se senzor ceny neaktualizoval v průběhu tohoto počtu minut, aktivní režim se jako bezpečnostní opatření zastaví. Výchozí 90."
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
-      "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
-      "already_configured": "This Sunsynk account is already configured.",
+      "invalid_auth": "Neplatné přihlašovací údaje. Zkontrolujte e-mail a heslo účtu Sunsynk.",
+      "cannot_connect": "Nelze se připojit k API Sunsynk. Zkontrolujte API server a připojení k internetu.",
+      "already_configured": "Tento účet Sunsynk je již nakonfigurován.",
       "invalid_serials": "Neplatné sériové číslo/čísla. Zadejte alespoň jedno sériové číslo.",
       "invalid_forecast_config": "Solární předpověď vyžaduje platnou zeměpisnou šířku, délku a výkon panelů v kWp.",
       "invalid_tariff_config": "Chyba konfigurace tarifu. Levné nabíjení vyžaduje práh + nabíjecí proud + normální proud (všechny tři). Vybíjení vyžaduje práh + špičkový proud + normální proud (všechny tři).",
-      "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
-      "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect."
+      "charge_current_above_limit": "Příliš vysoké: váš systém nabíjí baterii nejvýše {charge_max} A ({charge_limits}). Vyšší hodnota nemá žádný účinek.",
+      "discharge_current_above_limit": "Příliš vysoké: váš systém vybíjí baterii nejvýše {discharge_max} A ({discharge_limits}). Vyšší hodnota nemá žádný účinek."
     }
   },
   "issues": {
@@ -103,8 +103,8 @@
       "description": "Data pro měnič **{serial}** se nepodařilo načíst. Zkontrolujte, zda je dongle připojen a aplikace Sunsynk zobrazuje živá data."
     },
     "setting_write_mismatch": {
-      "title": "Setting {setting_key} did not apply on {serial}",
-      "description": "The inverter reports `{actual}` after `{expected}` was written. Check the setting in the Sunsynk app."
+      "title": "Nastavení {setting_key} se na {serial} neprojevilo",
+      "description": "Střídači **{serial}** bylo zadáno nastavit **{setting_key}** na `{expected}`, ale zpětné čtení hlásí `{actual}`. Střídač nebo dongle mohl hodnotu odmítnout — zkontrolujte ji přímo v aplikaci Sunsynk. Toto upozornění zmizí samo, jakmile bude zápis tohoto nastavení potvrzen."
     }
   }
 }

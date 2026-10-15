@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 - **Charge and discharge currents are checked against what your hardware will actually use.** A current above your inverter's own battery limit (its "Max A" charge or discharge setting) or the limit your lithium battery's BMS reports was accepted before and simply had no effect. **Configure** now refuses a Tariff Manager current above the lower of the two and shows the maximum, e.g. "no more than 100 A (inverter 120 A, battery BMS 100 A)". The `force_charge`, `force_discharge` and `set_virtual_slot` actions refuse it in the same way. A limit your inverter doesn't report, or reports as an implausible value, is never used to refuse a current.
+- **Every language now has a full translation of Configure and of the setting repair.** Several newer options, including "Allow only administrators to use control actions", were still in English in Afrikaans, Czech, German, Spanish, French, Polish, Russian and Chinese.
 
 ### Fixed
 - **Tariff Manager could act on an old battery SOC.** When every inverter failed to refresh, Home Assistant kept the previous data, and a price change could then start charging or discharging based on a SOC that might be hours old. Tariff Manager now treats the SOC as unavailable until a refresh succeeds: it stops anything it's doing and makes no new decision.

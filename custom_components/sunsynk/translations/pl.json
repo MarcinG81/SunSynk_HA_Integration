@@ -37,7 +37,7 @@
           "serials": "Numer(y) seryjny falownika",
           "refresh_interval": "Interwał odświeżania (sekundy)",
           "create_dashboard": "Utwórz i utrzymuj dashboard Sunsynk",
-          "admin_only_control": "Allow only administrators to use control actions",
+          "admin_only_control": "Zezwalaj na akcje sterujące tylko administratorom",
           "latitude": "Szerokość geograficzna (prognoza słoneczna)",
           "longitude": "Długość geograficzna (prognoza słoneczna)",
           "panel_kwp": "Szczytowa moc paneli (kWp)",
@@ -54,13 +54,13 @@
           "discharge_min_soc": "Zatrzymaj rozładowanie przy SOC (%)",
           "tariff_start_hour": "Harmonogram — godzina rozpoczęcia (0–23)",
           "tariff_end_hour": "Harmonogram — godzina zakończenia (0–23)",
-          "price_stale_check": "Stop when price data looks out of date",
+          "price_stale_check": "Zatrzymaj, gdy dane cenowe wyglądają na nieaktualne",
           "price_max_age": "Maksymalny wiek danych cenowych (minuty)"
         },
         "data_description": {
           "password": "Zostaw puste, aby zachować zapisane hasło. Wpisz nowe hasło po zmianie w portalu Sunsynk lub Deye.",
           "create_dashboard": "Opcjonalnie utwórz dashboard Lovelace, zarejestruj dołączoną kartę i aktualizuj dashboard po każdym przeładowaniu integracji. Domyślnie wyłączone.",
-          "admin_only_control": "When ticked, the Sunsynk control actions (force charge/discharge, work mode, virtual slots) can only be run by Home Assistant administrators. Automations and scripts are unaffected. Only administrators can change this setting.",
+          "admin_only_control": "Po zaznaczeniu akcje sterujące Sunsynk (wymuszenie ładowania/rozładowania, tryb pracy, wirtualne sloty) mogą uruchamiać tylko administratorzy Home Assistant. Automatyzacje i skrypty działają bez zmian. Tylko administratorzy mogą zmienić to ustawienie.",
           "latitude": "Opcjonalne — domyślnie lokalizacja HA",
           "longitude": "Opcjonalne — domyślnie lokalizacja HA",
           "panel_kwp": "Łączna moc zainstalowanych paneli w kWp. Pozostaw puste, aby wyłączyć prognozę słoneczną.",
@@ -77,7 +77,7 @@
           "discharge_min_soc": "Rozładowanie zatrzymuje się automatycznie gdy bateria osiągnie ten SOC. Domyślnie 10.",
           "tariff_start_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się aktywuje. Pozostaw puste dla trybu zawsze aktywnego.",
           "tariff_end_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się dezaktywuje. Może przekraczać północ (np. start 22, koniec 6).",
-          "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
+          "price_stale_check": "Domyślnie wyłączone. Po włączeniu Menedżer taryf zatrzymuje aktywne ładowanie lub rozładowanie, jeśli czujnik ceny zakupu nie zgłaszał danych dłużej niż Maksymalny wiek danych cenowych. Zostaw wyłączone, jeśli cena długo się nie zmienia albo ustawia ją pomocnik.",
           "price_max_age": "Jeśli czujnik ceny nie zaktualizował się w ciągu podanej liczby minut, aktywny tryb ładowania/rozładowania zostanie zatrzymany. Domyślnie 90."
         }
       }
@@ -104,7 +104,7 @@
     },
     "setting_write_mismatch": {
       "title": "Ustawienie {setting_key} nie zostało zastosowane na {serial}",
-      "description": "Po zapisaniu `{expected}` falownik zgłasza `{actual}`. Sprawdź ustawienie bezpośrednio w aplikacji Sunsynk."
+      "description": "Falownik **{serial}** dostał polecenie ustawienia **{setting_key}** na `{expected}`, ale odczyt zwraca `{actual}`. Falownik lub dongle mogły odrzucić tę wartość — sprawdź ją bezpośrednio w aplikacji Sunsynk. Ten komunikat zniknie sam, gdy zapis tego ustawienia zostanie potwierdzony."
     }
   }
 }
