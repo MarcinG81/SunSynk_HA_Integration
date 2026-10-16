@@ -10,9 +10,13 @@ from typing import Any
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
+from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import Unauthorized, UnknownUser
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from .api.auth import SunsynkAuth
 from .calibration import PerformanceRatioCalibrator
@@ -185,6 +189,33 @@ def _find_coordinator(hass: HomeAssistant, serial: str) -> SunsynkCoordinator | 
     return None
 
 
+async def _async_ensure_control_allowed(
+    hass: HomeAssistant, call: ServiceCall, serial: str
+) -> None:
+    """Refuse a control action from a user who may not control this inverter.
+
+    A user must be allowed to control the inverter's entities, so a read-only
+    user can't change the inverter through an action. Automations and
+    scripts run without a user and are always allowed.
+    """
+    context = getattr(call, "context", None)
+    if context is None or context.user_id is None:
+        return
+    user = await hass.auth.async_get_user(context.user_id)
+    if user is None:
+        raise UnknownUser(context=context)
+    if user.is_admin:
+        return
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, serial)})
+    entity_ids = (
+        [e.entity_id for e in er.async_entries_for_device(er.async_get(hass), device.id)]
+        if device is not None
+        else []
+    )
+    if not any(user.permissions.check_entity(e, POLICY_CONTROL) for e in entity_ids):
+        raise Unauthorized(context=context, permission=POLICY_CONTROL)
+
+
 def _find_entry_id_for_serial(hass: HomeAssistant, serial: str) -> str | None:
     """Find the config entry id that owns a given inverter serial.
 
@@ -227,6 +258,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_force_charge(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         coordinator = _find_coordinator(hass, serial)
         if coordinator is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
@@ -234,6 +266,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_force_discharge(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         coordinator = _find_coordinator(hass, serial)
         if coordinator is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
@@ -241,6 +274,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_set_work_mode(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         coordinator = _find_coordinator(hass, serial)
         if coordinator is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
@@ -248,6 +282,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_set_virtual_slot(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         entry_id = _find_entry_id_for_serial(hass, serial)
         if entry_id is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
@@ -271,6 +306,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     async def _handle_clear_virtual_slot(call: ServiceCall) -> None:
         serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
         entry_id = _find_entry_id_for_serial(hass, serial)
         if entry_id is None:
             raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")

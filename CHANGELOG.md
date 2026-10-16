@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.14] - 2026-10-17
+
+### Security
+- **A Home Assistant user with read-only access could control the inverter through the `sunsynk.*` actions**, e.g. force a discharge, because the actions didn't check the user's permissions. Every action now requires a user who may control that inverter's entities, as Home Assistant's own entity controls do. Automations and scripts are unaffected.
+
 ## [1.9.13] - 2026-10-15
 
 ### Fixed
