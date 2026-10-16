@@ -1,0 +1,21 @@
+# Keeps the GitHub Actions used by CI and releases up to date. They are
+# pinned to full commit SHAs, so nothing updates them otherwise; Dependabot
+# bumps the SHA and the version comment together.
+#
+# The integration itself has no Python requirements shipped to users, and
+# the test requirements are pinned on purpose (requirements_test_min.txt
+# tracks the oldest supported Home Assistant), so pip isn't covered here.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "08:00"
+      timezone: Europe/London
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
