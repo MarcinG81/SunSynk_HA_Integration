@@ -496,3 +496,23 @@ async def test_options_form_shows_how_the_export_limit_splits(
 
     assert result["description_placeholders"]["export_inverters"] == inverters
     assert result["description_placeholders"]["export_share"] == share
+
+
+@pytest.mark.asyncio
+async def test_options_form_keeps_typed_values_after_an_error():
+    """The refused value stays in its field, not the saved one; the
+    password is never sent back to the page."""
+    flow = _options_flow()
+    _running_coordinator(
+        flow, {"INV1": {"settings": {"batteryMaxCurrentDischarge": 120}, "battery": {}}}
+    )
+
+    result = await flow.async_step_init({**_tariff_input(), "password": "typed-secret"})
+
+    suggested = {
+        str(marker): (marker.description or {}).get("suggested_value")
+        for marker in result["data_schema"].schema
+    }
+    assert result["errors"]["peak_discharge_current"] == "discharge_current_above_limit"
+    assert suggested["peak_discharge_current"] == "200"
+    assert suggested["password"] != "typed-secret"

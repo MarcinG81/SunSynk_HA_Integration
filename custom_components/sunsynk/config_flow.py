@@ -477,6 +477,14 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
         )
 
         placeholders.update(self._export_placeholders(_opt(CONF_MAX_EXPORT_POWER)))
+        if user_input is not None:
+            # Shown again after an error: keep what was just typed, not the
+            # saved values, so the field the error points at shows the value
+            # that was refused. The password is never sent back to the page.
+            schema = self.add_suggested_values_to_schema(
+                schema,
+                {k: v for k, v in user_input.items() if k != CONF_PASSWORD},
+            )
         return self.async_show_form(
             step_id="init",
             data_schema=schema,

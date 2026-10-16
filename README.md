@@ -53,6 +53,24 @@ The difficult reports are what made the integration better.
 - **Multi-language UI** — Config flow and options translated into Polish, German, French, Afrikaans, Russian, Spanish, Czech and Chinese Simplified
 - **HACS compatible** — Install and update through HACS
 
+### Screenshots
+
+*From a demo parallel pair (two 12 kW inverters), not a real installation.*
+
+The optional generated dashboard, with the bundled Sunsynk Power Flow Card:
+
+![Generated dashboard: power flow, battery, solar, grid and Tariff Manager](docs/images/dashboard-overview.png)
+
+Tariff Manager's own tab, with every threshold and current editable in place:
+
+![Tariff Manager tab](docs/images/dashboard-tariff.png)
+
+Configure refuses a current your hardware won't use, and says what the maximum is:
+
+![Configure: "Too high: your system discharges the battery at no more than 240 A"](docs/images/configure-too-high.png)
+
+More screenshots are in the [wiki](https://github.com/MarcinG81/SunSynk_HA_Integration/wiki).
+
 ---
 
 ## Supported Inverters

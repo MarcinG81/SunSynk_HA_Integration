@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **The Virtual Slot Scheduler could take the timer over before it knew your own settings**, e.g. when turned on right after a restart, before the first poll. It would then have had nothing to put back. It now waits until it has captured your timer, and never captures it from a failed refresh.
 - **Switching the Virtual Slot Scheduler off while it was standing by** wrote your own timer and currents back, although they were already in place. It now writes nothing.
 - **A parallel slave could be routed to a master whose plant wasn't known yet**, which might belong to another installation. Once plants are known, only a master on the slave's own plant counts.
+- **After an error in Configure, the form showed the saved values again** instead of what you had just typed, so the field the error pointed at no longer showed the refused value. It now keeps what you typed (except the password).
 - **A virtual slot with no weekdays** (only possible by editing storage) could stop the scheduler with an error. It's now ignored.
 - **The dashboard's "Open sunsynk.clear_virtual_slot" link opened Set Virtual Slot instead** (and the other way round), because Home Assistant reopens the last action used. The links now say which action to choose and to check it before running. (#21)
 
