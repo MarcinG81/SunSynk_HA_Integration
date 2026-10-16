@@ -226,3 +226,79 @@ async def test_idle_window_restores_both_normal_currents():
         ("chargeCurrent", 50),
         ("dischargeCurrent", 60),
     ]
+
+
+# ── 2.0 audit N3/N4/N5: never drive without a way back ─────────────────────
+
+
+@pytest.mark.asyncio
+async def test_no_takeover_until_the_user_timer_can_be_captured():
+    """Enabled before the first poll: nothing to put back, so drive nothing."""
+    coordinator, scheduler = _setup(_tariff(discharging=True))
+    coordinator.data[SERIAL]["settings"] = {}
+
+    await scheduler._async_bootstrap()
+    assert _writes(coordinator) == []
+    assert scheduler._original_settings is None
+
+    coordinator.data[SERIAL]["settings"] = dict(_USER_TIMER)
+    await scheduler._async_tick_locked()
+
+    assert scheduler._original_settings == _USER_TIMER
+    assert scheduler.active_source == "price_override"
+
+
+@pytest.mark.asyncio
+async def test_the_user_timer_is_never_captured_from_a_failed_refresh():
+    coordinator, scheduler = _setup(_tariff(discharging=True))
+    coordinator.last_update_success = False
+
+    await scheduler._async_bootstrap()
+
+    assert scheduler._original_settings is None
+    assert _writes(coordinator) == []
+
+
+@pytest.mark.asyncio
+async def test_removing_a_window_puts_the_normal_current_back():
+    coordinator, scheduler = _setup()
+    scheduler._normal_charge_current = 50
+    scheduler._slots[1] = VirtualSlot(
+        1, "16:00", "19:00", MODE_CHARGE, current=100, target_soc=90
+    )
+    await scheduler._async_bootstrap()
+    assert ("chargeCurrent", 100) in [
+        c.args[1:] for c in coordinator.async_write_setting.call_args_list
+    ]
+
+    coordinator.async_write_setting.reset_mock()
+    scheduler._slots.clear()
+    await scheduler._async_tick_locked()
+
+    assert [c.args[1:] for c in coordinator.async_write_setting.call_args_list] == [
+        ("chargeCurrent", 50)
+    ]
+    assert scheduler._standing_by is True
+
+
+@pytest.mark.asyncio
+async def test_switching_off_while_standing_by_writes_nothing():
+    coordinator, scheduler = _setup(_tariff())
+    scheduler._normal_charge_current = 50
+    await scheduler._async_bootstrap()
+
+    assert await scheduler.async_shutdown() is True
+
+    assert _writes(coordinator) == []
+    coordinator.async_write_setting.assert_not_called()
+    assert scheduler._original_settings is None
+
+
+def test_a_slot_with_no_weekdays_is_nothing_to_do():
+    _, scheduler = _setup()
+    scheduler._slots[1] = VirtualSlot(
+        1, "16:00", "19:00", MODE_CHARGE, weekdays=frozenset(), target_soc=90
+    )
+
+    assert scheduler._has_work() is False
+    assert scheduler._resolve_virtual(datetime(2024, 1, 4, 12, 0))[2] is None

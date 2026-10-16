@@ -25,6 +25,16 @@ Price-driven decisions from TariffChargingManager do not need a
 breakpoint of their own — they always take priority and are applied by
 live-patching whichever of slot 1 / slot 6 is currently active (cap /
 sell power / on), without touching its start time or the other slot.
+
+Ownership is taken only when there is something to drive (an enabled
+window or a price decision), and only once the user's own timer has been
+captured, so it can always be put back. With nothing to do, the scheduler
+stands by: the user's timer is in place and the capture follows it.
+
+Every current and sell power written is also kept within what the hardware
+and the installation allow: the battery's BMS limit and the maximum export
+power, both shared between the inverters of a parallel group (see
+current_limits).
 """
 
 from __future__ import annotations
@@ -431,29 +441,19 @@ class VirtualSlotScheduler:
         self._notify_listeners()
 
     async def _async_bootstrap(self) -> None:
-        """Take ownership: disable slots 2-5, then compute 1 & 6 from scratch."""
+        """Start after the switch is turned on: capture the user's timer, then
+        tick, which takes the slots over only if there is something to do."""
         async with self._operation_lock:
             # The enable task may still be queued when an unload/disable wins
             # the race. Never take ownership after shutdown has begun.
             if not self._enabled or not self._drives_inverter():
                 return
             if self._original_settings is None:
-                self._original_settings = self._current_managed_settings()
-                # Each model has only one of the two sell-flag names.
-                missing = (
-                    set(_MANAGED_SETTING_KEYS)
-                    - self._original_settings.keys()
-                    - _SELL_FLAG_KEYS
-                )
-                if missing:
-                    _LOGGER.warning(
-                        "Virtual slots [%s]: cannot snapshot missing settings: %s",
-                        self._serial,
-                        ", ".join(sorted(missing)),
-                    )
-                await self._async_persist()
                 # Nothing has been written yet: the user's timer is in place.
+                # If it can't be captured yet (no settings polled), the tick
+                # keeps trying and drives nothing until it can.
                 self._standing_by = True
+                await self._async_capture_user_timer()
             else:
                 # A snapshot from before a restart: the inverter may still
                 # hold this scheduler's layout, so put the user's back first.
@@ -464,6 +464,36 @@ class VirtualSlotScheduler:
             self._last_written_slot2_boundary = None
             await self._async_tick_locked()
 
+    async def _async_capture_user_timer(self) -> bool:
+        """Capture the user's timer so it can always be put back.
+
+        Never from a failed refresh, and never empty: without a capture the
+        scheduler has no way back to the user's schedule, so it doesn't take
+        the slots over at all (2.0 audit N3).
+        """
+        if getattr(self._coordinator, "last_update_success", True) is False:
+            return False
+        captured = self._current_managed_settings()
+        if not captured:
+            _LOGGER.warning(
+                "Virtual slots [%s]: waiting for the inverter's timer settings "
+                "before taking over",
+                self._serial,
+            )
+            return False
+        # Each model has only one of the two sell-flag names.
+        missing = set(_MANAGED_SETTING_KEYS) - captured.keys() - _SELL_FLAG_KEYS
+        if missing:
+            _LOGGER.warning(
+                "Virtual slots [%s]: cannot capture missing settings, they "
+                "won't be put back: %s",
+                self._serial,
+                ", ".join(sorted(missing)),
+            )
+        self._original_settings = captured
+        await self._async_persist()
+        return True
+
     def _current_managed_settings(self) -> dict[str, Any]:
         settings = (
             (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
@@ -473,7 +503,7 @@ class VirtualSlotScheduler:
     def _has_work(self) -> bool:
         """Whether there is an enabled window or a live price override."""
         return (
-            any(slot.enabled for slot in self._slots.values())
+            any(slot.enabled and slot.weekdays for slot in self._slots.values())
             or self._resolve_override() is not None
         )
 
@@ -493,31 +523,40 @@ class VirtualSlotScheduler:
                     self._original_settings = current
                     await self._async_persist()
             return False
-        if self._original_settings:
-            try:
+        try:
+            if self._original_settings:
                 await self._coordinator.async_write_settings(
                     self._serial, self._original_settings
                 )
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.error(
-                    "Virtual slots [%s]: could not put your own timer back, "
-                    "will retry: %s",
-                    self._serial,
-                    err,
-                )
-                return False
+            if isinstance(self._last_current_key, tuple):
+                # A window's own current is still on the inverter (the window
+                # was removed or disabled): put the normal currents back too.
+                await self._apply_current_if_changed(_IDLE)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error(
+                "Virtual slots [%s]: could not put your own timer back, "
+                "will retry on the next update: %s",
+                self._serial,
+                err,
+            )
+            return False
         self._standing_by = True
         self._last_written = {}
         self._last_current_key = None
         self._last_written_slot2_boundary = None
         _LOGGER.info(
-            "Virtual slots [%s]: nothing scheduled, your own timer is in place",
+            "Virtual slots [%s]: nothing to do, your own timer is back in place",
             self._serial,
         )
         return True
 
     async def _async_take_over(self) -> None:
         """Turn slots 2-5 off before driving slots 1 and 6."""
+        _LOGGER.info(
+            "Virtual slots [%s]: taking over timer slots 1 and 6 (%s)",
+            self._serial,
+            "price override" if self._resolve_override() else "virtual slot",
+        )
         await self._coordinator.async_write_settings(
             self._serial,
             {key: 0 for key in _UNUSED_SLOT_ON_KEYS},
@@ -531,14 +570,17 @@ class VirtualSlotScheduler:
         """Restore the exact settings captured before taking ownership."""
         success = True
         async with self._operation_lock:
+            # Standing by, the user's own timer and the normal currents are
+            # already in place: nothing to put back (2.0 audit N4).
+            owns = not self._standing_by
             had_ownership = (
-                self._original_settings is not None
+                (self._original_settings is not None and owns)
                 or self._pending_current_restore is not None
-                or force_disable
+                or (force_disable and owns)
             )
             pending: dict[str, Any] = {}
             pending_currents: dict[str, Any] = {}
-            if self._original_settings:
+            if self._original_settings and owns:
                 try:
                     await self._coordinator.async_write_settings(
                         self._serial, self._original_settings
@@ -551,7 +593,7 @@ class VirtualSlotScheduler:
                         self._serial,
                         err,
                     )
-            elif force_disable and self._drives_inverter():
+            elif force_disable and owns and self._drives_inverter():
                 try:
                     await self._coordinator.async_write_settings(
                         self._serial,
@@ -605,6 +647,7 @@ class VirtualSlotScheduler:
 
             self._original_settings = pending or None
             self._pending_current_restore = pending_currents or None
+            self._standing_by = False
             self._last_written = {}
             self._last_current_key = None
             self._last_written_slot2_boundary = None
@@ -671,7 +714,8 @@ class VirtualSlotScheduler:
 
         boundaries: list[datetime] = []
         for slot in self._slots.values():
-            if not slot.enabled:
+            # A slot with no weekdays never starts (2.0 audit N5).
+            if not slot.enabled or not slot.weekdays:
                 continue
             if chosen is not None and slot.slot_id == chosen[0].slot_id:
                 boundaries.append(chosen[2])  # this slot's own window end
@@ -957,6 +1001,10 @@ class VirtualSlotScheduler:
         if not self._drives_inverter():
             return
 
+        if self._original_settings is None and not (
+            await self._async_capture_user_timer()
+        ):
+            return
         if not self._has_work():
             if await self._async_stand_by():
                 self._current_source = "none"
@@ -982,6 +1030,14 @@ class VirtualSlotScheduler:
 
         changed = wrote1 or wrote6 or wrote_boundary or wrote_current
         if plan.active_resolution.source != self._current_source:
+            _LOGGER.info(
+                "Virtual slots [%s]: now %s (%s) on timer slot %s, next change %s",
+                self._serial,
+                plan.active_resolution.source,
+                plan.active_resolution.mode,
+                plan.active_physical,
+                plan.next_boundary.isoformat() if plan.next_boundary else "none",
+            )
             self._current_source = plan.active_resolution.source
             changed = True
         if plan.active_physical != self._current_physical_slot:

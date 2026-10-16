@@ -11,9 +11,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Configure shows how your maximum export power splits**, e.g. "2 inverter(s) per group, so the saved value is 5500 W per inverter". The field description now also says clearly that the limit covers selling slots set by the scheduler, not solar export.
 
 ### Changed
+- **Clearer logs.** Every settings write is logged at debug level, with the values changed and the inverter it went to, including a slave's write going to its master. A failed write is logged as a warning naming the settings. Tariff Manager logs the current it actually set, also when it changes mid-charge. The Virtual Slot Scheduler logs when it takes the timer over, when it hands it back, and every change of what's in force.
+- **A release is only published once its commit passes the tests and validation.** The Release workflow now runs both and waits for them.
+- **The Maximum export power description now says** that with several independent inverters or parallel groups in one entry, each gets the limit of its own.
 - **The Virtual Slot Scheduler leaves your own timer alone when it has nothing to do.** With no enabled window and no Tariff Manager override, it no longer takes over the timer slots. When an override ends, it puts your own timer back exactly as it was, so you can use Tariff Manager without virtual slots and without your schedule being left changed. While it stands by, it keeps track of changes you make to your timer in the Sunsynk app, so those are what come back. Suggested by pay4property. (#21)
 
 ### Fixed
+- **Removing or disabling a virtual window left its own current on the inverter.** When the Virtual Slot Scheduler goes back to your own timer, it now puts the normal charge and discharge currents back too.
+- **The Virtual Slot Scheduler could take the timer over before it knew your own settings**, e.g. when turned on right after a restart, before the first poll. It would then have had nothing to put back. It now waits until it has captured your timer, and never captures it from a failed refresh.
+- **Switching the Virtual Slot Scheduler off while it was standing by** wrote your own timer and currents back, although they were already in place. It now writes nothing.
+- **A parallel slave could be routed to a master whose plant wasn't known yet**, which might belong to another installation. Once plants are known, only a master on the slave's own plant counts.
+- **A virtual slot with no weekdays** (only possible by editing storage) could stop the scheduler with an error. It's now ignored.
 - **The dashboard's "Open sunsynk.clear_virtual_slot" link opened Set Virtual Slot instead** (and the other way round), because Home Assistant reopens the last action used. The links now say which action to choose and to check it before running. (#21)
 
 ## [2.0.0-beta.13] - 2026-10-15

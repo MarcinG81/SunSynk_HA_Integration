@@ -9,7 +9,16 @@ permissions:
   contents: write
 
 jobs:
+  # A release is only published once the tagged commit passes the same tests
+  # and validation as every push (2.0 audit N7).
+  tests:
+    uses: ./.github/workflows/tests.yaml
+
+  validate:
+    uses: ./.github/workflows/validate.yaml
+
   release:
+    needs: [tests, validate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

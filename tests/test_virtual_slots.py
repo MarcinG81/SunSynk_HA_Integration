@@ -690,6 +690,8 @@ async def test_shutdown_restores_exact_pre_ownership_settings(
         normal_charge_current=47,
         normal_discharge_current=53,
     )
+    # A window, so the scheduler takes the timer over before shutting down.
+    sched._slots[1] = VirtualSlot(1, "01:00", "02:00", MODE_CHARGE, target_soc=90)
     sched._now = lambda: _dt(2024, 1, 1, 12, 0)
     sched._enabled = True
 
@@ -816,6 +818,7 @@ async def test_bootstrap_never_calls_write_setting_for_a_parallel_slave(
 ):
     mock_coordinator.serials = ["SLAVE1", "MASTER1"]
     mock_coordinator.write_target_serials = ["MASTER1"]  # slave collapsed in
+    mock_coordinator.data["MASTER1"] = mock_coordinator.data["TEST123"]
     sched = _make_scheduler(mock_hass, mock_coordinator, serial="MASTER1")
     sched._slots[1] = VirtualSlot(
         slot_id=1, start="00:00", end="23:59", mode=MODE_CHARGE, current=60, target_soc=90
@@ -841,6 +844,7 @@ async def test_scheduler_writes_only_its_independent_target(
     mock_hass, mock_coordinator
 ):
     mock_coordinator.write_target_serials = ["INV1", "INV2"]
+    mock_coordinator.data["INV2"] = mock_coordinator.data["TEST123"]
     sched = _make_scheduler(mock_hass, mock_coordinator, serial="INV2")
     sched._slots[1] = VirtualSlot(
         slot_id=1,
@@ -1022,13 +1026,17 @@ async def test_switch_state_and_original_timer_survive_a_restart(
 
     second._enabled = True
     second._now = lambda: _dt(2024, 1, 1, 12, 0)
-    await second._async_bootstrap()
     mock_coordinator.async_write_settings.reset_mock()
-    await second.async_shutdown()
+    await second._async_bootstrap()
 
+    # Nothing scheduled: the user's own timer is put back straight away.
     restored = mock_coordinator.async_write_settings.await_args_list[0].args[1]
     assert restored["sellTime1"] == "06:30"
     assert restored["cap1"] == "55"
+    mock_coordinator.async_write_settings.reset_mock()
+    await second.async_shutdown()
+    # Already back in place, so unloading has nothing more to write.
+    mock_coordinator.async_write_settings.assert_not_called()
     # Unload doesn't change what the user chose; the snapshot is cleared.
     final = second._store.async_save.await_args.args[0]
     assert final["enabled"] is True
@@ -1085,6 +1093,7 @@ async def test_window_skips_sell_flag_on_models_without_one(mock_hass, mock_coor
     settings = mock_coordinator.data["TEST123"]["settings"]
     del settings["sellTime1on"]
     del settings["sellTime6on"]
+    settings["time1on"] = "false"  # the timer still has its other fields
     sched = _make_scheduler(mock_hass, mock_coordinator)
     sched._slots[1] = VirtualSlot(
         slot_id=1, start="00:00", end="23:59", mode=MODE_DISCHARGE, sell_power=3000

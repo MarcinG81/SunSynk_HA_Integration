@@ -2,7 +2,10 @@ name: Tests
 
 on:
   push:
+    # Tags are tested by the Release workflow, which waits for the result.
+    branches: ["**"]
   pull_request:
+  workflow_call:
 
 permissions: {}
 

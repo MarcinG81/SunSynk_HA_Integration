@@ -635,6 +635,7 @@ class TariffChargingManager:
                 self._target_soc,
             )
             amps = self._safe(serial, "charge", self._cheap_current)
+            _LOGGER.info("Tariff [%s]: charging at %s A", serial, amps)
             await self._write_setting(serial, "chargeCurrent", amps)
             self._charging_active_serials.add(serial)
             self._applied_charge_current[serial] = self._cheap_current
@@ -650,11 +651,13 @@ class TariffChargingManager:
             and self._applied_charge_current.get(serial) != self._cheap_current
         ):
             # The cheap-rate current was changed while charging.
-            await self._write_setting(
+            amps = self._safe(serial, "charge", self._cheap_current)
+            _LOGGER.info(
+                "Tariff [%s]: cheap-rate current changed while charging, now %s A",
                 serial,
-                "chargeCurrent",
-                self._safe(serial, "charge", self._cheap_current),
+                amps,
             )
+            await self._write_setting(serial, "chargeCurrent", amps)
             self._applied_charge_current[serial] = self._cheap_current
             self._notify_listeners()
 
@@ -693,6 +696,7 @@ class TariffChargingManager:
                 self._discharge_min_soc,
             )
             amps = self._safe(serial, "discharge", self._peak_discharge_current)
+            _LOGGER.info("Tariff [%s]: discharging at %s A", serial, amps)
             await self._write_setting(serial, "dischargeCurrent", amps)
             self._discharging_active_serials.add(serial)
             self._applied_discharge_current[serial] = self._peak_discharge_current
@@ -711,11 +715,14 @@ class TariffChargingManager:
             != self._peak_discharge_current
         ):
             # The peak discharge current was changed while discharging.
-            await self._write_setting(
+            amps = self._safe(serial, "discharge", self._peak_discharge_current)
+            _LOGGER.info(
+                "Tariff [%s]: peak discharge current changed while discharging, "
+                "now %s A",
                 serial,
-                "dischargeCurrent",
-                self._safe(serial, "discharge", self._peak_discharge_current),
+                amps,
             )
+            await self._write_setting(serial, "dischargeCurrent", amps)
             self._applied_discharge_current[serial] = self._peak_discharge_current
             self._notify_listeners()
 

@@ -1593,3 +1593,19 @@ async def test_failed_confirmation_never_leaves_an_overlay_behind():
     fresh_poll = {"settings": {"chargeCurrent": 50}}
     SunsynkCoordinator._overlay_unconfirmed_writes(obj, "SN1", fresh_poll)
     assert fresh_poll["settings"]["chargeCurrent"] == 50
+
+
+def test_a_master_of_unknown_plant_is_not_chosen_once_plants_are_known():
+    """2.0 audit N2: master_B's plant is unknown and may be plant 1."""
+    coordinator = _two_groups()
+    coordinator.data["master_B"]["inverter"]["plant"] = {}
+
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "slave_B") == "slave_B"
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "slave_A") == "master_A"
+
+
+def test_before_any_plant_is_known_the_only_master_is_used():
+    coordinator = _real_shape_parallel()
+    coordinator.data["2406060175"]["inverter"]["plant"] = {"id": 7}
+
+    assert SunsynkCoordinator.resolve_write_target(coordinator, "2406060175") == "2406060181"

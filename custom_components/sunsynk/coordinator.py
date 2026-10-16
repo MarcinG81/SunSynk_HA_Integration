@@ -270,16 +270,21 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         # Only a master of the slave's own plant can be its group's master;
         # one account can hold several installations.
         plant = SunsynkCoordinator._plant_id(self, serial)
-        masters = [
+        all_masters = [
             other_serial
             for other_serial in self.serials
             if other_serial != serial
             and SunsynkCoordinator._parallel_role(self, other_serial) == "master"
-            and (
-                plant is None
-                or SunsynkCoordinator._plant_id(self, other_serial) in (None, plant)
-            )
         ]
+        plants = {m: SunsynkCoordinator._plant_id(self, m) for m in all_masters}
+        if plant is None or all(p is None for p in plants.values()):
+            # Plants not known yet (e.g. before the first plant lookup).
+            masters = all_masters
+        else:
+            # Once plants are known, only an exact match counts: a master
+            # whose plant is unknown could belong to another installation
+            # (2.0 audit N2).
+            masters = [m for m in all_masters if plants[m] == plant]
         if len(masters) == 1:
             return masters[0]
         if masters:
@@ -354,7 +359,15 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         # Validate the complete caller-supplied batch before mutating queue
         # state. A bad field must not allow valid siblings to leak to the API.
         settings = validate_setting_batch(settings)
+        requested = serial
         serial = SunsynkCoordinator.resolve_write_target(self, serial)
+        if serial != requested:
+            _LOGGER.debug(
+                "Write for parallel slave %s goes to its master %s: %s",
+                requested,
+                serial,
+                settings,
+            )
         SunsynkCoordinator._ensure_write_state(self)
 
         loop = asyncio.get_running_loop()
@@ -508,13 +521,32 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                         key,
                         err,
                     )
+            # The changed values only; the rest of the group is resent as read.
+            _LOGGER.debug(
+                "Writing to inverter %s: %s (%d fields in the request)",
+                serial,
+                {key: payload[key] for key in group_updates},
+                len(payload),
+            )
             try:
                 await client.async_write_settings(session, serial, payload)
             except SunsynkAuthenticationError as err:
                 self._auth.invalidate_token()
+                _LOGGER.warning(
+                    "Write to inverter %s refused, logging in again on the next "
+                    "attempt: %s",
+                    serial,
+                    err,
+                )
                 error = UpdateFailed(f"Authentication failed: {err}")
                 return {key: error for key in updates}
             except SunsynkApiError as err:
+                _LOGGER.warning(
+                    "Write of %s to inverter %s failed: %s",
+                    ", ".join(group_updates),
+                    serial,
+                    err,
+                )
                 error = UpdateFailed(
                     f"Failed to write settings {', '.join(group_updates)}: {err}"
                 )
