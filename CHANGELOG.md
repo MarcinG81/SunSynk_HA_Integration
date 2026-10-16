@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0-beta.14] - 2026-10-16
 
 ### Added
 - **Tariff Manager test mode.** A new tick in **Configure**. Tariff Manager decides as usual and shows it in Tariff Mode, its notifications (marked "[Test mode]") and the log, but sends nothing to the inverter, and the Virtual Slot Scheduler ignores it. It's a safe way to check what your settings would do. Suggested by pay4property. (#21)
@@ -282,6 +282,14 @@ especially parallel master/slave installations exposed API and firmware behaviou
 that is neither documented nor obvious from a successful HTTP response. Those
 reports did not merely fix isolated bugs; they shaped the safer write pipeline,
 restoration lifecycle and per-inverter architecture delivered in this 2.0 beta.
+
+## [1.9.13] - 2026-10-16
+
+### Fixed
+- **Tariff Manager safety:** no decision on a missing or old battery SOC, failed restores of the normal currents are retried, and a changed current applies straight away. Same fixes as 2.0.0-beta.12.
+- **Virtual Slot Scheduler could leave the last window running after it ended**, and **a slave could be routed to another parallel group's master**. Same fixes as 2.0.0-beta.12.
+- **A Sunsynk cloud timeout could leave a setting showing a value the inverter never accepted.** Same fix as 2.0.0-beta.12.
+- **Battery BMS SOC with no BMS voltage, "inf"/"nan" prices, and HTTP redirects on login and writes.** Same fixes as 2.0.0-beta.11. Thanks to @davidatjourney.
 
 ## [1.9.12] - 2026-10-14
 
