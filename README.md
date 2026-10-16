@@ -44,8 +44,11 @@ The difficult reports are what made the integration better.
 - **3-phase support** — Per-phase voltage, current and power for grid, load and inverter output
 - **Writable settings** — Change key inverter parameters directly from HA (battery thresholds, charge/discharge current, time slots, sell power limits, etc.)
 - **Solar Forecast** — Optional sensors for predicted PV yield today/tomorrow, cloud cover, precipitation and solar irradiance (GHI/DNI) via Open-Meteo (free, no API key)
-- **Tariff Manager** — Automatic cheap-rate charging and peak-rate discharging based on any HA electricity price sensor (Octopus Agile, NordPool, Tibber, G12, `input_number`, etc.)
-- **Multiple inverters** — One integration entry supports multiple serial numbers
+- **Tariff Manager** — Automatic cheap-rate charging and peak-rate discharging based on any HA electricity price sensor (Octopus Agile, NordPool, Tibber, G12, `input_number`, etc.), with an optional separate export price and a test mode that decides without touching the inverter
+- **Virtual Slot Scheduler** — Up to 10 charge/discharge/idle windows per inverter, defined in Home Assistant and put onto the inverter's own timer, with Tariff Manager price decisions taking priority. With nothing scheduled it leaves your own timer alone
+- **Multiple and parallel inverters** — One integration entry supports multiple serial numbers. A parallel group's slave is recognised and every write goes to its master
+- **Safety limits** — Charge and discharge currents are checked against the inverter's own Max A and the battery's BMS limit (shared across a parallel group), and an optional **Maximum export power** caps what scheduled selling slots may put out
+- **Admin-only control** — Optionally allow only Home Assistant administrators to run the control actions
 - **Config Flow** — Fully configured through the Home Assistant UI (no YAML needed)
 - **Multi-language UI** — Config flow and options translated into Polish, German, French, Afrikaans, Russian, Spanish, Czech and Chinese Simplified
 - **HACS compatible** — Install and update through HACS
@@ -131,6 +134,26 @@ Any inverter accessible through the Sunsynk cloud API, including:
 | **Refresh Interval** | How often to poll the API in seconds (min 60, default 300) |
 
 4. Click **Submit** — HA will validate your credentials and create the integration
+
+### Options (Configure)
+
+**Settings → Devices & Services → Sunsynk → Configure** lets you change everything above, plus:
+
+| Option | Description |
+|---|---|
+| **Create and maintain Sunsynk dashboard** | Off by default since 2.0. See [Dashboard](#dashboard) |
+| **Allow only administrators to use control actions** | Off by default. When ticked, the `sunsynk.*` actions can only be run by HA administrators; automations and scripts are unaffected. It covers the actions, not the integration's number/switch/text entities |
+| **Solar Forecast** fields | See [Solar Forecast Setup](#solar-forecast-setup) |
+| **Tariff Manager** fields | See [Tariff Manager Setup](#tariff-manager-setup) |
+| **Maximum export power, whole system (W)** | Optional, e.g. your G99/G100 limit (11000 for 11 kW). The most a selling time slot set by the Virtual Slot Scheduler may put out, including Tariff Manager discharges. In a parallel system enter the total: it is shared between the inverters (11000 W → 5500 W each). It does **not** limit solar export, which follows the inverter's own Max Sell Power, and doesn't replace your installation's own export limitation |
+
+A field you clear stays cleared when you save.
+
+### Parallel (master/slave) systems
+
+Add every inverter of the group, master and slaves. The integration reads each one's role from its settings and sends every setting change to the group's master, because a slave copies the master's settings and reverts direct changes. With more than one parallel group in one entry, a slave is only routed to a master on its own plant.
+
+Currents and sell power are **per inverter**, and each inverter in the group applies them on its own: two inverters at 240 A draw 480 A from a shared battery, and two selling 12000 W each can put out 24 kW. Battery and export limits are therefore shared between the inverters.
 
 ---
 
@@ -250,6 +273,16 @@ These entities appear on the inverter device when Tariff Manager is configured.
 | Tariff Normal Discharge Current | Number (config) | Discharge current restored after expensive period (A) |
 | Tariff Discharge Min SOC | Number (config) | Stop discharging when battery drops to this SOC (%) |
 
+### Virtual Slot Scheduler and export entities
+
+One set per independent inverter, or per parallel group on the master's device.
+
+| Entity | Type | Description |
+|---|---|---|
+| Virtual Slot Scheduler | Switch | Enable / disable the scheduler (default **off**) |
+| Virtual Slot Scheduler | Sensor (diagnostic) | What's in force: `disabled` / `none` / `price_override` / `virtual_slot:<id>`, with the defined slots as attributes |
+| Export Power Limit | Sensor (diagnostic) | Your Maximum export power. Attributes show it per inverter, and the inverters' rated power and Max Sell Power added up across the group; `max_sell_power_above_limit` flags an inverter setting that allows more than your limit |
+
 > Tariff config number entities are in the **Config** entity category — they are hidden by default in the entity list but visible on the device page and the auto-generated dashboard.
 
 ---
@@ -358,10 +391,10 @@ Five services are available for use in automations and scripts (**Developer Tool
 
 | Service | Description |
 |---|---|
-| `sunsynk.force_charge` | Set battery charge current from 0–300 A. Call again with your normal value to restore. |
-| `sunsynk.force_discharge` | Set battery discharge current from 0–300 A. |
+| `sunsynk.force_charge` | Set battery charge current from 0–300 A. Call again with your normal value to restore. Only changes the current — whether the battery charges from the grid still depends on the active timer slot. |
+| `sunsynk.force_discharge` | Set battery discharge current from 0–300 A. Only changes the current — exporting still needs a selling timer slot. |
 | `sunsynk.set_work_mode` | Set inverter work mode: 0 = Selling First, 1 = Zero Export (Limit to Load), 2 = Limited to Home, 3 = Self Use, 4 = Time of Use. |
-| `sunsynk.set_virtual_slot` | Define or replace one of 10 virtual charge/discharge slots for one inverter. |
+| `sunsynk.set_virtual_slot` | Define or replace one of 10 virtual charge/discharge slots for one inverter. A discharge slot's `sell_power` above the inverter's rated power or its share of Maximum export power is refused. |
 | `sunsynk.clear_virtual_slot` | Remove one virtual slot from one inverter. |
 
 Every service call targets exactly one logical inverter selected by `serial`.
@@ -384,6 +417,14 @@ currents are limited to 0–300 A, powers to 0–30,000 W, SOC values to 0–100
 and modes, booleans and timer strings must use their documented formats.
 Invalid batches are rejected atomically without making an API request.
 
+On top of that, a charge or discharge current is checked against what the
+hardware will actually use: `force_charge`, `force_discharge` and
+`set_virtual_slot` refuse a current above the inverter's own **Max A** or its
+share of the battery's BMS limit, and the error says what the maximum is. When
+Tariff Manager or the Virtual Slot Scheduler sets a current in a parallel
+group, it is lowered if the inverters together would draw more than the BMS
+allows at that moment.
+
 Example automation:
 ```yaml
 action:
@@ -405,6 +446,7 @@ The Tariff Manager automatically charges the battery when electricity is cheap a
 | Field | Description |
 |---|---|
 | **Price sensor** | Any HA sensor with a numeric electricity price (e.g. `sensor.octopus_current_rate`) |
+| **Export/Sell price sensor** | Optional. Drives discharging instead of the import price, for tariffs where import and export rates aren't linked. Leave blank to use the import price for both |
 | **Cheap threshold** | Price at or below which charging activates (e.g. `0.10`) |
 | **Cheap charge current (A)** | Charge current during cheap rate |
 | **Normal charge current (A)** | Current restored when cheap rate ends |
@@ -414,11 +456,17 @@ The Tariff Manager automatically charges the battery when electricity is cheap a
 | **Normal discharge current (A)** | Current restored when expensive rate ends |
 | **Minimum SOC (%)** | Stop discharging when battery reaches this SOC (default 10) |
 | **Active from / Active until** | Optional hours to restrict tariff activity (supports midnight wrap, e.g. 22–06) |
-| **Price max age (minutes)** | How old price data can be before it's considered stale (default 90) |
+| **Stop when price data looks out of date** | Off by default. When ticked, an active charge or discharge stops if the import price sensor hasn't reported for longer than *Price max age* |
+| **Price max age (minutes)** | Used only when the option above is ticked (default 90) |
+| **Test mode** | Off by default. Tariff Manager decides as usual and shows it in Tariff Mode, its notifications and the log, but sends nothing to the inverter |
 
 3. After setup, go to your inverter device and **turn on the Tariff Manager switch** — it starts **off** by default.
 
 > Both cheap-rate charging and expensive-rate discharging are independent — configure one, both, or neither.
+
+> **Currents are per inverter** and are checked when you save: Configure refuses one above the inverter's Max A or its share of the battery's BMS limit, and shows the maximum.
+
+> **On its own, Tariff Manager only changes currents.** Whether the battery charges from the grid or exports is still decided by the active timer slot. Turn on the **Virtual Slot Scheduler** as well to have Tariff Manager put a charging or selling slot in place for you. With no virtual slots defined, your own timer comes back when the decision ends.
 
 ---
 
