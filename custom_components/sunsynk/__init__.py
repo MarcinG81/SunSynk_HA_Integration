@@ -11,6 +11,7 @@ from typing import Any
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
+from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
@@ -20,6 +21,7 @@ from homeassistant.exceptions import (
     Unauthorized,
     UnknownUser,
 )
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 
@@ -249,24 +251,50 @@ def _find_entry_id_for_serial(hass: HomeAssistant, serial: str) -> str | None:
 async def _async_ensure_control_allowed(
     hass: HomeAssistant, call: ServiceCall, serial: str
 ) -> None:
-    """Refuse a control action from a non-administrator when the owning
-    entry is set to "administrators only".
+    """Refuse a control action from a user who may not control this inverter.
 
-    Automations and scripts run without a user and are always allowed.
-    Same check as Home Assistant's own admin services; suggested by David
-    (@davidatjourney).
+    A user must be allowed to control the inverter's entities, so a read-only
+    user can't change the inverter through an action (2.0 audit A1). With
+    "administrators only" ticked, the user must also be an administrator,
+    the same check as Home Assistant's own admin services (suggested by
+    David, @davidatjourney). Automations and scripts run without a user and
+    are always allowed.
     """
+    context = getattr(call, "context", None)
+    if context is None or context.user_id is None:
+        return
+    user = await hass.auth.async_get_user(context.user_id)
+    if user is None:
+        raise UnknownUser(context=context)
+
     entry_id = _find_entry_id_for_serial(hass, serial)
     entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
-    if entry is None or entry.options.get(CONF_ADMIN_ONLY_CONTROL) is not True:
+    if (
+        entry is not None
+        and entry.options.get(CONF_ADMIN_ONLY_CONTROL) is True
+        and not user.is_admin
+    ):
+        raise Unauthorized(context=context)
+    if user.is_admin:
         return
-    if call.context.user_id is None:
-        return
-    user = await hass.auth.async_get_user(call.context.user_id)
-    if user is None:
-        raise UnknownUser(context=call.context)
-    if not user.is_admin:
-        raise Unauthorized(context=call.context)
+
+    entity_ids = _entity_ids_for_serial(hass, serial)
+    if not any(
+        user.permissions.check_entity(entity_id, POLICY_CONTROL)
+        for entity_id in entity_ids
+    ):
+        raise Unauthorized(context=context, permission=POLICY_CONTROL)
+
+
+def _entity_ids_for_serial(hass: HomeAssistant, serial: str) -> list[str]:
+    """The entities of the device for one inverter serial."""
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, serial)})
+    if device is None:
+        return []
+    return [
+        entry.entity_id
+        for entry in er.async_entries_for_device(er.async_get(hass), device.id)
+    ]
 
 
 def _ensure_current_within_limit(

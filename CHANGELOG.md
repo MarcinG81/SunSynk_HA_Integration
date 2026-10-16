@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Security
+- **A Home Assistant user with read-only access could control the inverter through the `sunsynk.*` actions.** Unless "Allow only administrators to use control actions" was ticked, the actions didn't check the user's permissions at all, so a read-only user could e.g. force a discharge. Every action now requires a user who may control that inverter's entities, as Home Assistant's own entity controls do; with "administrators only" ticked, the user must also be an administrator. Automations and scripts are unaffected. Until you update, ticking "Allow only administrators to use control actions" in Configure closes the gap.
+
 ## [2.0.0-beta.14] - 2026-10-16
 
 ### Added

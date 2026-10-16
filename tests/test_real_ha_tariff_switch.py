@@ -272,8 +272,13 @@ async def test_admin_only_control_refuses_non_administrators(
     options = {**PAY4PROPERTY_OPTIONS, "serials": [SLAVE, SERIAL], "admin_only_control": True}
     entry, patches = await _setup_parallel(hass, options)
     try:
+        regular = await hass.auth.async_create_user(
+            "Regular", group_ids=["system-users"]
+        )
         with pytest.raises(Unauthorized):
             await _call_force_charge(hass, hass_read_only_user)
+        with pytest.raises(Unauthorized):
+            await _call_force_charge(hass, regular)
         await _call_force_charge(hass, hass_admin_user)
         await _call_force_charge(hass)  # automations and scripts
         await hass.config_entries.async_unload(entry.entry_id)
@@ -284,11 +289,32 @@ async def test_admin_only_control_refuses_non_administrators(
 
 
 @pytest.mark.asyncio
-async def test_control_actions_are_open_to_everyone_by_default(hass, hass_read_only_user):
+async def test_read_only_users_may_not_control_the_inverter(
+    hass, hass_admin_user, hass_read_only_user
+):
+    """2.0 audit A1: by default every user who may control the inverter's
+    entities may run the actions, but a read-only user may not."""
+    from homeassistant.core import Context
+    from homeassistant.exceptions import Unauthorized
+
+    regular = await hass.auth.async_create_user("Regular", group_ids=["system-users"])
     options = {**PAY4PROPERTY_OPTIONS, "serials": [SLAVE, SERIAL]}
     entry, patches = await _setup_parallel(hass, options)
     try:
-        await _call_force_charge(hass, hass_read_only_user)
+        with pytest.raises(Unauthorized):
+            await _call_force_charge(hass, hass_read_only_user)
+        # An inverter with no device here is refused too, without saying why.
+        with pytest.raises(Unauthorized):
+            await hass.services.async_call(
+                DOMAIN,
+                "force_charge",
+                {"serial": "NO-SUCH-INVERTER", "current": 30},
+                blocking=True,
+                context=Context(user_id=regular.id),
+            )
+        await _call_force_charge(hass, regular)
+        await _call_force_charge(hass, hass_admin_user)
+        await _call_force_charge(hass)  # automations and scripts
         await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
     finally:
