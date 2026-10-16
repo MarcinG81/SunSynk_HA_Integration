@@ -43,6 +43,7 @@ from .const import (
     CONF_TARIFF_ENABLED,
     CONF_TARIFF_END_HOUR,
     CONF_TARIFF_START_HOUR,
+    CONF_TARIFF_TEST_MODE,
     DEFAULT_CHEAP_TARGET_SOC,
     DEFAULT_DISCHARGE_MIN_SOC,
     DEFAULT_PERFORMANCE_RATIO,
@@ -465,18 +466,39 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     default=bool(_opt(CONF_PRICE_STALE_CHECK, False)),
                 ): bool,
                 vol.Optional(
+                    CONF_TARIFF_TEST_MODE,
+                    default=bool(_opt(CONF_TARIFF_TEST_MODE, False)),
+                ): bool,
+                vol.Optional(
                     CONF_PRICE_MAX_AGE,
                     default=_opt(CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE),
                 ): vol.All(vol.Coerce(int), vol.Range(min=5, max=1440)),
             }
         )
 
+        placeholders.update(self._export_placeholders(_opt(CONF_MAX_EXPORT_POWER)))
         return self.async_show_form(
             step_id="init",
             data_schema=schema,
             errors=errors,
             description_placeholders=placeholders,
         )
+
+    def _export_placeholders(self, saved_limit: Any) -> dict[str, str]:
+        """How the saved maximum export power splits over the inverters.
+
+        A form can't recalculate while someone types, so the description
+        shows the split of the value saved last time.
+        """
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id)
+        inverters = (
+            max(group_sizes(coordinator).values(), default=1) if coordinator else 1
+        )
+        try:
+            share = str(int(saved_limit) // inverters) if saved_limit else "-"
+        except (TypeError, ValueError):
+            share = "-"
+        return {"export_inverters": str(inverters), "export_share": share}
 
     def _check_current_limits(
         self,
@@ -591,5 +613,8 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
         )
         result[CONF_PRICE_STALE_CHECK] = bool(
             user_input.get(CONF_PRICE_STALE_CHECK, False)
+        )
+        result[CONF_TARIFF_TEST_MODE] = bool(
+            user_input.get(CONF_TARIFF_TEST_MODE, False)
         )
         return result

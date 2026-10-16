@@ -56,6 +56,7 @@
           "tariff_start_hour": "计划开始时间（0–23 时）",
           "tariff_end_hour": "计划结束时间（0–23 时）",
           "price_stale_check": "电价数据看起来过时时停止",
+          "tariff_test_mode": "测试模式：只做决策，不修改逆变器",
           "price_max_age": "电价数据最大有效时长（分钟）"
         },
         "data_description": {
@@ -76,10 +77,11 @@
           "peak_discharge_current": "峰电时段的电池放电电流（如 100 A）。",
           "normal_discharge_current": "峰电时段结束后恢复的放电电流。",
           "discharge_min_soc": "电池达到此 SOC 后自动停止放电，默认 10。",
-          "max_export_power": "可选。系统向电网输出的最大功率，例如您的并网限额（11 kW 填 11000）。并联系统请填写总值：它会在各逆变器之间平分（11000 W → 每台 5500 W）。Virtual Slot Scheduler 设置的售电时段，包括电价管理器触发的放电，都不会超过该值。逆变器自身的上网限制仍然有效。留空表示不在此设置限制。",
+          "max_export_power": "可选。整个系统中售电时段允许输出的最大功率，例如您的并网限额（11 kW 填 11000）。并联系统请填写总值：它会在各逆变器之间平分。您的系统当前：每组 {export_inverters} 台逆变器，因此已保存的值相当于每台 {export_share} W。它限制 Virtual Slot Scheduler 设置的售电时段功率，包括电价管理器触发的放电。它不限制光伏上网：请为此设置逆变器自身的 Max Sell Power。留空表示不在此设置限制。",
           "tariff_start_hour": "电价管理激活的时刻（0–23 时）。留空则全天激活。",
           "tariff_end_hour": "电价管理停止的时刻（0–23 时），可跨越午夜（如开始 22 时，结束 6 时）。",
           "price_stale_check": "默认关闭。开启后，如果购电电价传感器在超过“电价数据最大有效时长”的时间内没有上报，电价管理器将停止任何正在进行的充电或放电。如果您的电价长时间不变或由辅助实体设置，请保持关闭。",
+          "tariff_test_mode": "开启后，电价管理器照常做出决策，并在 Tariff Mode、通知和日志中显示，但不会向逆变器发送任何内容，Virtual Slot Scheduler 也会忽略它。可用于安全地检查设置。",
           "price_max_age": "若电价传感器在此分钟数内未更新，将停止当前充/放电模式以确保安全，默认 90。"
         }
       }

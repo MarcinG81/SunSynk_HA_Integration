@@ -51,6 +51,7 @@ from .const import (
     CONF_TARIFF_ENABLED,
     CONF_TARIFF_END_HOUR,
     CONF_TARIFF_START_HOUR,
+    CONF_TARIFF_TEST_MODE,
     DEFAULT_CHEAP_TARGET_SOC,
     DEFAULT_DISCHARGE_MIN_SOC,
     DEFAULT_PERFORMANCE_RATIO,
@@ -638,6 +639,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if _opt(CONF_PRICE_STALE_CHECK, False)
                 else None
             ),
+            test_mode=bool(_opt(CONF_TARIFF_TEST_MODE, False)),
         )
         hass.data[DOMAIN][f"{entry.entry_id}_tariff"] = tariff_manager
 

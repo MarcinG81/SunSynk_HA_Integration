@@ -192,6 +192,7 @@ async def async_setup_entry(
         async_add_entities(
             [
                 VirtualSlotStateSensor(serial, scheduler, device_info),
+                ExportPowerLimitSensor(coordinator, serial, scheduler, device_info),
             ]
         )
 
@@ -735,3 +736,41 @@ class VirtualSlotStateSensor(SensorEntity):
             "next_boundary": next_boundary.isoformat() if next_boundary else None,
             "virtual_slots": self._scheduler.list_slots(),
         }
+
+
+class ExportPowerLimitSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
+    """The maximum export power for the whole system, with group totals.
+
+    State is the configured total (unknown if none is set). The attributes
+    show it per inverter and the inverters' own limits added up across a
+    parallel group, e.g. Max Sell Power 12000 W x 2 = 24000 W (#21).
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Export Power Limit"
+    _attr_icon = "mdi:transmission-tower-export"
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: SunsynkCoordinator,
+        serial: str,
+        scheduler: VirtualSlotScheduler,
+        device_info: DeviceInfo,
+    ) -> None:
+        super().__init__(coordinator)
+        self._scheduler = scheduler
+        self._attr_unique_id = f"{serial}_export_power_limit"
+        self._attr_device_info = device_info
+
+    @property
+    def native_value(self) -> int | None:
+        return self._scheduler.export_summary()["limit_total"]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        summary = self._scheduler.export_summary()
+        summary.pop("limit_total")
+        return summary

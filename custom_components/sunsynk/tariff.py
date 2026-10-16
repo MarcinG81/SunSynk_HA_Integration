@@ -81,6 +81,8 @@ class TariffChargingManager:
         price_max_age_minutes: int | None = 90,
         # optional separate export/sell price (defaults to price_entity)
         export_price_entity: str | None = None,
+        # decide as usual, but write nothing to the inverters
+        test_mode: bool = False,
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
@@ -100,6 +102,7 @@ class TariffChargingManager:
         self._start_hour = start_hour
         self._end_hour = end_hour
         self._price_max_age_minutes = price_max_age_minutes
+        self._test_mode = test_mode
 
         self._enabled = False  # user must explicitly enable via switch
         # Runtime decisions are per physical write target.  A config entry may
@@ -240,7 +243,7 @@ class TariffChargingManager:
                 )
             if restores:
                 try:
-                    await self._coordinator.async_write_settings(serial, restores)
+                    await self._write_settings(serial, restores)
                 except Exception as err:  # noqa: BLE001
                     success = False
                     _LOGGER.error(
@@ -341,7 +344,7 @@ class TariffChargingManager:
             return
         _LOGGER.warning("Tariff: stopping charging [%s] — %s", serial, reason)
         if self._normal_charge_current is not None:
-            await self._coordinator.async_write_setting(
+            await self._write_setting(
                 serial,
                 "chargeCurrent",
                 self._safe(serial, "charge", self._normal_charge_current),
@@ -359,7 +362,7 @@ class TariffChargingManager:
             return
         _LOGGER.warning("Tariff: stopping discharging [%s] — %s", serial, reason)
         if self._normal_discharge_current is not None:
-            await self._coordinator.async_write_setting(
+            await self._write_setting(
                 serial,
                 "dischargeCurrent",
                 self._safe(serial, "discharge", self._normal_discharge_current),
@@ -632,7 +635,7 @@ class TariffChargingManager:
                 self._target_soc,
             )
             amps = self._safe(serial, "charge", self._cheap_current)
-            await self._coordinator.async_write_setting(serial, "chargeCurrent", amps)
+            await self._write_setting(serial, "chargeCurrent", amps)
             self._charging_active_serials.add(serial)
             self._applied_charge_current[serial] = self._cheap_current
             self._send_notification(
@@ -647,7 +650,7 @@ class TariffChargingManager:
             and self._applied_charge_current.get(serial) != self._cheap_current
         ):
             # The cheap-rate current was changed while charging.
-            await self._coordinator.async_write_setting(
+            await self._write_setting(
                 serial,
                 "chargeCurrent",
                 self._safe(serial, "charge", self._cheap_current),
@@ -690,9 +693,7 @@ class TariffChargingManager:
                 self._discharge_min_soc,
             )
             amps = self._safe(serial, "discharge", self._peak_discharge_current)
-            await self._coordinator.async_write_setting(
-                serial, "dischargeCurrent", amps
-            )
+            await self._write_setting(serial, "dischargeCurrent", amps)
             self._discharging_active_serials.add(serial)
             self._applied_discharge_current[serial] = self._peak_discharge_current
             self._send_notification(
@@ -710,7 +711,7 @@ class TariffChargingManager:
             != self._peak_discharge_current
         ):
             # The peak discharge current was changed while discharging.
-            await self._coordinator.async_write_setting(
+            await self._write_setting(
                 serial,
                 "dischargeCurrent",
                 self._safe(serial, "discharge", self._peak_discharge_current),
@@ -729,7 +730,24 @@ class TariffChargingManager:
 
     # ── Notifications ──────────────────────────────────────────────────────
 
+    async def _write_setting(self, serial: str, key: str, value: Any) -> None:
+        if self._test_mode:
+            _LOGGER.info(
+                "Tariff (test mode) [%s]: would set %s to %s", serial, key, value
+            )
+            return
+        await self._coordinator.async_write_setting(serial, key, value)
+
+    async def _write_settings(self, serial: str, settings: dict[str, Any]) -> None:
+        if self._test_mode:
+            _LOGGER.info("Tariff (test mode) [%s]: would set %s", serial, settings)
+            return
+        await self._coordinator.async_write_settings(serial, settings)
+
     def _send_notification(self, title: str, message: str) -> None:
+        if self._test_mode:
+            title = f"[Test mode] {title}"
+            message = f"{message} Test mode is on: nothing was sent to the inverter."
         self._hass.async_create_task(
             self._hass.services.async_call(
                 "persistent_notification",
@@ -899,6 +917,11 @@ class TariffChargingManager:
     @property
     def end_hour(self) -> int | None:
         return self._end_hour
+
+    @property
+    def test_mode(self) -> bool:
+        """Deciding as usual, but writing nothing to the inverters."""
+        return self._test_mode
 
     @property
     def price_max_age_minutes(self) -> int | None:

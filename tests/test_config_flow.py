@@ -218,7 +218,15 @@ class TestParseTariffFields:
     def test_empty_input_yields_only_default_price_max_age(self):
         result = SunsynkOptionsFlow._parse_tariff_fields({})
         # The age check is off unless the user turns it on (#21, #30).
-        assert result == {"price_max_age": 90, "price_stale_check": False}
+        assert result == {
+            "price_max_age": 90,
+            "price_stale_check": False,
+            "tariff_test_mode": False,
+        }
+
+    def test_test_mode_can_be_turned_on(self):
+        result = SunsynkOptionsFlow._parse_tariff_fields({"tariff_test_mode": True})
+        assert result["tariff_test_mode"] is True
 
     def test_stale_check_can_be_turned_on(self):
         result = SunsynkOptionsFlow._parse_tariff_fields({"price_stale_check": True})
@@ -409,6 +417,8 @@ async def test_options_flow_refuses_currents_above_the_hardware_limit():
         "peak_discharge_current": "discharge_current_above_limit",
     }
     assert result["description_placeholders"] == {
+        "export_inverters": "1",
+        "export_share": "-",
         "charge_max": "120",
         "charge_limits": "inverter 120 A",
         "discharge_max": "100",
@@ -459,3 +469,30 @@ async def test_options_flow_blank_export_power_means_no_limit():
     result = await flow.async_step_init(_user_input(password="", max_export_power=""))
 
     assert "max_export_power" not in result["data"]
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("saved", "routes", "inverters", "share"),
+    [
+        (None, {"INV1": "INV1"}, "1", "-"),
+        (11000, {"INV1": "INV1"}, "1", "11000"),
+        (11000, {"S": "M", "M": "M"}, "2", "5500"),  # #21
+        ("bad", {"INV1": "INV1"}, "1", "-"),
+    ],
+)
+async def test_options_form_shows_how_the_export_limit_splits(
+    saved, routes, inverters, share
+):
+    flow = _options_flow()
+    if saved is not None:
+        flow._config_entry.options = {"max_export_power": saved}
+    coordinator = MagicMock(serials=list(routes))
+    coordinator.resolve_write_target.side_effect = routes.__getitem__
+    flow.hass.data = {"sunsynk": {"entry": coordinator}}
+
+    result = await flow.async_step_init()
+
+    assert result["description_placeholders"]["export_inverters"] == inverters
+    assert result["description_placeholders"]["export_share"] == share

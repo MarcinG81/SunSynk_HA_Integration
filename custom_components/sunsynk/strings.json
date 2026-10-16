@@ -56,6 +56,7 @@
           "tariff_start_hour": "Active schedule — start hour (0–23)",
           "tariff_end_hour": "Active schedule — end hour (0–23)",
           "price_stale_check": "Stop when price data looks out of date",
+          "tariff_test_mode": "Test mode: decide but don't change the inverter",
           "price_max_age": "Price data max age (minutes)"
         },
         "data_description": {
@@ -76,10 +77,11 @@
           "peak_discharge_current": "Battery discharge current during expensive period (e.g. 100 A).",
           "normal_discharge_current": "Discharge current restored when expensive period ends.",
           "discharge_min_soc": "Discharging stops automatically when battery reaches this SOC. Default 10.",
-          "max_export_power": "Optional. The most your system may export to the grid, e.g. your G99/G100 limit (11000 for 11 kW). In a parallel system enter the total: it is shared between the inverters (11000 W → 5500 W each). Selling slots set by the Virtual Slot Scheduler, including Tariff Manager discharges, never go above it. Your inverter's own export limit still applies on top. Leave blank for no limit here.",
+          "max_export_power": "Optional. The most a selling slot may put out, for the whole system, e.g. your G99/G100 limit (11000 for 11 kW). In a parallel system enter the total: it is shared between the inverters. Your system now: {export_inverters} inverter(s) per group, so the saved value is {export_share} W per inverter. It limits the sell power of slots set by the Virtual Slot Scheduler, including Tariff Manager discharges. It does not limit solar export: for that, set the inverter's own Max Sell Power. Leave blank for no limit here.",
           "tariff_start_hour": "Hour of day (0–23) when tariff management activates. Leave blank for always-on.",
           "tariff_end_hour": "Hour of day (0–23) when tariff management deactivates. Can wrap midnight (e.g. start 22, end 6). The same start and end hour (e.g. 0 and 0) means all day.",
           "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
+          "tariff_test_mode": "When on, Tariff Manager decides as usual and shows it in Tariff Mode, its notifications and the log, but sends nothing to the inverter, and the Virtual Slot Scheduler ignores it. Use it to check your settings safely.",
           "price_max_age": "Only used when “Stop when price data looks out of date” is on. If the import price sensor hasn't reported within this many minutes, any active charge/discharge mode is stopped. A separate export price sensor is never age-checked. Default 90."
         }
       }

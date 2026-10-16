@@ -300,6 +300,10 @@ class VirtualSlotScheduler:
         # Normal currents a shutdown could not write back yet; retried until
         # the inverter accepts them, also across restarts.
         self._pending_current_restore: dict[str, Any] | None = None
+        # On but with nothing to do (no enabled window, no price override):
+        # the user's own timer is in place, and slots are only taken over
+        # when there is something to drive (#21).
+        self._standing_by = False
         # The user's on/off choice, kept across restarts. Unload/reload stops
         # the scheduler without changing it.
         self._wanted_enabled = False
@@ -434,16 +438,7 @@ class VirtualSlotScheduler:
             if not self._enabled or not self._drives_inverter():
                 return
             if self._original_settings is None:
-                settings = (
-                    (self._coordinator.data or {})
-                    .get(self._serial, {})
-                    .get("settings", {})
-                )
-                self._original_settings = {
-                    key: settings[key]
-                    for key in _MANAGED_SETTING_KEYS
-                    if key in settings
-                }
+                self._original_settings = self._current_managed_settings()
                 # Each model has only one of the two sell-flag names.
                 missing = (
                     set(_MANAGED_SETTING_KEYS)
@@ -457,15 +452,80 @@ class VirtualSlotScheduler:
                         ", ".join(sorted(missing)),
                     )
                 await self._async_persist()
+                # Nothing has been written yet: the user's timer is in place.
+                self._standing_by = True
+            else:
+                # A snapshot from before a restart: the inverter may still
+                # hold this scheduler's layout, so put the user's back first.
+                self._standing_by = False
 
-            await self._coordinator.async_write_settings(
-                self._serial,
-                {key: 0 for key in _UNUSED_SLOT_ON_KEYS},
-            )
             self._last_written = {}
             self._last_current_key = None
             self._last_written_slot2_boundary = None
             await self._async_tick_locked()
+
+    def _current_managed_settings(self) -> dict[str, Any]:
+        settings = (
+            (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        )
+        return {key: settings[key] for key in _MANAGED_SETTING_KEYS if key in settings}
+
+    def _has_work(self) -> bool:
+        """Whether there is an enabled window or a live price override."""
+        return (
+            any(slot.enabled for slot in self._slots.values())
+            or self._resolve_override() is not None
+        )
+
+    async def _async_stand_by(self) -> bool:
+        """Leave the user's own timer in place while there is nothing to do.
+
+        Puts the settings captured before taking ownership back once, e.g.
+        when a price override ends with no window defined, so Tariff Manager
+        can be used without leaving the user's schedule changed. While
+        standing by, the captured settings follow the inverter, so a change
+        made in the Sunsynk app is what comes back after the next override.
+        """
+        if self._standing_by:
+            if getattr(self._coordinator, "last_update_success", True) is not False:
+                current = self._current_managed_settings()
+                if current and current != self._original_settings:
+                    self._original_settings = current
+                    await self._async_persist()
+            return False
+        if self._original_settings:
+            try:
+                await self._coordinator.async_write_settings(
+                    self._serial, self._original_settings
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.error(
+                    "Virtual slots [%s]: could not put your own timer back, "
+                    "will retry: %s",
+                    self._serial,
+                    err,
+                )
+                return False
+        self._standing_by = True
+        self._last_written = {}
+        self._last_current_key = None
+        self._last_written_slot2_boundary = None
+        _LOGGER.info(
+            "Virtual slots [%s]: nothing scheduled, your own timer is in place",
+            self._serial,
+        )
+        return True
+
+    async def _async_take_over(self) -> None:
+        """Turn slots 2-5 off before driving slots 1 and 6."""
+        await self._coordinator.async_write_settings(
+            self._serial,
+            {key: 0 for key in _UNUSED_SLOT_ON_KEYS},
+        )
+        self._standing_by = False
+        self._last_written = {}
+        self._last_current_key = None
+        self._last_written_slot2_boundary = None
 
     async def _async_shutdown(self, force_disable: bool = True) -> bool:
         """Restore the exact settings captured before taking ownership."""
@@ -648,7 +708,8 @@ class VirtualSlotScheduler:
     def _resolve_override(self) -> Resolution | None:
         """Live price-driven decision from the Tariff Manager, if any."""
         tm = self._tariff_manager
-        if tm is None:
+        # In test mode Tariff Manager only shows what it would do.
+        if tm is None or getattr(tm, "test_mode", False) is True:
             return None
         if tm.is_charging_active_for(self._serial):
             return Resolution(
@@ -736,6 +797,41 @@ class VirtualSlotScheduler:
             )
         known = [value for value in (rated, share) if value is not None]
         return (min(known) if known else None), ", ".join(parts)
+
+    def export_summary(self) -> dict[str, Any]:
+        """The export limit and the inverter's own totals for this group.
+
+        Per-inverter values times the number of inverters, so a parallel
+        system shows what it can put on the grid as a whole: e.g. a Max Sell
+        Power of 12000 W on each of two inverters is 24000 W (#21).
+        """
+        inverters = max(1, group_sizes(self._coordinator).get(self._serial, 1))
+        settings = (
+            (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
+        )
+        try:
+            max_sell = int(settings.get("solarMaxSellPower") or 0) or None
+        except (TypeError, ValueError):
+            max_sell = None
+        rated = self._rated_power()
+        limit = int(self._max_export_power) if self._max_export_power else None
+        max_sell_total = max_sell * inverters if max_sell else None
+        return {
+            "limit_total": limit,
+            "inverters": inverters,
+            "limit_per_inverter": self._export_share(),
+            "rated_power_per_inverter": rated,
+            "rated_power_total": rated * inverters if rated else None,
+            "max_sell_power_per_inverter": max_sell,
+            "max_sell_power_total": max_sell_total,
+            # Max Sell Power also governs solar export, which this limit
+            # doesn't touch: flag an inverter setting that allows more.
+            "max_sell_power_above_limit": (
+                limit is not None
+                and max_sell_total is not None
+                and max_sell_total > limit
+            ),
+        }
 
     _DEFAULT_SOC_FLOOR = 20
 
@@ -860,6 +956,16 @@ class VirtualSlotScheduler:
             return
         if not self._drives_inverter():
             return
+
+        if not self._has_work():
+            if await self._async_stand_by():
+                self._current_source = "none"
+                self._next_boundary = None
+                self._cancel_boundary_timer()
+                self._notify_listeners()
+            return
+        if self._standing_by:
+            await self._async_take_over()
 
         now = self._now()
         plan = self._plan(now)

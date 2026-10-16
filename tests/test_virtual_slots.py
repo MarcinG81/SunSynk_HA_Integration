@@ -633,13 +633,15 @@ async def test_charge_slot_does_not_enable_sell_permission(mock_hass, mock_coord
 @pytest.mark.asyncio
 async def test_idle_slot_does_not_enable_sell_permission(mock_hass, mock_coordinator):
     sched = _make_scheduler(mock_hass, mock_coordinator)
+    # A window elsewhere in the day, so the scheduler drives the timer; at
+    # 12:00 the idle period is on slot 6 (02:00 round to 01:00).
+    sched._slots[1] = VirtualSlot(1, "01:00", "02:00", MODE_CHARGE, target_soc=90)
     sched._now = lambda: _dt(2024, 1, 1, 12, 0)
     sched._enabled = True
 
     await sched._async_bootstrap()
 
-    written = _written(mock_coordinator)
-    assert ("sellTime1on", 0) in written
+    assert _slot_batch(mock_coordinator, 6)["sellTime6on"] == 0
 
 
 @pytest.mark.asyncio
@@ -945,13 +947,15 @@ async def test_unknown_battery_low_capacity_uses_safe_default(
     if low_cap is not None:
         mock_coordinator.data["TEST123"]["settings"]["batteryLowCap"] = low_cap
     sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(1, "01:00", "02:00", MODE_CHARGE, target_soc=90)
     sched._now = lambda: _dt(2024, 1, 1, 12, 0)
     sched._enabled = True
 
     await sched._async_bootstrap()
 
+    # The idle slot (6 at 12:00) carries the floor as its SOC.
     assert (
-        _slot_batch(mock_coordinator, 1)["cap1"]
+        _slot_batch(mock_coordinator, 6)["cap6"]
         == VirtualSlotScheduler._DEFAULT_SOC_FLOOR
     )
 

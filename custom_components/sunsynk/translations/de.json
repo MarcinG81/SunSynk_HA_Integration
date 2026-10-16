@@ -56,6 +56,7 @@
           "tariff_start_hour": "Zeitplan — Startstunde (0–23)",
           "tariff_end_hour": "Zeitplan — Endstunde (0–23)",
           "price_stale_check": "Anhalten, wenn die Preisdaten veraltet wirken",
+          "tariff_test_mode": "Testmodus: entscheiden, aber den Wechselrichter nicht ändern",
           "price_max_age": "Maximales Alter der Preisdaten (Minuten)"
         },
         "data_description": {
@@ -76,10 +77,11 @@
           "peak_discharge_current": "Akku-Entladestrom während des teuren Tarifs (z. B. 100 A).",
           "normal_discharge_current": "Entladestrom, der nach Ende des teuren Tarifs wiederhergestellt wird.",
           "discharge_min_soc": "Entladen stoppt automatisch, wenn der Akku diesen SOC erreicht. Standard 10.",
-          "max_export_power": "Optional. Die höchste Leistung, die Ihr System ins Netz einspeisen darf, z. B. Ihr Netzbetreiber-Limit (11000 für 11 kW). Bei einem Parallelsystem die Summe eingeben: Sie wird auf die Wechselrichter aufgeteilt (11000 W → je 5500 W). Verkaufs-Slots des Virtual Slot Schedulers, auch Entladungen durch den Tarif-Manager, überschreiten sie nie. Das eigene Einspeiselimit des Wechselrichters gilt weiterhin. Leer lassen für kein Limit.",
+          "max_export_power": "Optional. Die höchste Leistung, die ein Verkaufs-Slot abgeben darf, für das gesamte System, z. B. Ihr Netzbetreiber-Limit (11000 für 11 kW). Bei einem Parallelsystem die Summe eingeben: Sie wird auf die Wechselrichter aufgeteilt. Ihr System jetzt: {export_inverters} Wechselrichter je Gruppe, der gespeicherte Wert entspricht also {export_share} W je Wechselrichter. Begrenzt die Verkaufsleistung der Slots des Virtual Slot Schedulers, auch bei Entladungen durch den Tarif-Manager. Begrenzt nicht die Solar-Einspeisung: dafür die eigene Max Sell Power des Wechselrichters setzen. Leer lassen für kein Limit.",
           "tariff_start_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung aktiviert wird. Leer lassen für Dauerbetrieb.",
           "tariff_end_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung deaktiviert wird. Kann Mitternacht überschreiten (z. B. Start 22, Ende 6).",
           "price_stale_check": "Standardmäßig aus. Wenn aktiviert, stoppt der Tarif-Manager jedes aktive Laden oder Entladen, wenn der Bezugspreissensor länger als Maximales Alter der Preisdaten nichts gemeldet hat. Ausgeschaltet lassen, wenn Ihr Preis lange gleich bleibt oder von einem Helfer gesetzt wird.",
+          "tariff_test_mode": "Wenn aktiviert, entscheidet der Tarif-Manager wie gewohnt und zeigt dies in Tariff Mode, seinen Benachrichtigungen und im Log, sendet aber nichts an den Wechselrichter, und der Virtual Slot Scheduler ignoriert ihn. So lassen sich die Einstellungen gefahrlos prüfen.",
           "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90."
         }
       }

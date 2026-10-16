@@ -56,6 +56,7 @@
           "tariff_start_hour": "Aktiewe skedule — beginuur (0–23)",
           "tariff_end_hour": "Aktiewe skedule — einduur (0–23)",
           "price_stale_check": "Stop wanneer prysdata verouderd lyk",
+          "tariff_test_mode": "Toetsmodus: besluit, maar verander nie die omsetter nie",
           "price_max_age": "Maksimum ouderdom van prysdata (minute)"
         },
         "data_description": {
@@ -76,10 +77,11 @@
           "peak_discharge_current": "Battery ontlaaistroomsterkte tydens duur periode (bv. 100 A).",
           "normal_discharge_current": "Ontlaaistroomsterkte herstel wanneer duur periode eindig.",
           "discharge_min_soc": "Ontlaaing stop outomaties wanneer battery hierdie SOC bereik. Verstek 10.",
-          "max_export_power": "Opsioneel. Die meeste krag wat jou stelsel na die netwerk mag uitvoer, bv. jou aansluitingslimiet (11000 vir 11 kW). In 'n parallelle stelsel voer die totaal in: dit word tussen die omsetters verdeel (11000 W → 5500 W elk). Verkoopgleuwe wat die Virtual Slot Scheduler stel, insluitend ontladings deur die Tariefbestuurder, gaan nooit daarbo nie. Die omsetter se eie uitvoerlimiet geld steeds. Laat leeg vir geen limiet nie.",
+          "max_export_power": "Opsioneel. Die meeste krag wat 'n verkoopgleuf mag lewer, vir die hele stelsel, bv. jou aansluitingslimiet (11000 vir 11 kW). In 'n parallelle stelsel voer die totaal in: dit word tussen die omsetters verdeel. Jou stelsel nou: {export_inverters} omsetter(s) per groep, dus is die gestoorde waarde {export_share} W per omsetter. Dit beperk die verkoopkrag van gleuwe wat die Virtual Slot Scheduler stel, insluitend ontladings deur die Tariefbestuurder. Dit beperk nie sonuitvoer nie: stel daarvoor die omsetter se eie Max Sell Power. Laat leeg vir geen limiet nie.",
           "tariff_start_hour": "Uur van dag (0–23) wanneer tariefbestuur aktiveer. Los leeg vir altyd-aan.",
           "tariff_end_hour": "Uur van dag (0–23) wanneer tariefbestuur deaktiveer. Kan middernag oorskry (bv. begin 22, einde 6).",
           "price_stale_check": "By verstek af. Wanneer aan, stop die Tariefbestuurder enige aktiewe laai of ontlaai as die invoerprys-sensor langer as Maksimum ouderdom van prysdata nie gerapporteer het nie. Laat dit af as jou prys vir lang tydperke dieselfde bly of deur 'n helper gestel word.",
+          "tariff_test_mode": "Wanneer aan, besluit die Tariefbestuurder soos gewoonlik en wys dit in Tariff Mode, sy kennisgewings en die log, maar stuur niks na die omsetter nie, en die Virtual Slot Scheduler ignoreer dit. Gebruik dit om jou instellings veilig te toets.",
           "price_max_age": "As die pryssensor nie binne hierdie aantal minute opgedateer het nie, word die aktiewe modus as veiligheidsmaatreel gestop. Verstek 90."
         }
       }

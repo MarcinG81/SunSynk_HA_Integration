@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **Tariff Manager test mode.** A new tick in **Configure**. Tariff Manager decides as usual and shows it in Tariff Mode, its notifications (marked "[Test mode]") and the log, but sends nothing to the inverter, and the Virtual Slot Scheduler ignores it. It's a safe way to check what your settings would do. Suggested by pay4property. (#21)
+- **Export Power Limit sensor**, one per inverter or parallel group. Its state is your maximum export power. Its attributes show the limit per inverter and the inverters' rated power and Max Sell Power added up across the group, e.g. Max Sell Power 12000 W × 2 = 24000 W. `max_sell_power_above_limit` flags an inverter setting that allows more than your limit, which matters because the limit doesn't cover solar export. (#21)
+- **Configure shows how your maximum export power splits**, e.g. "2 inverter(s) per group, so the saved value is 5500 W per inverter". The field description now also says clearly that the limit covers selling slots set by the scheduler, not solar export.
+
+### Changed
+- **The Virtual Slot Scheduler leaves your own timer alone when it has nothing to do.** With no enabled window and no Tariff Manager override, it no longer takes over the timer slots. When an override ends, it puts your own timer back exactly as it was, so you can use Tariff Manager without virtual slots and without your schedule being left changed. While it stands by, it keeps track of changes you make to your timer in the Sunsynk app, so those are what come back. Suggested by pay4property. (#21)
+
+### Fixed
+- **The dashboard's "Open sunsynk.clear_virtual_slot" link opened Set Virtual Slot instead** (and the other way round), because Home Assistant reopens the last action used. The links now say which action to choose and to check it before running. (#21)
+
 ## [2.0.0-beta.13] - 2026-10-15
 
 ### Added

@@ -119,3 +119,87 @@ async def test_non_selling_slots_keep_the_house_on_battery(mode):
     )
 
     assert _pac(coordinator) == 12000
+
+
+# ── What the system as a whole may export ──────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("inverters", "limit", "max_sell", "expected"),
+    [
+        (
+            2,
+            11000,
+            12000,
+            {
+                "limit_total": 11000,
+                "inverters": 2,
+                "limit_per_inverter": 5500,
+                "rated_power_per_inverter": 12000,
+                "rated_power_total": 24000,
+                "max_sell_power_per_inverter": 12000,
+                "max_sell_power_total": 24000,
+                "max_sell_power_above_limit": True,  # #21: 24 kW > 11 kW
+            },
+        ),
+        (
+            2,
+            11000,
+            5500,
+            {
+                "limit_total": 11000,
+                "inverters": 2,
+                "limit_per_inverter": 5500,
+                "rated_power_per_inverter": 12000,
+                "rated_power_total": 24000,
+                "max_sell_power_per_inverter": 5500,
+                "max_sell_power_total": 11000,
+                "max_sell_power_above_limit": False,
+            },
+        ),
+        (
+            1,
+            None,
+            "bad",
+            {
+                "limit_total": None,
+                "inverters": 1,
+                "limit_per_inverter": None,
+                "rated_power_per_inverter": 12000,
+                "rated_power_total": 12000,
+                "max_sell_power_per_inverter": None,
+                "max_sell_power_total": None,
+                "max_sell_power_above_limit": False,
+            },
+        ),
+    ],
+)
+def test_export_summary_adds_up_the_group(inverters, limit, max_sell, expected):
+    coordinator, scheduler = _scheduler(inverters, limit)
+    coordinator.data[MASTER]["settings"]["solarMaxSellPower"] = max_sell
+
+    assert scheduler.export_summary() == expected
+
+
+def test_export_summary_without_rated_power():
+    coordinator, scheduler = _scheduler(1, None)
+    coordinator.data[MASTER]["inverter"] = {}
+
+    summary = scheduler.export_summary()
+
+    assert summary["rated_power_per_inverter"] is None
+    assert summary["rated_power_total"] is None
+
+
+def test_export_power_limit_sensor():
+    from custom_components.sunsynk.sensor import ExportPowerLimitSensor
+
+    coordinator, scheduler = _scheduler(2, 11000)
+    coordinator.data[MASTER]["settings"]["solarMaxSellPower"] = 12000
+    sensor = ExportPowerLimitSensor(coordinator, MASTER, scheduler, MagicMock())
+
+    assert sensor.unique_id == "MASTER_export_power_limit"
+    assert sensor.native_value == 11000
+    assert sensor.extra_state_attributes["limit_per_inverter"] == 5500
+    assert sensor.extra_state_attributes["max_sell_power_total"] == 24000
+    assert "limit_total" not in sensor.extra_state_attributes
