@@ -616,3 +616,46 @@ def test_window_more_than_a_day_away_is_not_armed(mock_hass, mock_coordinator):
     plan = sched._plan(_dt(2024, 1, 4, 13, 0))
 
     assert plan.slot1.mode == plan.slot6.mode == MODE_IDLE
+
+
+# ── All six timer slots, Grid Charge only to charge (#36) ──────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("mode", "grid_charge", "sell"),
+    [(MODE_DISCHARGE, 0, 1), (MODE_CHARGE, 1, 0)],
+)
+async def test_every_slot_carries_the_window(mock_hass, mock_coordinator, mode, grid_charge, sell):
+    """Slots 3-5 used to keep the user's start times and could be in force
+    instead, e.g. a 09:00 slot without Sell during a discharge."""
+    settings = mock_coordinator.data["TEST123"]["settings"]
+    settings.update({f"sellTime{n}on": "false" for n in range(1, 7)})
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+    sched._slots[1] = VirtualSlot(
+        slot_id=1, start="00:00", end="23:59", mode=mode, target_soc=50, sell_power=3000
+    )
+    sched._now = lambda: _dt(2024, 1, 1, 13, 0)
+    sched._enabled = True
+
+    await sched._async_bootstrap()
+
+    written = dict(_written(mock_coordinator))
+    # Slot 1 carries the window; slots 2-6 all carry what follows it (idle
+    # from 23:59), so none of the user's own start times is left.
+    assert written["time1on"] == grid_charge
+    assert written["sellTime1on"] == sell
+    for n in range(2, 7):
+        assert written[f"time{n}on"] == 0, n
+        assert written[f"sellTime{n}on"] == 0, n
+        assert written[f"sellTime{n}"] == "23:59", n
+
+
+@pytest.mark.asyncio
+async def test_switching_off_unticks_grid_charge_on_every_slot(mock_hass, mock_coordinator):
+    sched = _make_scheduler(mock_hass, mock_coordinator)
+
+    await sched._async_shutdown()
+
+    written = dict(_written(mock_coordinator))
+    assert all(written[f"time{n}on"] == 0 for n in range(1, 7))

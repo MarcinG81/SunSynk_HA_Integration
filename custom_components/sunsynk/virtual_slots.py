@@ -62,20 +62,18 @@ MODE_IDLE = "idle"
 WEEKDAY_NAMES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 ALL_WEEKDAYS: frozenset[int] = frozenset(range(7))
 
-# setting_key names for each owned physical slot
+# setting_key names for each physical timer slot. The scheduler drives all
+# six: slot 1 holds the earlier boundary and slots 2-6 the later one, so no
+# start time of the user's own schedule is left in the middle of the day to
+# take over from it (#36). `on` is the slot's Grid Charge tick.
 _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
-    1: {
-        "on": "time1on", "cap": "cap1", "pac": "sellTime1Pac",
-        "start": "sellTime1", "en": "sellTime1on", "en_alt": "sellTime1En",
-    },
-    6: {
-        "on": "time6on", "cap": "cap6", "pac": "sellTime6Pac",
-        "start": "sellTime6", "en": "sellTime6on", "en_alt": "sellTime6En",
-    },
+    n: {
+        "on": f"time{n}on", "cap": f"cap{n}", "pac": f"sellTime{n}Pac",
+        "start": f"sellTime{n}", "en": f"sellTime{n}on", "en_alt": f"sellTime{n}En",
+    }
+    for n in range(1, 7)
 }
-# Slots 2-5 are turned off once when the scheduler takes ownership, and
-# otherwise left alone.
-_UNUSED_SLOT_ON_KEYS = ("time2on", "time3on", "time4on", "time5on")
+_GRID_CHARGE_KEYS = tuple(keys["on"] for keys in _PHYSICAL_KEYS.values())
 
 
 def _parse_hhmm(value: str) -> tuple[int, int]:
@@ -232,7 +230,6 @@ class VirtualSlotScheduler:
         self._next_boundary: datetime | None = None
         self._last_written: dict[int, tuple] = {}
         self._last_current_key: tuple | None = None
-        self._last_written_slot2_boundary: str | None = None
 
         self._listeners: list[Callable[[], None]] = []
         self._unsub_coordinator: Any = None
@@ -295,20 +292,15 @@ class VirtualSlotScheduler:
         self._notify_listeners()
 
     async def _async_bootstrap(self) -> None:
-        """Take ownership: disable slots 2-5, then compute 1 & 6 from scratch."""
-        for serial in self._coordinator.write_target_serials:
-            await self._coordinator.async_write_settings(
-                serial, {key: 0 for key in _UNUSED_SLOT_ON_KEYS}
-            )
+        """Take ownership: compute all six slots from scratch."""
         self._last_written = {}
         self._last_current_key = None
-        self._last_written_slot2_boundary = None
         await self._async_tick()
 
     async def _async_shutdown(self) -> None:
         for serial in self._coordinator.write_target_serials:
             await self._coordinator.async_write_settings(
-                serial, {_PHYSICAL_KEYS[1]["on"]: 0, _PHYSICAL_KEYS[6]["on"]: 0}
+                serial, {key: 0 for key in _GRID_CHARGE_KEYS}
             )
         self._last_written = {}
         self._last_current_key = None
@@ -533,12 +525,17 @@ class VirtualSlotScheduler:
         now = self._now()
         plan = self._plan(now)
 
-        wrote1 = await self._write_window_if_changed(1, plan.slot1, plan.slot1_start)
-        wrote6 = await self._write_window_if_changed(6, plan.slot6, plan.slot6_start)
-        wrote_boundary = await self._write_slot2_boundary_if_changed(plan.slot6_start)
+        # Slot 1 holds the earlier boundary. Slots 2-6 all hold the later one,
+        # with slot 6's start, so slot 1 ends there and whichever of them the
+        # inverter treats as in force, it does the same thing (#36).
+        wrote = [await self._write_window_if_changed(1, plan.slot1, plan.slot1_start)]
+        for n in range(2, 7):
+            wrote.append(
+                await self._write_window_if_changed(n, plan.slot6, plan.slot6_start)
+            )
         wrote_current = await self._apply_current_if_changed(plan.active_resolution)
 
-        changed = wrote1 or wrote6 or wrote_boundary or wrote_current
+        changed = any(wrote) or wrote_current
         if plan.active_resolution.source != self._current_source:
             self._current_source = plan.active_resolution.source
             changed = True
@@ -567,7 +564,9 @@ class VirtualSlotScheduler:
         still never actually export anything while System Work Mode is
         Zero-Export/Limited to Home.
         """
-        on = resolution.mode != MODE_IDLE
+        # Grid Charge only for a charge window: a discharge or idle slot with
+        # it ticked would top the battery up from the grid (#36).
+        on = resolution.mode == MODE_CHARGE
         # With Use Timer on and Sell unticked, a slot's power is also the most
         # the inverter may draw from the battery for the house, so 0 W pushed
         # the house onto the grid during idle windows (#21). Only a discharge
@@ -609,33 +608,6 @@ class VirtualSlotScheduler:
             await self._coordinator.async_write_settings(serial, window)
 
         self._last_written[index] = cache_key
-        return True
-
-    async def _write_slot2_boundary_if_changed(self, slot6_start: str) -> bool:
-        """Keep physical slot 2's start time pinned to slot 6's start.
-
-        Slot 1's *end* isn't a field this scheduler writes anywhere — the
-        inverter derives it from the next physical slot's own start time.
-        Slot 2 stays permanently disabled (`time2on=0`, see
-        `_async_bootstrap`), but a reporter found its *leftover* start time
-        from before VSS took ownership still silently bounded slot 1's end
-        on the inverter screen, even while disabled — so a virtual slot
-        assigned to physical slot 1 could get truncated (or extended) back
-        to whatever slot 2 happened to be set to previously, once the
-        inverter re-validated the full System Mode Timer a short time
-        after activation. `slot1_start <= slot6_start` always holds by
-        construction (slot 1 is defined as whichever boundary has the
-        earlier time-of-day), so pinning slot 2's start to slot 6's start
-        is always a validly-ordered value and gives slot 1 a real,
-        controlled end for the first time (#21).
-        """
-        if self._last_written_slot2_boundary == slot6_start:
-            return False
-
-        for serial in self._coordinator.write_target_serials:
-            await self._coordinator.async_write_setting(serial, "sellTime2", slot6_start)
-
-        self._last_written_slot2_boundary = slot6_start
         return True
 
     async def _apply_current_if_changed(self, resolution: Resolution) -> bool:
