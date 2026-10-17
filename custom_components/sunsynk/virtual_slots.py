@@ -1,5 +1,5 @@
-"""Up-to-10 HA-side virtual charge/discharge slots, resolved onto 2 owned
-physical Sunsynk time slots (1 and 6).
+"""Up-to-10 HA-side virtual charge/discharge slots, resolved onto the
+inverter's six System Mode timer slots.
 
 Background
 ----------
@@ -11,11 +11,12 @@ slots can wrap, and setting a lower-numbered slot to a later time-of-day
 than a higher-numbered slot is exactly the "conflict" that article warns
 about: the inverter will not reliably act on the out-of-order slot.
 
-This module takes exclusive ownership of physical slots **1 and 6** (2-5
-are disabled; slot 2's start is pinned as slot 1's boundary) — the only
-pair the firmware actually supports wrapping past midnight — and enforces
-the invariant that slot 1 always holds the earlier time-of-day boundary and
-slot 6 the later one,
+This module drives all six slots. Slot 1 holds the earlier time-of-day
+boundary and slots 2-6 the later one, all starting at slot 6's start: slot 6
+is the only slot the firmware lets wrap past midnight, and slots 2-5 carry
+the same settings, so none of the user's own start times is left in the
+middle of the day to take over (#36; before, slots 3-5 kept theirs, and a
+price override could land in one of them and export nothing). This is
 recomputed fresh on every tick. Which one is "currently active" flips
 between them as the day progresses (e.g. slot 1 governs the daytime arc,
 slot 6 governs the overnight arc that wraps into the next day), but their
@@ -88,53 +89,37 @@ class _CurrentState(Enum):
 WEEKDAY_NAMES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 ALL_WEEKDAYS: frozenset[int] = frozenset(range(7))
 
-# setting_key names for each owned physical slot
+# setting_key names for each physical timer slot. The scheduler drives all
+# six: slot 1 holds the earlier boundary and slots 2-6 the later one, so no
+# start time of the user's own schedule is left in the middle of the day to
+# take over from it (#36). `on` is the slot's Grid Charge tick.
 _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
-    1: {
-        "on": "time1on",
-        "cap": "cap1",
-        "pac": "sellTime1Pac",
-        "start": "sellTime1",
-        "en": "sellTime1on",
-        "en_alt": "sellTime1En",
-    },
-    6: {
-        "on": "time6on",
-        "cap": "cap6",
-        "pac": "sellTime6Pac",
-        "start": "sellTime6",
-        "en": "sellTime6on",
-        "en_alt": "sellTime6En",
-    },
+    n: {
+        "on": f"time{n}on",
+        "cap": f"cap{n}",
+        "pac": f"sellTime{n}Pac",
+        "start": f"sellTime{n}",
+        "en": f"sellTime{n}on",
+        "en_alt": f"sellTime{n}En",
+    }
+    for n in range(1, 7)
 }
 _SELL_FLAG_KEYS = frozenset(
     {key for keys in _PHYSICAL_KEYS.values() for key in (keys["en"], keys["en_alt"])}
 )
-# Slots 2-5 are turned off once when the scheduler takes ownership. Slot 2's
-# start is also maintained as slot 1's end boundary; slots 3-5 stay untouched.
-_UNUSED_SLOT_ON_KEYS = ("time2on", "time3on", "time4on", "time5on")
+_GRID_CHARGE_KEYS = tuple(keys["on"] for keys in _PHYSICAL_KEYS.values())
 
-# Restore slot data fields before enable flags so the inverter never briefly
-# activates a partially restored window. Currents return to configured normal
-# values separately; snapshotting a live tariff override would be unsafe.
+# Restore slot data fields before the Grid Charge ticks so the inverter never
+# briefly charges in a partially restored slot. Currents return to configured
+# normal values separately; snapshotting a live tariff override would be
+# unsafe.
 _MANAGED_SETTING_KEYS = (
-    "cap1",
-    "sellTime1Pac",
-    "sellTime1",
-    "sellTime1on",
-    "sellTime1En",
-    "sellTime2",
-    "cap6",
-    "sellTime6Pac",
-    "sellTime6",
-    "sellTime6on",
-    "sellTime6En",
-    "time1on",
-    "time2on",
-    "time3on",
-    "time4on",
-    "time5on",
-    "time6on",
+    tuple(
+        key
+        for keys in _PHYSICAL_KEYS.values()
+        for key in (keys["cap"], keys["pac"], keys["start"], keys["en"], keys["en_alt"])
+    )
+    + _GRID_CHARGE_KEYS
 )
 
 
@@ -267,7 +252,7 @@ class _TickPlan:
 
 
 class VirtualSlotScheduler:
-    """Owns physical slots 1 & 6; resolves up to 10 virtual slots plus a
+    """Drives the six timer slots; resolves up to 10 virtual slots plus a
     live price-driven override from TariffChargingManager onto them.
     """
 
@@ -305,7 +290,6 @@ class VirtualSlotScheduler:
         self._next_boundary: datetime | None = None
         self._last_written: dict[int, tuple] = {}
         self._last_current_key: tuple[str, int] | _CurrentState | None = None
-        self._last_written_slot2_boundary: str | None = None
         self._original_settings: dict[str, Any] | None = None
         # Normal currents a shutdown could not write back yet; retried until
         # the inverter accepts them, also across restarts.
@@ -461,7 +445,6 @@ class VirtualSlotScheduler:
 
             self._last_written = {}
             self._last_current_key = None
-            self._last_written_slot2_boundary = None
             await self._async_tick_locked()
 
     async def _async_capture_user_timer(self) -> bool:
@@ -543,7 +526,6 @@ class VirtualSlotScheduler:
         self._standing_by = True
         self._last_written = {}
         self._last_current_key = None
-        self._last_written_slot2_boundary = None
         _LOGGER.info(
             "Virtual slots [%s]: nothing to do, your own timer is back in place",
             self._serial,
@@ -551,20 +533,27 @@ class VirtualSlotScheduler:
         return True
 
     async def _async_take_over(self) -> None:
-        """Turn slots 2-5 off before driving slots 1 and 6."""
+        """Start driving the timer slots."""
         _LOGGER.info(
-            "Virtual slots [%s]: taking over timer slots 1 and 6 (%s)",
+            "Virtual slots [%s]: taking over the timer slots (%s)",
             self._serial,
             "price override" if self._resolve_override() else "virtual slot",
         )
-        await self._coordinator.async_write_settings(
-            self._serial,
-            {key: 0 for key in _UNUSED_SLOT_ON_KEYS},
-        )
+        # A capture from before 2.0.0-beta.16 only covered slots 1, 2 and 6.
+        # Add the rest from the inverter before they are first written, while
+        # they still hold the user's own values (#36).
+        current = self._current_managed_settings()
+        missing = {
+            key: value
+            for key, value in current.items()
+            if key not in (self._original_settings or {})
+        }
+        if missing and self._original_settings is not None:
+            self._original_settings = {**self._original_settings, **missing}
+            await self._async_persist()
         self._standing_by = False
         self._last_written = {}
         self._last_current_key = None
-        self._last_written_slot2_boundary = None
 
     async def _async_shutdown(self, force_disable: bool = True) -> bool:
         """Restore the exact settings captured before taking ownership."""
@@ -597,10 +586,7 @@ class VirtualSlotScheduler:
                 try:
                     await self._coordinator.async_write_settings(
                         self._serial,
-                        {
-                            _PHYSICAL_KEYS[1]["on"]: 0,
-                            _PHYSICAL_KEYS[6]["on"]: 0,
-                        },
+                        {key: 0 for key in _GRID_CHARGE_KEYS},
                     )
                 except Exception as err:  # noqa: BLE001
                     success = False
@@ -650,7 +636,6 @@ class VirtualSlotScheduler:
             self._standing_by = False
             self._last_written = {}
             self._last_current_key = None
-            self._last_written_slot2_boundary = None
             await self._async_persist()
 
         self._notify_listeners()
@@ -1018,17 +1003,22 @@ class VirtualSlotScheduler:
         now = self._now()
         plan = self._plan(now)
 
-        # Started together, these land in the coordinator's queue in the same
-        # turn and go out as one System Mode request rather than three, which
-        # keeps write volume down on parallel systems (#21).
-        wrote1, wrote6, wrote_boundary = await asyncio.gather(
+        # Slot 1 holds the earlier boundary. Slots 2-6 all hold the later one,
+        # with slot 6's start, so slot 1 ends there and whichever of them the
+        # inverter treats as in force, it does the same thing (#36; slot 2's
+        # start bounding slot 1, #21). Started together, these land in the
+        # coordinator's queue in the same turn and go out as one System Mode
+        # request, which keeps write volume down on parallel systems (#21).
+        wrote = await asyncio.gather(
             self._write_window_if_changed(1, plan.slot1, plan.slot1_start),
-            self._write_window_if_changed(6, plan.slot6, plan.slot6_start),
-            self._write_slot2_boundary_if_changed(plan.slot6_start),
+            *(
+                self._write_window_if_changed(n, plan.slot6, plan.slot6_start)
+                for n in range(2, 7)
+            ),
         )
         wrote_current = await self._apply_current_if_changed(plan.active_resolution)
 
-        changed = wrote1 or wrote6 or wrote_boundary or wrote_current
+        changed = any(wrote) or wrote_current
         if plan.active_resolution.source != self._current_source:
             _LOGGER.info(
                 "Virtual slots [%s]: now %s (%s) on timer slot %s, next change %s",
@@ -1070,7 +1060,9 @@ class VirtualSlotScheduler:
         still never actually export anything while System Work Mode is
         Zero-Export/Limited to Home.
         """
-        on = resolution.mode != MODE_IDLE
+        # Grid Charge only for a charge window: a discharge or idle slot with
+        # it ticked would top the battery up from the grid (#36).
+        on = resolution.mode == MODE_CHARGE
         floor = self._soc_floor()
         cap = max(resolution.target_soc or 0, floor)
         # With Use Timer on and Sell unticked, a slot's power is also the
@@ -1132,34 +1124,6 @@ class VirtualSlotScheduler:
         await self._coordinator.async_write_settings(self._serial, window)
 
         self._last_written[index] = cache_key
-        return True
-
-    async def _write_slot2_boundary_if_changed(self, slot6_start: str) -> bool:
-        """Keep physical slot 2's start time pinned to slot 6's start.
-
-        Slot 1's *end* isn't a field this scheduler writes anywhere — the
-        inverter derives it from the next physical slot's own start time.
-        Slot 2 stays permanently disabled (`time2on=0`, see
-        `_async_bootstrap`), but a reporter found its *leftover* start time
-        from before VSS took ownership still silently bounded slot 1's end
-        on the inverter screen, even while disabled — so a virtual slot
-        assigned to physical slot 1 could get truncated (or extended) back
-        to whatever slot 2 happened to be set to previously, once the
-        inverter re-validated the full System Mode Timer a short time
-        after activation. `slot1_start <= slot6_start` always holds by
-        construction (slot 1 is defined as whichever boundary has the
-        earlier time-of-day), so pinning slot 2's start to slot 6's start
-        is always a validly-ordered value and gives slot 1 a real,
-        controlled end for the first time (#21).
-        """
-        if self._last_written_slot2_boundary == slot6_start:
-            return False
-
-        await self._coordinator.async_write_setting(
-            self._serial, "sellTime2", slot6_start
-        )
-
-        self._last_written_slot2_boundary = slot6_start
         return True
 
     async def _apply_current_if_changed(self, resolution: Resolution) -> bool:

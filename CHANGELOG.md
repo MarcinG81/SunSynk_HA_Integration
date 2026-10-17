@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **A Tariff Manager discharge could export nothing, depending on the time of day.** The Virtual Slot Scheduler only drove timer slots 1 and 6 and slot 2's start time. Slots 3–5 kept your own start times, so for part of the day one of your own slots was in force instead, e.g. a slot from 09:00 without Sell ticked. The scheduler now drives all six slots: slot 1 holds the earlier boundary, and slots 2–6 all hold the later one with the same settings, so none of your own start times is left in the middle of the day. Your whole timer, all six slots, is still put back when there's nothing to do. A capture taken by beta.14 or beta.15, which only covered slots 1, 2 and 6, is completed from the inverter before the other slots are first changed. (#36)
+- **Discharge and idle slots had Grid Charge ticked.** The scheduler ticked Grid Charge on every slot that wasn't idle, including discharge windows, so the inverter could top the battery up from the grid during a discharge. Grid Charge is now ticked only for charge windows. (#36)
+
 ## [2.0.0-beta.15] - 2026-10-17
 
 ### Security

@@ -23,22 +23,28 @@ from custom_components.sunsynk.virtual_slots import (
 
 SERIAL = "INV1"
 
+# The user's own six-slot timer, as a Deye reports it (#36: sell slots 6200 W
+# in the evening, house supply from the battery the rest of the day).
 _USER_TIMER = {
-    "cap1": 10,
-    "sellTime1Pac": 12000,
-    "sellTime1": "00:00",
-    "sellTime1En": "0",
-    "sellTime2": "05:30",
-    "cap6": 10,
-    "sellTime6Pac": 6200,
-    "sellTime6": "21:00",
-    "sellTime6En": "1",
-    "time1on": "false",
-    "time2on": "false",
+    **{
+        key: value
+        for n, start, pac, sell in [
+            (1, "00:00", 12000, "0"),
+            (2, "05:30", 12000, "0"),
+            (3, "09:00", 12000, "0"),
+            (4, "16:00", 6200, "1"),
+            (5, "19:00", 6200, "1"),
+            (6, "21:00", 12000, "0"),
+        ]
+        for key, value in {
+            f"cap{n}": 10,
+            f"sellTime{n}Pac": pac,
+            f"sellTime{n}": start,
+            f"sellTime{n}En": sell,
+        }.items()
+    },
+    **{f"time{n}on": "false" for n in range(1, 7)},
     "time3on": "true",
-    "time4on": "false",
-    "time5on": "false",
-    "time6on": "false",
 }
 
 
@@ -111,8 +117,12 @@ async def test_override_takes_the_slots_and_its_end_puts_the_user_timer_back():
     await scheduler._async_tick_locked()
 
     writes = _writes(coordinator)
-    assert writes[0] == {"time2on": 0, "time3on": 0, "time4on": 0, "time5on": 0}
-    assert any(w.get("sellTime1En") == 1 or w.get("sellTime6En") == 1 for w in writes)
+    # Every slot carries the discharge, so none of the user's own start
+    # times is left in force, and none has Grid Charge ticked (#36).
+    for n in range(1, 7):
+        slot = next(w for w in writes if f"time{n}on" in w)
+        assert slot[f"time{n}on"] == 0
+        assert slot[f"sellTime{n}En"] == 1
     assert scheduler.active_source == "price_override"
     assert scheduler._standing_by is False
 
@@ -201,7 +211,8 @@ async def test_adding_a_window_takes_the_slots_over():
     await scheduler._async_tick_locked()
 
     writes = _writes(coordinator)
-    assert writes[0] == {"time2on": 0, "time3on": 0, "time4on": 0, "time5on": 0}
+    # A charge window: Grid Charge ticked on the slots that carry it.
+    assert any(w.get("time1on") == 1 or w.get("time6on") == 1 for w in writes)
     assert scheduler.active_source == "virtual_slot:1"
 
 
@@ -302,3 +313,22 @@ def test_a_slot_with_no_weekdays_is_nothing_to_do():
 
     assert scheduler._has_work() is False
     assert scheduler._resolve_virtual(datetime(2024, 1, 4, 12, 0))[2] is None
+
+
+
+@pytest.mark.asyncio
+async def test_a_capture_from_before_six_slots_is_completed_before_takeover():
+    """A beta.14/15 capture only covered slots 1, 2 and 6. Slots 3-5 are
+    added from the inverter before they are first written (#36)."""
+    old_keys = [k for k in _USER_TIMER if k[-1] in "126" or k in ("sellTime2",)]
+    stored = {k: _USER_TIMER[k] for k in old_keys if not any(
+        k.endswith(str(n)) or k.startswith(f"time{n}") for n in (3, 4, 5)
+    )}
+    coordinator, scheduler = _setup(_tariff(discharging=True), stored=dict(stored))
+    scheduler._standing_by = True
+
+    await scheduler._async_tick_locked()
+
+    assert scheduler._original_settings == _USER_TIMER
+    saved = scheduler._store.async_save.call_args_list[0].args[0]
+    assert saved["original_settings"]["sellTime4"] == "16:00"

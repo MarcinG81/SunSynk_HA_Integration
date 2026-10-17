@@ -1053,8 +1053,8 @@ def test_switching_off_is_remembered(mock_hass, mock_coordinator):
 
 @pytest.mark.asyncio
 async def test_tick_starts_all_timer_writes_together(mock_hass, mock_coordinator):
-    """Slots 1 and 6 and slot 2's boundary must reach the coordinator in the
-    same turn, so they go out as one System Mode request (#21, #32)."""
+    """All six timer slots must reach the coordinator in the same turn, so
+    they go out as one System Mode request (#21, #32, #36)."""
     in_flight: list[dict] = []
     release = asyncio.Event()
 
@@ -1075,15 +1075,15 @@ async def test_tick_starts_all_timer_writes_together(mock_hass, mock_coordinator
     sched._enabled = True
 
     tick = asyncio.ensure_future(sched._async_tick())
-    for _ in range(5):
+    for _ in range(20):
         await asyncio.sleep(0)
     started = [set(batch) for batch in in_flight]
     release.set()
     await tick
 
-    assert any("time1on" in keys for keys in started)
-    assert any("time6on" in keys for keys in started)
-    assert any(keys == {"sellTime2"} for keys in started)
+    # All six timer slots are in flight at once (#36).
+    for n in range(1, 7):
+        assert any(f"time{n}on" in keys for keys in started), n
 
 
 
