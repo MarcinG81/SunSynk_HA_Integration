@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0-beta.17] - 2026-10-18
 
 ### Fixed
 - **Charging bounced between 100% and 99% until the cheap period ended.** Tariff Manager stopped charging as soon as the battery reached the target SOC. With the Virtual Slot Scheduler on, that also handed the timer back, so the house ran from the battery, and at 1% below the target charging started again, each time with another round of writes to the inverter. Tariff Manager now stays in charge mode for the whole cheap period, as a slot on the inverter does. The slot carries the target SOC, so the inverter itself stops charging there and holds it, with the house on the grid. The target only decides whether to start: charging doesn't start when the battery is already at it. Discharging works the same way at the minimum SOC. Found by pay4property in test mode. (#36)
