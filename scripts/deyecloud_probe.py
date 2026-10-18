@@ -2,36 +2,36 @@
 
 Read-only: it logs in, lists your inverters and prints their latest measure
 points and settings (system, battery, time of use). It changes nothing.
-Serial numbers, names and IDs are masked, so the output is safe to paste
-into a GitHub issue or discussion.
+Serial numbers, names, IDs and location are masked, so the output is safe to
+paste into a GitHub issue or discussion.
 
-You need a Deye Cloud developer application (App ID and App Secret) from
+Needs only Python 3.9 or newer, nothing to install. You need a Deye Cloud
+developer application (App ID and App Secret) from
 https://developer.deyecloud.com/app and your Deye Cloud login.
 
-Usage (from the repository root, Python 3.11+ with aiohttp installed):
+    python deyecloud_probe.py --region eu --app-id YOUR_APP_ID --login you@example.com
 
-    python -m scripts.deyecloud_probe --region eu --app-id ID --login you@example.com
-
-It asks for the App Secret and password without echoing them.
+It asks for the App Secret and password without showing them, and saves the
+result to deyecloud_probe.json.
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
 import getpass
+import hashlib
 import json
 import re
 import sys
+import urllib.request
 from typing import Any
 
-import aiohttp
-
-from custom_components.sunsynk.deyecloud.client import (
-    REGIONS,
-    DeyeCloudClient,
-    hash_password,
-)
+# Same data centres and endpoints as custom_components/sunsynk/deyecloud.
+REGIONS = {
+    "eu": "https://eu1-developer.deyecloud.com/v1.0",
+    "us": "https://us1-developer.deyecloud.com/v1.0",
+}
+_SUCCESS_CODES = {0, 1000000, 1106000}
 
 # Identifying fields: serials ("deviceSn", "loggerSn"), IDs ("stationId"),
 # names, addresses, contact details and location. Matched on whole words so
@@ -59,45 +59,118 @@ def redact(data: Any, key: str = "") -> Any:
     return data
 
 
-async def probe(args: argparse.Namespace, secret: str, password: str) -> dict[str, Any]:
-    async with aiohttp.ClientSession() as session:
-        client = DeyeCloudClient(
-            session,
-            args.region,
-            args.app_id,
-            secret,
-            args.login,
-            hash_password(password),
-            company_id=args.company_id,
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None  # never send credentials on to another address
+
+
+def post(url: str, body: dict[str, Any], token: str | None = None) -> dict[str, Any]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode(),
+        headers={
+            "Content-Type": "application/json",
+            **({"Authorization": f"bearer {token}"} if token else {}),
+        },
+        method="POST",
+    )
+    opener = urllib.request.build_opener(_NoRedirect)
+    with opener.open(request, timeout=30) as response:
+        return json.loads(response.read().decode())
+
+
+def _ok(result: dict[str, Any]) -> bool:
+    try:
+        return int(result.get("code")) in _SUCCESS_CODES
+    except (TypeError, ValueError):
+        return result.get("success") is True
+
+
+def probe(
+    region: str,
+    app_id: str,
+    secret: str,
+    login: str,
+    password: str,
+    company_id: str | None = None,
+    limit: int = 3,
+) -> dict[str, Any]:
+    base = REGIONS[region]
+    body: dict[str, Any] = {
+        "appSecret": secret,
+        "password": hashlib.sha256(password.encode()).hexdigest(),
+        ("email" if "@" in login else "username"): login,
+    }
+    if company_id:
+        body["companyId"] = company_id
+    login_result = post(f"{base}/account/token?appId={app_id}", body)
+    token = str(login_result.get("accessToken") or "").split(" ", 1)[-1]
+    if not _ok(login_result) or not token:
+        raise SystemExit(f"Login failed: {login_result.get('msg') or login_result}")
+
+    def call(path: str, payload: dict[str, Any]) -> Any:
+        try:
+            result = post(f"{base}{path}", payload, token)
+        except Exception as err:  # noqa: BLE001 - report, don't stop
+            return {"error": str(err)}
+        return result.get("data", result) if _ok(result) else {"error": result}
+
+    stations = call(
+        "/station/listWithDevice", {"page": 1, "size": 50, "deviceType": "INVERTER"}
+    )
+    serials = [
+        device["deviceSn"]
+        for station in (stations.get("stationList") or [])
+        for device in (station.get("deviceListItems") or [])
+        if device.get("deviceSn")
+    ][:limit]
+    report: dict[str, Any] = {"stations": stations, "devices": {}}
+    latest = call("/device/latest", {"deviceList": serials}) if serials else {}
+    for number, serial in enumerate(serials, start=1):
+        device_latest = next(
+            (
+                d
+                for d in (latest.get("deviceDataList") or [])
+                if d.get("deviceSn") == serial
+            ),
+            {},
         )
-        inverters = await client.async_list_inverters()
-        report: dict[str, Any] = {"inverters": inverters, "devices": {}}
-        serials = [inv["deviceSn"] for inv in inverters][: args.limit]
-        latest = await client.async_get_latest(serials) if serials else {}
-        for serial in serials:
-            device: dict[str, Any] = {"latest": latest.get(serial, {})}
-            for kind in ("system", "battery", "tou"):
-                try:
-                    device[kind] = await client.async_get_config(serial, kind)
-                except Exception as err:  # noqa: BLE001 - report, don't stop
-                    device[kind] = {"error": str(err)}
-            report["devices"][serial] = device
-        return redact(report)
+        # Numbered, not keyed by serial: keys aren't masked.
+        report["devices"][f"inverter_{number}"] = {
+            "latest": device_latest.get("dataList", []),
+            **{
+                kind: call(f"/config/{kind}", {"deviceSn": serial})
+                for kind in ("system", "battery", "tou")
+            },
+        }
+    return redact(report)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--region", choices=sorted(REGIONS), required=True)
     parser.add_argument("--app-id", required=True)
     parser.add_argument("--login", required=True, help="Deye Cloud email or username")
     parser.add_argument("--company-id", help="only for business accounts")
     parser.add_argument("--limit", type=int, default=3, help="inverters to show")
+    parser.add_argument("--output", default="deyecloud_probe.json")
     args = parser.parse_args()
     secret = getpass.getpass("App Secret: ")
     password = getpass.getpass("Deye Cloud password: ")
-    report = asyncio.run(probe(args, secret, password))
-    json.dump(report, sys.stdout, indent=2, ensure_ascii=False, sort_keys=True)
-    print()
+    report = probe(
+        args.region,
+        args.app_id,
+        secret,
+        args.login,
+        password,
+        args.company_id,
+        args.limit,
+    )
+    text = json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True)
+    with open(args.output, "w", encoding="utf-8") as handle:
+        handle.write(text + "\n")
+    print(text)
+    print(f"\nSaved to {args.output}", file=sys.stderr)
     return 0
 
 

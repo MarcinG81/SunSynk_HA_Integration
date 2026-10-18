@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -43,24 +42,43 @@ def test_identifying_fields_are_masked_and_measurements_kept():
     assert device["system"]["sn"] == "****"
 
 
-@pytest.mark.asyncio
-async def test_probe_reads_everything_and_reports_a_failed_group():
-    client = MagicMock()
-    client.async_list_inverters = AsyncMock(return_value=[{"deviceSn": "SN000001"}])
-    client.async_get_latest = AsyncMock(return_value={"SN000001": {"SOC": "50"}})
+def test_probe_logs_in_reads_everything_and_masks_it():
+    calls = []
 
-    async def config(serial, kind):
-        if kind == "battery":
-            raise RuntimeError("not permitted")
-        return {"kind": kind}
+    def fake_post(url, body, token=None):
+        calls.append((url.split("/v1.0")[1], body, token))
+        path = url.split("/v1.0")[1]
+        if path.startswith("/account/token"):
+            return {"code": "1000000", "accessToken": "bearer T"}
+        if path == "/station/listWithDevice":
+            return {"code": 1000000, "data": {"stationList": [
+                {"id": 99, "name": "Home", "deviceListItems": [{"deviceSn": "SN000001"}]}]}}
+        if path == "/device/latest":
+            return {"code": 0, "data": {"deviceDataList": [
+                {"deviceSn": "SN000001", "dataList": [{"key": "SOC", "value": "50"}]}]}}
+        if path == "/config/battery":
+            raise OSError("not permitted")
+        if path == "/config/tou":
+            return {"code": 5, "msg": "no permission"}
+        return {"code": 0, "data": {"workMode": "SELLING_FIRST"}}
 
-    client.async_get_config = AsyncMock(side_effect=config)
-    args = SimpleNamespace(region="eu", app_id="A", login="l", company_id=None, limit=3)
+    with patch("scripts.deyecloud_probe.post", side_effect=fake_post):
+        report = probe("eu", "APP", "SECRET", "me@example.com", "pw")
 
-    with patch("scripts.deyecloud_probe.DeyeCloudClient", return_value=client):
-        report = await probe(args, "secret", "pw")
-
-    device = next(iter(report["devices"].values()))
-    assert device["latest"] == {"SOC": "50"}
-    assert device["system"] == {"kind": "system"}
+    login = calls[0]
+    assert login[0] == "/account/token?appId=APP"
+    assert login[1]["email"] == "me@example.com"
+    assert login[1]["password"] != "pw"
+    assert all(token == "T" for _, _, token in calls[1:])
+    assert "SN000001" not in str(report)
+    device = report["devices"]["inverter_1"]
+    assert device["latest"] == [{"key": "SOC", "value": "50"}]
+    assert device["system"] == {"workMode": "SELLING_FIRST"}
     assert device["battery"] == {"error": "not permitted"}
+    assert device["tou"]["error"]["msg"] == "no permission"
+
+
+def test_a_refused_login_stops_the_probe():
+    with patch("scripts.deyecloud_probe.post", return_value={"code": 2101017, "msg": "bad"}):
+        with pytest.raises(SystemExit, match="Login failed: bad"):
+            probe("us", "APP", "S", "solaruser", "pw", company_id="7")

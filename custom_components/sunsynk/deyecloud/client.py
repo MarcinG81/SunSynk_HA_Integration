@@ -18,6 +18,11 @@ Two things work differently from the Sunsynk API:
 
 Errors subclass the Sunsynk client's, so the rest of the integration handles
 both clouds the same way.
+
+Field names follow Deye's published Swagger definition
+(https://eu1-developer.deyecloud.com/v2/api-docs), which is more complete
+than the sample code: time-of-use slots, for instance, take an `enableSell`
+flag the samples never use.
 """
 
 from __future__ import annotations
@@ -44,8 +49,13 @@ REGIONS: dict[str, str] = {
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
 # Codes the API returns for success; it isn't consistent across endpoints.
 _SUCCESS_CODES = frozenset({0, 1000000, 1106000})
-# Codes for an expired or invalid token or login.
+# Codes for an expired or invalid token or login. An expired token can also
+# come back as HTTP 200 with only a message, so those are matched too.
 _AUTH_CODES = frozenset({1001, 1002, 1003, 2101017})
+_AUTH_HINTS = ("invalid token", "token invalid", "token expired", "expired token")
+# One order at a time per inverter: another one is still running. Retry
+# later; it isn't a refusal.
+_BUSY_CODES = frozenset({2104004})
 # Deye has announced quotas but not their error codes, so match the message.
 _RATE_LIMIT_HINTS = (
     "rate limit",
@@ -59,8 +69,10 @@ _TOKEN_MARGIN = 3600
 # The latest-data endpoint takes at most this many devices per request.
 LATEST_BATCH = 10
 
+# Order status: 0 to be sent, 100 sending, 300 during a firmware upgrade,
+# 400 terminated, 500 failed, 666 succeeded.
 ORDER_SUCCESS = 666
-ORDER_PENDING = frozenset({0, 100})
+ORDER_PENDING = frozenset({0, 100, 300})
 
 # System work modes, by the value the Sunsynk API uses for the same mode, so
 # the rest of the integration can keep using `sysWorkMode` 0-2.
@@ -71,6 +83,15 @@ WORK_MODES: dict[int, str] = {
 }
 ENERGY_PATTERNS: dict[int, str] = {0: "BATTERY_FIRST", 1: "LOAD_FIRST"}
 TOU_SLOTS = 6
+WEEKDAYS = (
+    "SUNDAY",
+    "MONDAY",
+    "TUESDAY",
+    "WEDNESDAY",
+    "THURSDAY",
+    "FRIDAY",
+    "SATURDAY",
+)
 
 
 class DeyeCloudApiError(SunsynkApiError):
@@ -91,6 +112,10 @@ class DeyeCloudRateLimitError(DeyeCloudApiError):
 
 class DeyeCloudOrderError(DeyeCloudApiError):
     """A setting change was accepted but the inverter didn't apply it."""
+
+
+class DeyeCloudBusyError(DeyeCloudApiError):
+    """Another change is still running on this inverter; try again shortly."""
 
 
 def hash_password(password: str) -> str:
@@ -255,11 +280,15 @@ class DeyeCloudClient:
                 data = result.get("data")
                 return data if isinstance(data, dict) else result
             message = str(result.get("msg") or "Unknown error")
-            if code in _AUTH_CODES:
+            if code in _AUTH_CODES or any(
+                hint in message.lower() for hint in _AUTH_HINTS
+            ):
                 self.invalidate_token()
                 if attempt == 1:
                     continue
                 raise DeyeCloudAuthError(f"{message} (code {code})")
+            if code in _BUSY_CODES:
+                raise DeyeCloudBusyError(f"{path}: {message} (code {code})")
             if _is_rate_limit(message):
                 raise DeyeCloudRateLimitError(f"{message} (code {code})")
             raise DeyeCloudApiError(f"{path}: {message} (code {code})")
@@ -342,9 +371,12 @@ class DeyeCloudClient:
             if status == ORDER_SUCCESS:
                 return status_result
             if status not in ORDER_PENDING:
+                reason = status_result.get("error") or status_result.get("msg")
                 raise DeyeCloudOrderError(
                     f"{path}: the inverter didn't apply the change "
-                    f"(order {order_id}, status {status})"
+                    f"(order {order_id}, status {status}"
+                    + (f", {reason}" if reason else "")
+                    + ")"
                 )
             if self._clock() >= deadline:
                 raise DeyeCloudOrderError(
@@ -398,7 +430,9 @@ class DeyeCloudClient:
     ) -> dict[str, Any]:
         """Write the whole six-slot time-of-use table in one order.
 
-        Each slot: time, power (W), soc (%), enableGridCharge, enableGeneration.
+        Each slot: time, power (W), soc (%), enableGridCharge, enableSell,
+        enableGeneration. Every flag goes on every slot: the same hardware
+        behind the Sunsynk cloud drops a slot's flags when any is missing.
         """
         if len(slots) != TOU_SLOTS:
             raise ValueError(f"The time-of-use table has {TOU_SLOTS} slots")
@@ -408,6 +442,7 @@ class DeyeCloudClient:
                 "power": int(slot.get("power", 0)),
                 "soc": int(slot.get("soc", 0)),
                 "enableGridCharge": bool(slot.get("enableGridCharge")),
+                "enableSell": bool(slot.get("enableSell")),
                 "enableGeneration": bool(slot.get("enableGeneration")),
             }
             for slot in slots
@@ -418,7 +453,15 @@ class DeyeCloudClient:
         )
 
     async def async_set_tou_enabled(self, serial: str, enabled: bool) -> dict[str, Any]:
-        return await self._order(
-            "/order/sys/tou/switch",
-            {"deviceSn": serial, "action": "on" if enabled else "off"},
-        )
+        """Turn the timer on for every day, or off.
+
+        Turned on without days, the timer keeps whatever days it had, and a
+        timer with no day for today is stored but never applied.
+        """
+        body: dict[str, Any] = {
+            "deviceSn": serial,
+            "action": "on" if enabled else "off",
+        }
+        if enabled:
+            body["days"] = list(WEEKDAYS)
+        return await self._order("/order/sys/tou/switch", body)

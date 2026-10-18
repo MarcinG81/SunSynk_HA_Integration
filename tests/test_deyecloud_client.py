@@ -17,6 +17,7 @@ from custom_components.sunsynk.deyecloud.client import (
     REGIONS,
     DeyeCloudApiError,
     DeyeCloudAuthError,
+    DeyeCloudBusyError,
     DeyeCloudClient,
     DeyeCloudOrderError,
     DeyeCloudRateLimitError,
@@ -359,7 +360,12 @@ async def test_a_change_without_an_order_id_returns_at_once():
         (("async_set_solar_sell", False), "/order/sys/solarSell/control", {"action": "off"}),
         (("async_set_battery_current", "charge", 120), "/order/battery/parameter/update", {"paramterType": "MAX_CHARGE_CURRENT", "value": 120}),
         (("async_set_battery_current", "discharge", 90), "/order/battery/parameter/update", {"paramterType": "MAX_DISCHARGE_CURRENT", "value": 90}),
-        (("async_set_tou_enabled", True), "/order/sys/tou/switch", {"action": "on"}),
+        (
+            ("async_set_tou_enabled", True),
+            "/order/sys/tou/switch",
+            {"action": "on", "days": ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY",
+                                      "THURSDAY", "FRIDAY", "SATURDAY"]},
+        ),
     ],
 )
 async def test_each_setting_goes_to_its_own_order(call, path, body):
@@ -388,6 +394,7 @@ async def test_the_whole_time_of_use_table_is_written_in_one_order():
         "power": 5000,
         "soc": 30,
         "enableGridCharge": True,
+        "enableSell": False,
         "enableGeneration": False,
     }
     assert [i["time"] for i in body["timeUseSettingItems"]] == [
@@ -412,3 +419,57 @@ async def test_a_response_without_a_code_is_taken_as_success():
 async def test_an_unreadable_order_status_is_an_order_error():
     with pytest.raises(DeyeCloudOrderError, match="status None"):
         await _client(_order_session("done?")).async_set_tou_enabled("SN1", False)
+
+
+
+@pytest.mark.asyncio
+async def test_a_token_refused_by_message_only_is_replaced_once():
+    """An expired token can come back as HTTP 200 with just a message."""
+    session = fake_session(
+        post=[
+            FakeResponse(TOKEN_OK),
+            FakeResponse({"code": "9", "success": False, "msg": "auth invalid token"}),
+            FakeResponse({**TOKEN_OK, "accessToken": "tok2"}),
+            _ok({"ok": 1}),
+        ]
+    )
+
+    assert await _client(session).async_get_config("SN1", "system") == {"ok": 1}
+
+
+@pytest.mark.asyncio
+async def test_a_busy_inverter_is_a_retryable_error():
+    session = fake_session(
+        post=[FakeResponse(TOKEN_OK), FakeResponse({"code": "2104004", "msg": "command concurrent running"})]
+    )
+
+    with pytest.raises(DeyeCloudBusyError, match="concurrent"):
+        await _client(session).async_set_solar_sell("SN1", True)
+
+
+@pytest.mark.asyncio
+async def test_an_order_waits_through_a_firmware_upgrade():
+    with patch("asyncio.sleep", AsyncMock()):
+        result = await _client(_order_session(300, 666)).async_set_solar_sell("SN1", True)
+
+    assert result == {"status": 666}
+
+
+@pytest.mark.asyncio
+async def test_a_failed_order_says_why():
+    session = fake_session(
+        post=[FakeResponse(TOKEN_OK), _ok({"orderId": "o1"})],
+        get=[_ok({"status": 500, "error": "501 Conflicting Command"})],
+    )
+
+    with pytest.raises(DeyeCloudOrderError, match="Conflicting Command"):
+        await _client(session).async_set_solar_sell("SN1", True)
+
+
+@pytest.mark.asyncio
+async def test_turning_the_timer_off_sends_no_days():
+    session = _order_session(666)
+
+    await _client(session).async_set_tou_enabled("SN1", False)
+
+    assert session.post.call_args.kwargs["json"] == {"deviceSn": "SN1", "action": "off"}
