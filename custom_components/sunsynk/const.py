@@ -27,6 +27,9 @@ DOMAIN: Final = "sunsynk"
 CONF_API_SERVER: Final = "api_server"
 CONF_SERIALS: Final = "serials"
 CONF_REFRESH_INTERVAL: Final = "refresh_interval"
+# Whether the integration creates and updates its Lovelace dashboard. On by
+# default on 1.9.x, which always did (#38); 2.0 makes it opt-in, same key.
+CONF_CREATE_DASHBOARD: Final = "create_dashboard"
 
 API_SERVER_SUNSYNK: Final = "api.sunsynk.net"
 API_SERVER_INTELESS: Final = "pv.inteless.com"

@@ -36,6 +36,7 @@
           "password": "New Sunsynk Account Password",
           "serials": "Numéro(s) de série de l'onduleur",
           "refresh_interval": "Intervalle de rafraîchissement (secondes)",
+          "create_dashboard": "Créer et maintenir le tableau de bord Sunsynk",
           "latitude": "Latitude (prévision solaire)",
           "longitude": "Longitude (prévision solaire)",
           "panel_kwp": "Puissance crête des panneaux (kWc)",
@@ -70,7 +71,8 @@
           "discharge_min_soc": "La décharge s'arrête automatiquement quand la batterie atteint cet état de charge. Défaut 10.",
           "tariff_start_hour": "Heure de la journée (0–23) à laquelle la gestion tarifaire s'active. Laisser vide pour une activation permanente.",
           "tariff_end_hour": "Heure de la journée (0–23) à laquelle la gestion tarifaire se désactive. Peut chevaucher minuit (ex. début 22, fin 6).",
-          "price_max_age": "Si le capteur de prix ne s'est pas mis à jour dans ce délai (minutes), le mode actif est arrêté par mesure de sécurité. Défaut 90."
+          "price_max_age": "Si le capteur de prix ne s'est pas mis à jour dans ce délai (minutes), le mode actif est arrêté par mesure de sécurité. Défaut 90.",
+          "create_dashboard": "Activé par défaut. Crée le tableau de bord Sunsynk et le met à jour à chaque rechargement, en écrasant vos modifications. Décochez pour que vos tableaux de bord restent intacts ; un tableau de bord déjà créé reste jusqu'à ce que vous le supprimiez."
         }
       }
     },

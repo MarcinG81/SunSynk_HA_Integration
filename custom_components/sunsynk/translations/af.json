@@ -36,6 +36,7 @@
           "password": "New Sunsynk Account Password",
           "serials": "Omvormer reeksnommer(s)",
           "refresh_interval": "Verfrissinginterval (sekondes)",
+          "create_dashboard": "Skep en onderhou Sunsynk-paneelbord",
           "latitude": "Breedtegraad (Sonsenergie-voorspelling)",
           "longitude": "Lengtegraad (Sonsenergie-voorspelling)",
           "panel_kwp": "Paneel piekdrywing (kWp)",
@@ -70,7 +71,8 @@
           "discharge_min_soc": "Ontlaaing stop outomaties wanneer battery hierdie SOC bereik. Verstek 10.",
           "tariff_start_hour": "Uur van dag (0–23) wanneer tariefbestuur aktiveer. Los leeg vir altyd-aan.",
           "tariff_end_hour": "Uur van dag (0–23) wanneer tariefbestuur deaktiveer. Kan middernag oorskry (bv. begin 22, einde 6).",
-          "price_max_age": "As die pryssensor nie binne hierdie aantal minute opgedateer het nie, word die aktiewe modus as veiligheidsmaatreel gestop. Verstek 90."
+          "price_max_age": "As die pryssensor nie binne hierdie aantal minute opgedateer het nie, word die aktiewe modus as veiligheidsmaatreel gestop. Verstek 90.",
+          "create_dashboard": "By verstek aan. Skep die Sunsynk-paneelbord en werk dit by elke herlaai by, wat jou veranderinge oorskryf. Ontmerk om jou paneelborde onveranderd te laat; 'n reeds geskepte paneelbord bly totdat jy dit uitvee."
         }
       }
     },

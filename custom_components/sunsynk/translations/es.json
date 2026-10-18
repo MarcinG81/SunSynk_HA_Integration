@@ -36,6 +36,7 @@
           "password": "New Sunsynk Account Password",
           "serials": "Número(s) de serie del inversor",
           "refresh_interval": "Intervalo de actualización (segundos)",
+          "create_dashboard": "Crear y mantener el panel de Sunsynk",
           "latitude": "Latitud (previsión solar)",
           "longitude": "Longitud (previsión solar)",
           "panel_kwp": "Potencia pico de los paneles (kWp)",
@@ -70,7 +71,8 @@
           "discharge_min_soc": "La descarga se detiene automáticamente cuando la batería alcanza este SOC. Por defecto 10.",
           "tariff_start_hour": "Hora del día (0–23) en que se activa la gestión de tarifas. Dejar en blanco para modo siempre activo.",
           "tariff_end_hour": "Hora del día (0–23) en que se desactiva la gestión de tarifas. Puede cruzar la medianoche (p. ej. inicio 22, fin 6).",
-          "price_max_age": "Si el sensor de precio no se ha actualizado en este número de minutos, el modo activo se detiene como medida de seguridad. Por defecto 90."
+          "price_max_age": "Si el sensor de precio no se ha actualizado en este número de minutos, el modo activo se detiene como medida de seguridad. Por defecto 90.",
+          "create_dashboard": "Activado por defecto. Crea el panel de Sunsynk y lo actualiza en cada recarga, sobrescribiendo sus cambios. Desmárquelo para que sus paneles no se modifiquen; un panel ya creado se mantiene hasta que lo elimine."
         }
       }
     },

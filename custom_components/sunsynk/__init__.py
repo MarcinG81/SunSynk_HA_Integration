@@ -25,6 +25,7 @@ from .const import (
     CONF_CHEAP_CHARGE_CURRENT,
     CONF_CHEAP_TARGET_SOC,
     CONF_CHEAP_THRESHOLD,
+    CONF_CREATE_DASHBOARD,
     CONF_DISCHARGE_MIN_SOC,
     CONF_EXPENSIVE_THRESHOLD,
     CONF_EXPORT_PRICE_ENTITY,
@@ -455,7 +456,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         tariff_manager.start()
     vslot_scheduler.start()
 
-    hass.async_create_task(_async_setup_dashboard(hass, entry, coordinator))
+    if _dashboard_enabled(entry):
+        hass.async_create_task(_async_setup_dashboard(hass, entry, coordinator))
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
@@ -484,6 +486,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             vslot_scheduler.stop()
 
     return unload_ok
+
+
+def _dashboard_enabled(entry: ConfigEntry) -> bool:
+    """Whether to create and update the dashboard: on unless turned off (#38)."""
+    return bool(
+        entry.options.get(
+            CONF_CREATE_DASHBOARD, entry.data.get(CONF_CREATE_DASHBOARD, True)
+        )
+    )
 
 
 async def _async_setup_dashboard(

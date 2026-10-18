@@ -36,6 +36,7 @@
           "password": "New Sunsynk Account Password",
           "serials": "Sériové číslo/čísla měniče",
           "refresh_interval": "Interval aktualizace (sekundy)",
+          "create_dashboard": "Vytvářet a udržovat řídicí panel Sunsynk",
           "latitude": "Zeměpisná šířka (solární předpověď)",
           "longitude": "Zeměpisná délka (solární předpověď)",
           "panel_kwp": "Špičkový výkon panelů (kWp)",
@@ -70,7 +71,8 @@
           "discharge_min_soc": "Vybíjení se automaticky zastaví, jakmile baterie dosáhne tohoto SOC. Výchozí 10.",
           "tariff_start_hour": "Hodina dne (0–23), kdy se správa tarifů aktivuje. Ponechte prázdné pro vždy zapnutý režim.",
           "tariff_end_hour": "Hodina dne (0–23), kdy se správa tarifů deaktivuje. Může přesahovat půlnoc (např. začátek 22, konec 6).",
-          "price_max_age": "Pokud se senzor ceny neaktualizoval v průběhu tohoto počtu minut, aktivní režim se jako bezpečnostní opatření zastaví. Výchozí 90."
+          "price_max_age": "Pokud se senzor ceny neaktualizoval v průběhu tohoto počtu minut, aktivní režim se jako bezpečnostní opatření zastaví. Výchozí 90.",
+          "create_dashboard": "Ve výchozím stavu zapnuto. Vytvoří řídicí panel Sunsynk a při každém opětovném načtení jej aktualizuje, čímž přepíše vaše změny. Zrušte zaškrtnutí, aby integrace vaše panely neměnila; dříve vytvořený panel zůstane, dokud jej nesmažete."
         }
       }
     },

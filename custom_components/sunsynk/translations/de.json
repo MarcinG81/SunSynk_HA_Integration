@@ -36,6 +36,7 @@
           "password": "New Sunsynk Account Password",
           "serials": "Seriennummer(n) des Wechselrichters",
           "refresh_interval": "Aktualisierungsintervall (Sekunden)",
+          "create_dashboard": "Sunsynk-Dashboard erstellen und pflegen",
           "latitude": "Breitengrad (Solarprognose)",
           "longitude": "Längengrad (Solarprognose)",
           "panel_kwp": "Spitzenleistung der Panels (kWp)",
@@ -70,7 +71,8 @@
           "discharge_min_soc": "Entladen stoppt automatisch, wenn der Akku diesen SOC erreicht. Standard 10.",
           "tariff_start_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung aktiviert wird. Leer lassen für Dauerbetrieb.",
           "tariff_end_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung deaktiviert wird. Kann Mitternacht überschreiten (z. B. Start 22, Ende 6).",
-          "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90."
+          "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90.",
+          "create_dashboard": "Standardmäßig an. Erstellt das Sunsynk-Dashboard und aktualisiert es bei jedem Neuladen, wobei eigene Änderungen überschrieben werden. Deaktivieren, damit Ihre Dashboards unverändert bleiben; ein bereits erstelltes Dashboard bleibt, bis Sie es löschen."
         }
       }
     },

@@ -19,6 +19,7 @@ from .const import (
     CONF_CHEAP_CHARGE_CURRENT,
     CONF_CHEAP_TARGET_SOC,
     CONF_CHEAP_THRESHOLD,
+    CONF_CREATE_DASHBOARD,
     CONF_DISCHARGE_MIN_SOC,
     CONF_EXPENSIVE_THRESHOLD,
     CONF_EXPORT_PRICE_ENTITY,
@@ -251,6 +252,9 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                         data={
                             CONF_REFRESH_INTERVAL: user_input[CONF_REFRESH_INTERVAL],
                             CONF_SERIALS: serials,
+                            CONF_CREATE_DASHBOARD: user_input.get(
+                                CONF_CREATE_DASHBOARD, True
+                            ),
                             **forecast_fields,
                             **tariff_fields,
                         },
@@ -299,6 +303,10 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     vol.Coerce(int),
                     vol.Range(min=MIN_REFRESH_INTERVAL, max=MAX_REFRESH_INTERVAL),
                 ),
+                vol.Optional(
+                    CONF_CREATE_DASHBOARD,
+                    default=bool(_opt(CONF_CREATE_DASHBOARD, True)),
+                ): bool,
                 # Solar Forecast
                 vol.Optional(CONF_LATITUDE, default=str(current_lat) if current_lat != "" else ""): str,
                 vol.Optional(CONF_LONGITUDE, default=str(current_lon) if current_lon != "" else ""): str,

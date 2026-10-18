@@ -36,6 +36,7 @@
           "password": "New Sunsynk Account Password",
           "serials": "逆变器序列号",
           "refresh_interval": "刷新间隔（秒）",
+          "create_dashboard": "创建并维护 Sunsynk 仪表板",
           "latitude": "纬度（光伏发电预测）",
           "longitude": "经度（光伏发电预测）",
           "panel_kwp": "组件峰值功率（kWp）",
@@ -70,7 +71,8 @@
           "discharge_min_soc": "电池达到此 SOC 后自动停止放电，默认 10。",
           "tariff_start_hour": "电价管理激活的时刻（0–23 时）。留空则全天激活。",
           "tariff_end_hour": "电价管理停止的时刻（0–23 时），可跨越午夜（如开始 22 时，结束 6 时）。",
-          "price_max_age": "若电价传感器在此分钟数内未更新，将停止当前充/放电模式以确保安全，默认 90。"
+          "price_max_age": "若电价传感器在此分钟数内未更新，将停止当前充/放电模式以确保安全，默认 90。",
+          "create_dashboard": "默认开启。创建 Sunsynk 仪表板并在每次重新加载时更新，会覆盖您对其所做的修改。取消勾选则不会更改您的仪表板；之前创建的仪表板会保留，直到您将其删除。"
         }
       }
     },

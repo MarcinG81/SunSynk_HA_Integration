@@ -36,6 +36,7 @@
           "password": "New Sunsynk Account Password",
           "serials": "Inverter Serial Number(s)",
           "refresh_interval": "Refresh Interval (seconds)",
+          "create_dashboard": "Create and maintain Sunsynk dashboard",
           "latitude": "Latitude (Solar Forecast)",
           "longitude": "Longitude (Solar Forecast)",
           "panel_kwp": "Panel Peak Power (kWp)",
@@ -72,7 +73,8 @@
           "discharge_min_soc": "Discharging stops automatically when battery reaches this SOC. Default 10.",
           "tariff_start_hour": "Hour of day (0–23) when tariff management activates. Leave blank for always-on.",
           "tariff_end_hour": "Hour of day (0–23) when tariff management deactivates. Can wrap midnight (e.g. start 22, end 6).",
-          "price_max_age": "If the price sensor has not updated within this many minutes, any active charge/discharge mode is stopped as a safety measure. Default 90. Set high to effectively disable the check."
+          "price_max_age": "If the price sensor has not updated within this many minutes, any active charge/discharge mode is stopped as a safety measure. Default 90. Set high to effectively disable the check.",
+          "create_dashboard": "On by default. Creates the Sunsynk dashboard and updates it on every reload, which overwrites changes you make to it. Untick to leave your dashboards alone; a dashboard created earlier stays until you delete it."
         }
       }
     },

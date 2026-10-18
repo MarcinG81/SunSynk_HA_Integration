@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.16] - 2026-10-18
+
+### Added
+- **"Create and maintain Sunsynk dashboard" option in Configure.** On by default, so nothing changes unless you untick it. Unticked, the integration no longer creates or updates its dashboard, so your own changes to it aren't overwritten on reload. A dashboard created earlier stays until you delete it. 2.0 has the same option, off by default there. (#38)
+
 ## [1.9.15] - 2026-10-17
 
 ### Fixed

@@ -36,6 +36,7 @@
           "password": "Nowe hasło konta Sunsynk",
           "serials": "Numer(y) seryjny falownika",
           "refresh_interval": "Interwał odświeżania (sekundy)",
+          "create_dashboard": "Twórz i utrzymuj dashboard Sunsynk",
           "latitude": "Szerokość geograficzna (prognoza słoneczna)",
           "longitude": "Długość geograficzna (prognoza słoneczna)",
           "panel_kwp": "Szczytowa moc paneli (kWp)",
@@ -70,7 +71,8 @@
           "discharge_min_soc": "Rozładowanie zatrzymuje się automatycznie gdy bateria osiągnie ten SOC. Domyślnie 10.",
           "tariff_start_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się aktywuje. Pozostaw puste dla trybu zawsze aktywnego.",
           "tariff_end_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się dezaktywuje. Może przekraczać północ (np. start 22, koniec 6).",
-          "price_max_age": "Jeśli czujnik ceny nie zaktualizował się w ciągu podanej liczby minut, aktywny tryb ładowania/rozładowania zostanie zatrzymany. Domyślnie 90."
+          "price_max_age": "Jeśli czujnik ceny nie zaktualizował się w ciągu podanej liczby minut, aktywny tryb ładowania/rozładowania zostanie zatrzymany. Domyślnie 90.",
+          "create_dashboard": "Domyślnie włączone. Tworzy dashboard Sunsynk i aktualizuje go przy każdym przeładowaniu, nadpisując Twoje zmiany. Odznacz, aby integracja nie zmieniała dashboardów; utworzony wcześniej dashboard zostaje, dopóki go nie usuniesz."
         }
       }
     },
