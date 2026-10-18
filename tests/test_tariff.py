@@ -653,17 +653,46 @@ async def test_charging_holds_at_the_target_until_the_cheap_period_ends(
 
 
 @pytest.mark.asyncio
-async def test_discharging_holds_at_the_minimum_until_the_peak_ends(
+async def test_discharging_stops_at_the_minimum(mock_hass, mock_coordinator):
+    """The house then runs from the battery on the user's own timer (#36)."""
+    mgr = _make_manager(mock_hass, mock_coordinator)
+
+    await mgr._evaluate_discharging("TEST123", price=0.40, soc=50.0, in_schedule=True)
+    await mgr._evaluate_discharging("TEST123", price=0.40, soc=10.0, in_schedule=True)
+
+    assert mgr._discharging_active is False
+    message = mock_hass.services.async_call.call_args.args[2]["message"]
+    assert "reached the minimum 10%" in message
+
+
+@pytest.mark.asyncio
+async def test_discharging_doesnt_restart_in_the_same_peak(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    await mgr._evaluate_discharging("TEST123", price=0.40, soc=50.0, in_schedule=True)
+    await mgr._evaluate_discharging("TEST123", price=0.40, soc=10.0, in_schedule=True)
+
+    for soc in (11.0, 15.0):
+        await mgr._evaluate_discharging("TEST123", price=0.40, soc=soc, in_schedule=True)
+    assert mgr._discharging_active is False
+
+    # The next expensive period starts afresh.
+    await mgr._evaluate_discharging("TEST123", price=0.20, soc=15.0, in_schedule=True)
+    await mgr._evaluate_discharging("TEST123", price=0.40, soc=15.0, in_schedule=True)
+    assert mgr._discharging_active is True
+
+
+@pytest.mark.asyncio
+async def test_discharging_holds_above_the_minimum_until_the_peak_ends(
     mock_hass, mock_coordinator
 ):
     mgr = _make_manager(mock_hass, mock_coordinator)
 
     await mgr._evaluate_discharging("TEST123", price=0.40, soc=50.0, in_schedule=True)
-    for soc in (10.0, 11.0, 10.0):
+    for soc in (40.0, 11.0, 30.0):
         await mgr._evaluate_discharging("TEST123", price=0.40, soc=soc, in_schedule=True)
     assert mgr._discharging_active is True
 
-    await mgr._evaluate_discharging("TEST123", price=0.40, soc=10.0, in_schedule=False)
+    await mgr._evaluate_discharging("TEST123", price=0.40, soc=30.0, in_schedule=False)
     assert mgr._discharging_active is False
 
 

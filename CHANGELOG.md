@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Discharging no longer holds at the minimum SOC.** Since 1.9.17 Tariff Manager stayed in discharge mode for the whole expensive period, so the house could end up on the grid once the battery reached the minimum. Discharging now stops at the minimum again, so the house runs from the battery on your own timer, and isn't started again in the same expensive period. Charging still holds the target for the whole cheap period. Found by pay4property. (#36)
+
 ## [1.9.17] - 2026-10-18
 
 ### Fixed

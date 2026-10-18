@@ -100,6 +100,9 @@ class TariffChargingManager:
         self._enabled = False  # user must explicitly enable via switch
         self._charging_active = False
         self._discharging_active = False
+        # Discharged down to the minimum during the current expensive period:
+        # not started again until that period ends.
+        self._discharged_to_min = False
         # Last current written while each mode is active, so a changed
         # setting is applied mid-mode rather than only on the next entry.
         self._applied_charge_current: int | None = None
@@ -443,12 +446,18 @@ class TariffChargingManager:
         if self._expensive_threshold is None or self._peak_discharge_current is None:
             return
 
-        # Likewise for the whole expensive period (#36).
+        # Unlike charging, discharging stops at the minimum SOC, so the house
+        # can run from the battery on the user's own timer for the rest of the
+        # expensive period. It isn't started again in the same period, so a
+        # little solar can't make it bounce at the minimum (#36).
         expensive_now = in_schedule and price >= self._expensive_threshold
-        if self._discharging_active:
-            should_discharge = expensive_now
-        else:
-            should_discharge = expensive_now and soc > self._discharge_min_soc
+        if not expensive_now:
+            self._discharged_to_min = False
+        should_discharge = (
+            expensive_now
+            and soc > self._discharge_min_soc
+            and not self._discharged_to_min
+        )
 
         if should_discharge and not self._discharging_active:
             _LOGGER.info(
@@ -482,6 +491,12 @@ class TariffChargingManager:
         elif not should_discharge and self._discharging_active:
             if not in_schedule:
                 reason = "outside active schedule"
+            elif expensive_now:
+                reason = (
+                    f"battery {soc:.0f}% reached the minimum "
+                    f"{self._discharge_min_soc}%"
+                )
+                self._discharged_to_min = True
             else:
                 reason = f"price {price:.4f} < threshold {self._expensive_threshold}"
             _LOGGER.info("Tariff discharging OFF [%s] — %s", serial, reason)
