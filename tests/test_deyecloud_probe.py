@@ -82,3 +82,28 @@ def test_a_refused_login_stops_the_probe():
     with patch("scripts.deyecloud_probe.post", return_value={"code": 2101017, "msg": "bad"}):
         with pytest.raises(SystemExit, match="Login failed: bad"):
             probe("us", "APP", "S", "solaruser", "pw", company_id="7")
+
+
+def test_an_unknown_app_id_says_which_data_centre_knows_it():
+    def fake_post(url, body, token=None):
+        if url.startswith("https://us1"):
+            return {"code": "2101019", "msg": "auth appSecret error"}
+        return {"code": "2101022", "msg": "auth appId not found"}
+
+    with patch("scripts.deyecloud_probe.post", side_effect=fake_post):
+        with pytest.raises(SystemExit) as err:
+            probe("eu", " 202310190001 ", "secret", "me@example.com", "pw")
+
+    assert "try --region us" in str(err.value)
+    assert "202...001 (12 characters)" in str(err.value)
+
+
+def test_an_app_id_no_data_centre_knows_is_reported():
+    with patch(
+        "scripts.deyecloud_probe.post",
+        return_value={"code": "2101022", "msg": "auth appId not found"},
+    ):
+        with pytest.raises(SystemExit) as err:
+            probe("eu", "202310190001", "secret", "me@example.com", "pw")
+
+    assert "not known in any data centre" in str(err.value)

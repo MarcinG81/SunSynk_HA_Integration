@@ -30,6 +30,7 @@ from typing import Any
 REGIONS = {
     "eu": "https://eu1-developer.deyecloud.com/v1.0",
     "us": "https://us1-developer.deyecloud.com/v1.0",
+    "india": "https://india-developer.deyecloud.com/v1.0",
 }
 _SUCCESS_CODES = {0, 1000000, 1106000}
 
@@ -86,6 +87,27 @@ def _ok(result: dict[str, Any]) -> bool:
         return result.get("success") is True
 
 
+def _app_id_hint(region: str, app_id: str) -> str:
+    """Which data centre knows this App ID, if not the one asked for."""
+    known = []
+    for other, base in REGIONS.items():
+        if other == region:
+            continue
+        try:
+            result = post(f"{base}/account/token?appId={app_id}", {"appSecret": ""})
+        except Exception:  # noqa: BLE001 - only a hint
+            continue
+        if "appid" not in str(result.get("msg", "")).lower():
+            known.append(other)
+    shown = f"{app_id[:3]}...{app_id[-3:]} ({len(app_id)} characters)"
+    if known:
+        return f"\nApp ID {shown} is known in region {', '.join(known)}: try --region {known[0]}"
+    return (
+        f"\nApp ID {shown} is not known in any data centre. Check it is the App ID"
+        " (not the App Secret or the app name), copied whole."
+    )
+
+
 def probe(
     region: str,
     app_id: str,
@@ -95,6 +117,7 @@ def probe(
     company_id: str | None = None,
     limit: int = 3,
 ) -> dict[str, Any]:
+    app_id, secret, login = app_id.strip(), secret.strip(), login.strip()
     base = REGIONS[region]
     body: dict[str, Any] = {
         "appSecret": secret,
@@ -106,7 +129,10 @@ def probe(
     login_result = post(f"{base}/account/token?appId={app_id}", body)
     token = str(login_result.get("accessToken") or "").split(" ", 1)[-1]
     if not _ok(login_result) or not token:
-        raise SystemExit(f"Login failed: {login_result.get('msg') or login_result}")
+        message = str(login_result.get("msg") or login_result)
+        if "appid" in message.lower():
+            message += _app_id_hint(region, app_id)
+        raise SystemExit(f"Login failed: {message}")
 
     def call(path: str, payload: dict[str, Any]) -> Any:
         try:
