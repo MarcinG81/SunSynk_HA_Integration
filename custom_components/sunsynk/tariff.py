@@ -386,7 +386,14 @@ class TariffChargingManager:
         if self._cheap_threshold is None or self._cheap_current is None:
             return
 
-        should_charge = in_schedule and price <= self._cheap_threshold and soc < self._target_soc
+        # Charge for the whole cheap period, as a slot on the inverter does.
+        # The target SOC only decides whether to start; stopping at it let the
+        # battery drop 1% and start charging again, over and over (#36).
+        cheap_now = in_schedule and price <= self._cheap_threshold
+        if self._charging_active:
+            should_charge = cheap_now
+        else:
+            should_charge = cheap_now and soc < self._target_soc
 
         if should_charge and not self._charging_active:
             _LOGGER.info(
@@ -416,10 +423,8 @@ class TariffChargingManager:
         elif not should_charge and self._charging_active:
             if not in_schedule:
                 reason = "outside active schedule"
-            elif price > self._cheap_threshold:
-                reason = f"price {price:.4f} > threshold {self._cheap_threshold}"
             else:
-                reason = f"SOC {soc:.0f}% reached target {self._target_soc}%"
+                reason = f"price {price:.4f} > threshold {self._cheap_threshold}"
             _LOGGER.info("Tariff charging OFF [%s] — %s", serial, reason)
             await self._coordinator.async_write_setting(
                 serial, "chargeCurrent", self._normal_charge_current
@@ -438,9 +443,12 @@ class TariffChargingManager:
         if self._expensive_threshold is None or self._peak_discharge_current is None:
             return
 
-        should_discharge = (
-            in_schedule and price >= self._expensive_threshold and soc > self._discharge_min_soc
-        )
+        # Likewise for the whole expensive period (#36).
+        expensive_now = in_schedule and price >= self._expensive_threshold
+        if self._discharging_active:
+            should_discharge = expensive_now
+        else:
+            should_discharge = expensive_now and soc > self._discharge_min_soc
 
         if should_discharge and not self._discharging_active:
             _LOGGER.info(
@@ -474,10 +482,8 @@ class TariffChargingManager:
         elif not should_discharge and self._discharging_active:
             if not in_schedule:
                 reason = "outside active schedule"
-            elif price < self._expensive_threshold:
-                reason = f"price {price:.4f} < threshold {self._expensive_threshold}"
             else:
-                reason = f"SOC {soc:.0f}% reached minimum {self._discharge_min_soc}%"
+                reason = f"price {price:.4f} < threshold {self._expensive_threshold}"
             _LOGGER.info("Tariff discharging OFF [%s] — %s", serial, reason)
             await self._coordinator.async_write_setting(
                 serial, "dischargeCurrent", self._normal_discharge_current

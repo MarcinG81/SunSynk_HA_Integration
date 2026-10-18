@@ -629,3 +629,50 @@ def test_non_finite_price_is_invalid(mock_hass, mock_coordinator, value):
 
     assert quality == QUALITY_INVALID
     assert mgr._read_price("sensor.electricity_price") is None
+
+
+# ── Charge and discharge for the whole price period (#36) ──────────────────
+
+
+@pytest.mark.asyncio
+async def test_charging_holds_at_the_target_until_the_cheap_period_ends(
+    mock_hass, mock_coordinator
+):
+    mgr = _make_manager(mock_hass, mock_coordinator, target_soc=100)
+
+    await mgr._evaluate_charging("TEST123", price=0.05, soc=80.0, in_schedule=True)
+    mock_coordinator.async_write_setting.reset_mock()
+    for soc in (100.0, 99.0, 100.0):
+        await mgr._evaluate_charging("TEST123", price=0.05, soc=soc, in_schedule=True)
+
+    assert mgr._charging_active is True
+    mock_coordinator.async_write_setting.assert_not_called()
+
+    await mgr._evaluate_charging("TEST123", price=0.25, soc=100.0, in_schedule=True)
+    assert mgr._charging_active is False
+
+
+@pytest.mark.asyncio
+async def test_discharging_holds_at_the_minimum_until_the_peak_ends(
+    mock_hass, mock_coordinator
+):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+
+    await mgr._evaluate_discharging("TEST123", price=0.40, soc=50.0, in_schedule=True)
+    for soc in (10.0, 11.0, 10.0):
+        await mgr._evaluate_discharging("TEST123", price=0.40, soc=soc, in_schedule=True)
+    assert mgr._discharging_active is True
+
+    await mgr._evaluate_discharging("TEST123", price=0.40, soc=10.0, in_schedule=False)
+    assert mgr._discharging_active is False
+
+
+@pytest.mark.asyncio
+async def test_neither_starts_at_its_soc_limit(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator, target_soc=90)
+
+    await mgr._evaluate_charging("TEST123", price=0.05, soc=90.0, in_schedule=True)
+    await mgr._evaluate_discharging("TEST123", price=0.40, soc=10.0, in_schedule=True)
+
+    assert mgr._charging_active is False
+    assert mgr._discharging_active is False

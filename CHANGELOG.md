@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.9.17] - 2026-10-18
+
+### Fixed
+- **Charging bounced between 100% and 99% until the cheap period ended.** Tariff Manager stopped charging as soon as the battery reached the target SOC, then started again 1% lower. It now stays in charge mode for the whole cheap period, as a slot on the inverter does; the target only decides whether to start. Discharging works the same way at the minimum SOC. Found by pay4property. (#36)
+
 ## [1.9.16] - 2026-10-18
 
 ### Added
