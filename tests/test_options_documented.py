@@ -22,8 +22,8 @@ COMPONENT = ROOT / "custom_components" / "sunsynk"
 LANGUAGES = sorted((COMPONENT / "translations").glob("*.json"))
 
 # Options that only exist from 2.0; the README must mark them "(2.0)".
+# "create_dashboard" is also in 1.9.x from 1.9.16 (#38).
 OPTIONS_NEW_IN_2_0 = {
-    "create_dashboard",
     "admin_only_control",
     "max_export_power",
     "price_stale_check",

@@ -157,11 +157,11 @@ Any inverter accessible through the Sunsynk cloud API, including:
 
 **Settings → Devices & Services → Sunsynk → Configure** lets you change everything above, plus the options below.
 
-> **This README describes 2.0, currently in beta.** Options marked *2.0* don't exist in the stable 1.9.x releases. On 1.9.x the dashboard is always created automatically, so there is no option for it.
+> **This README describes 2.0, currently in beta.** Options marked *2.0* don't exist in the stable 1.9.x releases.
 
 | Option | Description |
 |---|---|
-| **Create and maintain Sunsynk dashboard** *(2.0)* | Off by default. See [Dashboard](#dashboard) |
+| **Create and maintain Sunsynk dashboard** | Off by default on 2.0. On 1.9.x it's there from 1.9.16 and on by default, as 1.9 always created the dashboard. See [Dashboard](#dashboard) |
 | **Allow only administrators to use control actions** *(2.0)* | Off by default. When ticked, the `sunsynk.*` actions can only be run by HA administrators; automations and scripts are unaffected. It covers the actions, not the integration's number/switch/text entities |
 | **Solar Forecast** fields | See [Solar Forecast Setup](#solar-forecast-setup) |
 | **Tariff Manager** fields | See [Tariff Manager Setup](#tariff-manager-setup) |
