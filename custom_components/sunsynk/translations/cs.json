@@ -111,5 +111,17 @@
       "title": "Nastavení {setting_key} se na {serial} neprojevilo",
       "description": "Střídači **{serial}** bylo zadáno nastavit **{setting_key}** na `{expected}`, ale zpětné čtení hlásí `{actual}`. Střídač nebo dongle mohl hodnotu odmítnout — zkontrolujte ji přímo v aplikaci Sunsynk. Toto upozornění zmizí samo, jakmile bude zápis tohoto nastavení potvrzen."
     }
+  },
+  "entity": {
+    "select": {
+      "system_work_mode": {
+        "name": "Pracovní režim systému",
+        "state": {
+          "selling_first": "Prodej přednostně",
+          "zero_export_limit_to_load": "Nulový export + pouze zátěž",
+          "limited_to_home": "Omezeno na dům"
+        }
+      }
+    }
   }
 }

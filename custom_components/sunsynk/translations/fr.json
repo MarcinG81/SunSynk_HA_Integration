@@ -111,5 +111,17 @@
       "title": "Le paramètre {setting_key} n'a pas été appliqué sur {serial}",
       "description": "L'onduleur **{serial}** devait régler **{setting_key}** sur `{expected}`, mais la relecture indique `{actual}`. L'onduleur ou le dongle a peut-être refusé la valeur — vérifiez-la directement dans l'application Sunsynk. Ce message disparaîtra automatiquement dès qu'une écriture de ce paramètre sera confirmée."
     }
+  },
+  "entity": {
+    "select": {
+      "system_work_mode": {
+        "name": "Mode de fonctionnement du système",
+        "state": {
+          "selling_first": "Vente en priorité",
+          "zero_export_limit_to_load": "Injection zéro + charge uniquement",
+          "limited_to_home": "Limité à la maison"
+        }
+      }
+    }
   }
 }

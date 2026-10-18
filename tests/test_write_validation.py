@@ -24,7 +24,7 @@ from custom_components.sunsynk.write_validation import (
         ("dischargeCurrent", str(MAX_CURRENT_A), MAX_CURRENT_A),
         ("cap1", 100.0, 100),
         ("sellTime6Pac", MAX_POWER_W, MAX_POWER_W),
-        ("sysWorkMode", 4, 4),
+        ("sysWorkMode", 2, 2),
         ("time1on", "true", 1),
         ("sellTime1on", False, 0),
         ("sellTime1", "23:59", "23:59"),
@@ -44,7 +44,7 @@ def test_valid_values_are_normalized(key, value, expected):
         ("chargeCurrent", math.inf),
         ("cap1", 101),
         ("sellTime1Pac", MAX_POWER_W + 1),
-        ("sysWorkMode", 5),
+        ("sysWorkMode", 3),  # no mode 3 on Sunsynk / Deye
         ("time1on", 2),
         ("sellTime1", "24:00"),
         ("sellTime1", "8:00"),

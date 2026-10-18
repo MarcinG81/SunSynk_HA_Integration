@@ -170,11 +170,9 @@ clear_virtual_slot:
 set_work_mode:
   name: Set Work Mode
   description: >
-    Set the inverter system work mode.
-    0 = Selling First, 1 = Zero Export (Limit to Load), 2 = Limited to Home,
-    3 = Self Use, 4 = Time of Use. 0-2 confirmed against the Sunsynk portal
-    (2 confirmed on real hardware); 3-4 inferred from the same source, not
-    yet confirmed — see issue #14.
+    Set the inverter's System Work Mode:
+    0 = Selling First, 1 = Zero Export + Limit to Load Only,
+    2 = Limited to Home. The System Work Mode select entity does the same.
   fields:
     serial:
       name: Inverter Serial
@@ -184,10 +182,10 @@ set_work_mode:
         text:
     mode:
       name: Work Mode
-      description: System work mode (0–4).
+      description: 0 = Selling First, 1 = Zero Export + Limit to Load Only, 2 = Limited to Home.
       required: true
       selector:
         number:
           min: 0
-          max: 4
+          max: 2
           mode: box

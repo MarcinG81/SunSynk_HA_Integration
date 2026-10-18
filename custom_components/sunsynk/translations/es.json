@@ -111,5 +111,17 @@
       "title": "El ajuste {setting_key} no se aplicó en {serial}",
       "description": "Se indicó al inversor **{serial}** que estableciera **{setting_key}** en `{expected}`, pero al leerlo devuelve `{actual}`. Es posible que el inversor o el dongle hayan rechazado el valor; compruébelo directamente en la app de Sunsynk. Este aviso desaparecerá automáticamente cuando se confirme una escritura de este ajuste."
     }
+  },
+  "entity": {
+    "select": {
+      "system_work_mode": {
+        "name": "Modo de trabajo del sistema",
+        "state": {
+          "selling_first": "Venta primero",
+          "zero_export_limit_to_load": "Exportación cero + solo carga",
+          "limited_to_home": "Limitado al hogar"
+        }
+      }
+    }
   }
 }

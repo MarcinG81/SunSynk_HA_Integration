@@ -42,7 +42,7 @@ _POWER_KEYS = frozenset(
 )
 _ENUM_RANGES: dict[str, tuple[int, int]] = {
     "battMode": (0, 2),
-    "sysWorkMode": (0, 4),
+    "sysWorkMode": (0, 2),
     "energyMode": (0, 1),
 }
 _BOOLEAN_KEYS = frozenset(

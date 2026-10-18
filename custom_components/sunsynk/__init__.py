@@ -79,7 +79,13 @@ from .write_validation import MAX_CURRENT_A, MAX_POWER_W
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SWITCH, Platform.TEXT]
+PLATFORMS = [
+    Platform.SENSOR,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SWITCH,
+    Platform.TEXT,
+]
 
 SERVICE_FORCE_CHARGE = "force_charge"
 SERVICE_FORCE_DISCHARGE = "force_discharge"
@@ -98,7 +104,9 @@ _SERVICE_SERIAL_CURRENT_SCHEMA = vol.Schema(
 _SERVICE_SET_WORK_MODE_SCHEMA = vol.Schema(
     {
         vol.Required("serial"): str,
-        vol.Required("mode"): vol.All(vol.Coerce(int), vol.Range(min=0, max=4)),
+        # 0 Selling First, 1 Zero Export + Limit to Load Only, 2 Limited to
+        # Home: the only modes Sunsynk / Deye inverters have.
+        vol.Required("mode"): vol.All(vol.Coerce(int), vol.Range(min=0, max=2)),
     }
 )
 # Sunsynk's portal UI only ever offers :00/:30 options; 1.9.1 assumed that

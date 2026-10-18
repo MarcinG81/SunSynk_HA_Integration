@@ -345,8 +345,15 @@ These appear under **Settings** entities on the device page.
 | Time Slot 1–6 Capacity | % | Target SOC per time slot |
 | Generator Start/On/Off Capacity | % | Generator automation thresholds |
 | Battery Mode | 0–2 | 0=Lithium, 1=Lead-acid, 2=Other |
-| System Work Mode | 0–4 | System operation mode |
 | Energy Mode | 0–1 | Energy priority mode |
+
+#### Selects
+
+| Entity | Options |
+|---|---|
+| System Work Mode | Selling First · Zero Export + Limit to Load Only · Limited to Home |
+
+The older *System Work Mode (number)* entity (0–2) is still there for existing automations, but is disabled on new installs.
 
 #### Switches (on/off)
 | Entity | Description |
@@ -411,7 +418,7 @@ Five services are available for use in automations and scripts (**Developer Tool
 |---|---|
 | `sunsynk.force_charge` | Set battery charge current from 0–300 A. Call again with your normal value to restore. Only changes the current — whether the battery charges from the grid still depends on the active timer slot. |
 | `sunsynk.force_discharge` | Set battery discharge current from 0–300 A. Only changes the current — exporting still needs a selling timer slot. |
-| `sunsynk.set_work_mode` | Set inverter work mode: 0 = Selling First, 1 = Zero Export (Limit to Load), 2 = Limited to Home, 3 = Self Use, 4 = Time of Use. |
+| `sunsynk.set_work_mode` | Set the System Work Mode: 0 = Selling First, 1 = Zero Export + Limit to Load Only, 2 = Limited to Home. The System Work Mode select does the same. |
 | `sunsynk.set_virtual_slot` | Define or replace one of 10 virtual charge/discharge slots for one inverter. A discharge slot's `sell_power` above the inverter's rated power or its share of Maximum export power is refused. |
 | `sunsynk.clear_virtual_slot` | Remove one virtual slot from one inverter. |
 

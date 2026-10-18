@@ -111,5 +111,17 @@
       "title": "Instelling {setting_key} is nie op {serial} toegepas nie",
       "description": "Omsetter **{serial}** is opdrag gegee om **{setting_key}** op `{expected}` te stel, maar dit lees terug as `{actual}`. Die omsetter of dongle het die waarde dalk verwerp — kontroleer dit direk in die Sunsynk-toep. Dit verdwyn outomaties sodra 'n skryf na hierdie instelling bevestig is."
     }
+  },
+  "entity": {
+    "select": {
+      "system_work_mode": {
+        "name": "Stelsel-werkmodus",
+        "state": {
+          "selling_first": "Verkoop eerste",
+          "zero_export_limit_to_load": "Nul-uitvoer + slegs las",
+          "limited_to_home": "Beperk tot huis"
+        }
+      }
+    }
   }
 }

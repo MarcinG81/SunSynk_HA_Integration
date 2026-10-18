@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased — 2.1]
+
+### Added
+- **System Work Mode as a select** with the three modes the Sunsynk portal offers: Selling First, Zero Export + Limit to Load Only, Limited to Home, translated into every language. It replaces the number entity, which is kept for existing automations but disabled on new installs.
+
+### Changed
+- **`sunsynk.set_work_mode` and the work mode number accept 0–2 only.** Modes 3 ("Self Use") and 4 ("Time of Use") were listed but don't exist on Sunsynk / Deye inverters.
+
 ## [2.0.0-beta.16] - 2026-10-17
 
 ### Fixed

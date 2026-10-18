@@ -104,6 +104,9 @@ def build_dashboard(
     def nm(key: str) -> str:
         return e(key, key, "number")
 
+    def sl(key: str, fallback: str) -> str:
+        return e(key, fallback, "select")
+
     def tx(key: str) -> str:
         return e(key, key, "text")
 
@@ -464,7 +467,7 @@ def build_dashboard(
                             sw("setting_grid_always_on"),
                             sw("setting_allow_remote_control"),
                             sw("setting_peak_and_valley"),
-                            nm("setting_sys_work_mode"),
+                            sl("setting_sys_work_mode_select", "system_work_mode"),
                             nm("setting_batt_mode"),
                             nm("setting_energy_mode"),
                             nm("setting_zero_export_power"),

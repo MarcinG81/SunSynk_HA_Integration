@@ -111,5 +111,17 @@
       "title": "Ustawienie {setting_key} nie zostało zastosowane na {serial}",
       "description": "Falownik **{serial}** dostał polecenie ustawienia **{setting_key}** na `{expected}`, ale odczyt zwraca `{actual}`. Falownik lub dongle mogły odrzucić tę wartość — sprawdź ją bezpośrednio w aplikacji Sunsynk. Ten komunikat zniknie sam, gdy zapis tego ustawienia zostanie potwierdzony."
     }
+  },
+  "entity": {
+    "select": {
+      "system_work_mode": {
+        "name": "Tryb pracy systemu",
+        "state": {
+          "selling_first": "Sprzedaż w pierwszej kolejności",
+          "zero_export_limit_to_load": "Zero eksportu + tylko do obciążenia",
+          "limited_to_home": "Ograniczenie do domu"
+        }
+      }
+    }
   }
 }

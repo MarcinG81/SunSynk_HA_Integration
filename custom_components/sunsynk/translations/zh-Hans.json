@@ -111,5 +111,17 @@
       "title": "设置 {setting_key} 未在 {serial} 上生效",
       "description": "已要求逆变器 **{serial}** 将 **{setting_key}** 设置为 `{expected}`，但读回的值为 `{actual}`。逆变器或通讯棒可能拒绝了该值——请直接在 Sunsynk App 中检查。一旦该设置的写入得到确认，此提示将自动消失。"
     }
+  },
+  "entity": {
+    "select": {
+      "system_work_mode": {
+        "name": "系统工作模式",
+        "state": {
+          "selling_first": "优先售电",
+          "zero_export_limit_to_load": "零上网 + 仅供负载",
+          "limited_to_home": "仅限家庭"
+        }
+      }
+    }
   }
 }

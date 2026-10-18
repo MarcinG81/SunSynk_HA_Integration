@@ -111,5 +111,17 @@
       "title": "Setting {setting_key} did not apply on {serial}",
       "description": "We told inverter **{serial}** to set **{setting_key}** to `{expected}`, but reading it back reports `{actual}`. The inverter or dongle may have rejected the value — check it directly in the Sunsynk app. This will clear automatically once a write to this setting is confirmed."
     }
+  },
+  "entity": {
+    "select": {
+      "system_work_mode": {
+        "name": "System Work Mode",
+        "state": {
+          "selling_first": "Selling First",
+          "zero_export_limit_to_load": "Zero Export + Limit to Load Only",
+          "limited_to_home": "Limited to Home"
+        }
+      }
+    }
   }
 }

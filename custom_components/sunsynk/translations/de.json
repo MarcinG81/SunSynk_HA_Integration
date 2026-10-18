@@ -111,5 +111,17 @@
       "title": "Einstellung {setting_key} wurde auf {serial} nicht übernommen",
       "description": "Wechselrichter **{serial}** sollte **{setting_key}** auf `{expected}` setzen, meldet beim Auslesen aber `{actual}`. Der Wechselrichter oder Dongle hat den Wert möglicherweise abgelehnt — prüfen Sie ihn direkt in der Sunsynk-App. Diese Meldung verschwindet automatisch, sobald ein Schreibvorgang für diese Einstellung bestätigt wird."
     }
+  },
+  "entity": {
+    "select": {
+      "system_work_mode": {
+        "name": "Systemarbeitsmodus",
+        "state": {
+          "selling_first": "Verkauf zuerst",
+          "zero_export_limit_to_load": "Nulleinspeisung + nur Last",
+          "limited_to_home": "Begrenzt auf Haus"
+        }
+      }
+    }
   }
 }

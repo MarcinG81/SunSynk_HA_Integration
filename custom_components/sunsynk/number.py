@@ -360,10 +360,13 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_sys_work_mode",
-        name="System Work Mode",
+        name="System Work Mode (number)",
         setting_key="sysWorkMode",
+        # Replaced by the System Work Mode select; kept so automations that
+        # use it keep working, but off on new installs.
+        entity_registry_enabled_default=False,
         native_min_value=0,
-        native_max_value=4,
+        native_max_value=2,
         native_step=1,
         entity_category=EntityCategory.CONFIG,
         mode=NumberMode.BOX,
