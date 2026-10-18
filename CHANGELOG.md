@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **A Tariff Manager discharge put the house on the grid once the battery reached the minimum SOC.** Since beta.17 Tariff Manager stayed in discharge mode for the whole expensive period, so the slot holding the minimum stayed in force and the inverter supplied the house from the grid until the period ended. Discharging now stops at the minimum again and your own timer is put back, which normally has a lower SOC, so the house runs from the battery. It isn't started again in the same expensive period, so a little solar can't make it bounce at the minimum. Charging still holds the target for the whole cheap period. Found by pay4property. (#36)
+
 ## [2.0.0-beta.17] - 2026-10-18
 
 ### Fixed

@@ -112,6 +112,9 @@ class TariffChargingManager:
         # remaining ones.
         self._charging_active_serials: set[str] = set()
         self._discharging_active_serials: set[str] = set()
+        # Discharged down to the minimum during the current expensive period:
+        # not started again until that period ends.
+        self._discharged_to_min_serials: set[str] = set()
         # The current last written while each mode is active, so a changed
         # setting is applied mid-mode rather than only on the next entry.
         self._applied_charge_current: dict[str, int] = {}
@@ -268,6 +271,7 @@ class TariffChargingManager:
     def _release(self, serial: str) -> None:
         self._charging_active_serials.discard(serial)
         self._discharging_active_serials.discard(serial)
+        self._discharged_to_min_serials.discard(serial)
         self._applied_charge_current.pop(serial, None)
         self._applied_discharge_current.pop(serial, None)
 
@@ -590,6 +594,11 @@ class TariffChargingManager:
                 f"export price {price:g} is below the expensive threshold "
                 f"{self._expensive_threshold:g}"
             )
+        if serial in self._discharged_to_min_serials:
+            return (
+                f"battery reached the minimum {self._discharge_min_soc}% in this "
+                "expensive period"
+            )
         if soc <= self._discharge_min_soc:
             return (
                 f"battery {soc:.0f}% is not above the minimum "
@@ -682,13 +691,20 @@ class TariffChargingManager:
         if self._expensive_threshold is None or self._peak_discharge_current is None:
             return
 
-        # Likewise for the whole expensive period: the slot's own SOC stops
-        # the inverter at the minimum, without bouncing just above it (#36).
+        # Unlike charging, discharging stops at the minimum SOC: holding the
+        # slot there would put the house on the grid for the rest of the
+        # expensive period. Stopping hands the battery back to the user's own
+        # timer, which normally has a lower SOC, so the house runs from the
+        # battery as planned. It isn't started again in the same expensive
+        # period, so a little solar can't make it bounce at the minimum (#36).
         expensive_now = in_schedule and price >= self._expensive_threshold
-        if serial in self._discharging_active_serials:
-            should_discharge = expensive_now
-        else:
-            should_discharge = expensive_now and soc > self._discharge_min_soc
+        if not expensive_now:
+            self._discharged_to_min_serials.discard(serial)
+        should_discharge = (
+            expensive_now
+            and soc > self._discharge_min_soc
+            and serial not in self._discharged_to_min_serials
+        )
 
         if (
             should_discharge
@@ -737,6 +753,12 @@ class TariffChargingManager:
         elif not should_discharge and serial in self._discharging_active_serials:
             if not in_schedule:
                 reason = "outside active schedule"
+            elif expensive_now:
+                reason = (
+                    f"battery {soc:.0f}% reached the minimum "
+                    f"{self._discharge_min_soc}%"
+                )
+                self._discharged_to_min_serials.add(serial)
             else:
                 reason = f"price {price:.4f} < threshold {self._expensive_threshold}"
             await self._stop_discharging(serial, reason)
