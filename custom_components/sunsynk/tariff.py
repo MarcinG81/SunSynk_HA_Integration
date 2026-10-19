@@ -404,6 +404,16 @@ class TariffChargingManager:
     def _on_coordinator_update(self) -> None:
         self._hass.async_create_task(self._evaluate())
 
+    @property
+    def is_busy(self) -> bool:
+        """Whether an evaluation or restore is under way.
+
+        Its mode can be part-way through a change then, e.g. idle between
+        stopping a charge and starting a discharge. Listeners are notified
+        once it has finished.
+        """
+        return self._evaluate_lock.locked()
+
     # ── Core evaluation ────────────────────────────────────────────────────
 
     async def _evaluate(self) -> None:

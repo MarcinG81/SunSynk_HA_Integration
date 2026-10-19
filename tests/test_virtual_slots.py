@@ -107,6 +107,8 @@ def _make_scheduler(
     normal_charge_current=None,
     normal_discharge_current=None,
 ) -> VirtualSlotScheduler:
+    if tariff_manager is not None:
+        tariff_manager.is_busy = False
     scheduler = VirtualSlotScheduler(
         hass=mock_hass,
         coordinator=mock_coordinator,

@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **A Tariff Manager discharge put the house on the grid once the battery reached the minimum SOC.** Since beta.17 Tariff Manager stayed in discharge mode for the whole expensive period, so the slot holding the minimum stayed in force and the inverter supplied the house from the grid until the period ended. Discharging now stops at the minimum again and your own timer is put back, which normally has a lower SOC, so the house runs from the battery. It isn't started again in the same expensive period, so a little solar can't make it bounce at the minimum. Charging still holds the target for the whole cheap period. Found by pay4property. (#36)
+- **A discharge straight after a charge could export nothing.** When the cheap period ended and the export price was already above the threshold, Tariff Manager went from charging to idle to discharging in the same second. The Virtual Slot Scheduler acted on the idle in between: it put your own timer back and took the slots over again straight after, and the two writes crossed, so the discharge slots had the right power and SOC but no Sell ticked. The scheduler now waits until Tariff Manager has finished deciding. (#36)
+- **A slot the inverter didn't take stayed wrong until the window changed.** The scheduler only remembered what it had written, so a lost write was never noticed. It now also checks what the inverter reports once a write is confirmed, and writes a slot again if it differs, at most three times for the same window, with a warning in the log if the inverter still refuses it. (#36)
 
 ## [2.0.0-beta.17] - 2026-10-18
 
