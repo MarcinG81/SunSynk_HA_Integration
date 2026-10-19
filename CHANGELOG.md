@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0-beta.18] - 2026-10-19
 
 ### Fixed
 - **After a discharge, Sell could stay ticked and the inverter kept exporting at full power.** When a Tariff Manager discharge ended, the write putting your own timer back could be lost, like the morning one above: the discharge slots stayed, Sell ticked, and the inverter exported over 20 kW until it was noticed. Worse, while standing by the Virtual Slot Scheduler takes what the inverter reports as your timer, so it could have kept the discharge slots as yours. Every write is now checked: one the inverter still hasn't applied after a minute, while it still reports the value from before, is sent again, up to three times, and only then reported under Repairs. A value changed elsewhere, e.g. in the Sunsynk app, is left alone. The scheduler also checks that the inverter really reports your timer once it has put it back, never takes its own slots for yours (also after a restart), and shows a notification if your timer can't be put back. Found by pay4property. (#36)
