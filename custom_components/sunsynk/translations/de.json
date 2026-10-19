@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "An welche Cloud melden Ihre Wechselrichter?",
+        "description": "Sunsynk Connect / Inteless für Wechselrichter in einem Sunsynk- oder Inteless-Konto; Deye Cloud für Deye-Wechselrichter mit SOLARMAN- / LSW-Logger.",
+        "menu_options": {
+          "sunsynk": "Sunsynk Connect / Inteless",
+          "deyecloud": "Deye Cloud"
+        }
+      },
+      "sunsynk": {
         "title": "Sunsynk / Deye Wechselrichter einrichten",
         "description": "Verbindung mit der Sunsynk Cloud-API herstellen. Mehrere Seriennummern mit Semikolon trennen.",
         "data": {
@@ -15,12 +23,41 @@
           "serials": "Für mehrere Wechselrichter: SN123456;SN789012",
           "refresh_interval": "Wie oft die Sunsynk-API abgefragt wird (mindestens 60 Sekunden)"
         }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud",
+        "description": "Erstellen Sie eine kostenlose Entwickler-App auf developer.deyecloud.com (mit Ihrem Deye-Cloud-Konto anmelden) und kopieren Sie App ID und App Secret. Deye-Cloud-Wechselrichter sind vorerst nur lesbar: nur Sensoren, keine Steuerung.",
+        "data": {
+          "region": "Rechenzentrum",
+          "app_id": "App ID",
+          "app_secret": "App Secret",
+          "login": "Deye-Cloud-E-Mail oder Benutzername",
+          "password": "Deye-Cloud-Passwort",
+          "company_id": "Firmen-ID (nur Firmenkonten)",
+          "refresh_interval": "Aktualisierungsintervall (Sekunden)"
+        },
+        "data_description": {
+          "region": "Das Rechenzentrum Ihrer Entwickler-App: EMEA / APAC ist eu",
+          "login": "Wird die E-Mail abgelehnt, den Benutzernamen aus den Deye-Cloud-Kontoeinstellungen verwenden",
+          "company_id": "Für ein privates Konto leer lassen",
+          "refresh_interval": "Deye-Logger senden etwa alle 5 Minuten, daher ist 300 ein guter Wert"
+        }
+      },
+      "deyecloud_inverters": {
+        "title": "Wechselrichter auswählen",
+        "description": "Wechselrichter in Ihrem Deye-Cloud-Konto.",
+        "data": {
+          "serials": "Wechselrichter"
+        }
       }
     },
     "error": {
       "invalid_auth": "Ungültige Anmeldedaten. Bitte E-Mail und Passwort des Sunsynk-Kontos prüfen.",
       "cannot_connect": "Verbindung zur Sunsynk-API nicht möglich. API-Server und Internetverbindung prüfen.",
-      "invalid_serials": "Ungültige Seriennummer(n). Mindestens eine Seriennummer eingeben."
+      "invalid_serials": "Ungültige Seriennummer(n). Mindestens eine Seriennummer eingeben.",
+      "invalid_auth_deyecloud": "Deye Cloud hat die Anmeldung abgelehnt. App ID, App Secret, Rechenzentrum, E-Mail bzw. Benutzername und Passwort prüfen.",
+      "cannot_connect_deyecloud": "Keine Verbindung zu Deye Cloud. Rechenzentrum und Internetverbindung prüfen.",
+      "no_inverters": "In diesem Deye-Cloud-Konto wurden keine Wechselrichter gefunden."
     },
     "abort": {
       "already_configured": "Dieses Sunsynk-Konto ist bereits konfiguriert."
@@ -83,6 +120,13 @@
           "price_stale_check": "Standardmäßig aus. Wenn aktiviert, stoppt der Tarif-Manager jedes aktive Laden oder Entladen, wenn der Bezugspreissensor länger als Maximales Alter der Preisdaten nichts gemeldet hat. Ausgeschaltet lassen, wenn Ihr Preis lange gleich bleibt oder von einem Helfer gesetzt wird.",
           "tariff_test_mode": "Wenn aktiviert, entscheidet der Tarif-Manager wie gewohnt und zeigt dies in Tariff Mode, seinen Benachrichtigungen und im Log, sendet aber nichts an den Wechselrichter, und der Virtual Slot Scheduler ignoriert ihn. So lassen sich die Einstellungen gefahrlos prüfen.",
           "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90."
+        }
+      },
+      "deyecloud": {
+        "title": "Deye-Cloud-Optionen",
+        "description": "Deye-Cloud-Wechselrichter sind vorerst nur lesbar, daher lässt sich nur das Aktualisierungsintervall ändern.",
+        "data": {
+          "refresh_interval": "Aktualisierungsintervall (Sekunden)"
         }
       }
     },

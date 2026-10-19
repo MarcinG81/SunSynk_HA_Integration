@@ -18,12 +18,20 @@ from .api.auth import SunsynkAuth, SunsynkAuthError
 from .const import (
     API_SERVER_SUNSYNK,
     API_SERVERS,
+    BACKEND_DEYECLOUD,
     CONF_ADMIN_ONLY_CONTROL,
     CONF_API_SERVER,
+    CONF_BACKEND,
     CONF_CHEAP_CHARGE_CURRENT,
     CONF_CHEAP_TARGET_SOC,
     CONF_CHEAP_THRESHOLD,
     CONF_CREATE_DASHBOARD,
+    CONF_DEYE_APP_ID,
+    CONF_DEYE_APP_SECRET,
+    CONF_DEYE_COMPANY_ID,
+    CONF_DEYE_LOGIN,
+    CONF_DEYE_PASSWORD_HASH,
+    CONF_DEYE_REGION,
     CONF_DISCHARGE_MIN_SOC,
     CONF_EXPENSIVE_THRESHOLD,
     CONF_EXPORT_PRICE_ENTITY,
@@ -49,11 +57,19 @@ from .const import (
     DEFAULT_PERFORMANCE_RATIO,
     DEFAULT_PRICE_MAX_AGE,
     DEFAULT_REFRESH_INTERVAL,
+    DEYE_REGIONS,
     DOMAIN,
     MAX_REFRESH_INTERVAL,
     MIN_REFRESH_INTERVAL,
+    is_deyecloud,
 )
 from .current_limits import current_limit, describe_limit, group_sizes
+from .deyecloud.client import (
+    DeyeCloudApiError,
+    DeyeCloudAuthError,
+    DeyeCloudClient,
+    hash_password,
+)
 from .write_validation import MAX_CURRENT_A, MAX_POWER_W
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,6 +88,48 @@ STEP_USER_SCHEMA = vol.Schema(
         ),
     }
 )
+
+
+_REFRESH_INTERVAL_FIELD = vol.All(
+    vol.Coerce(int),
+    vol.Range(min=MIN_REFRESH_INTERVAL, max=MAX_REFRESH_INTERVAL),
+)
+
+STEP_DEYECLOUD_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_DEYE_REGION, default="eu"): vol.In(list(DEYE_REGIONS)),
+        vol.Required(CONF_DEYE_APP_ID): str,
+        vol.Required(CONF_DEYE_APP_SECRET): str,
+        vol.Required(CONF_DEYE_LOGIN): str,
+        vol.Required(CONF_PASSWORD): str,
+        vol.Optional(CONF_DEYE_COMPANY_ID): str,
+        vol.Optional(
+            CONF_REFRESH_INTERVAL, default=DEFAULT_REFRESH_INTERVAL
+        ): _REFRESH_INTERVAL_FIELD,
+    }
+)
+
+
+async def _async_list_deyecloud_inverters(data: dict[str, Any]) -> list[dict]:
+    """Log in to Deye Cloud and list the account's inverters."""
+    async with aiohttp.ClientSession() as session:
+        client = DeyeCloudClient(
+            session,
+            data[CONF_DEYE_REGION],
+            data[CONF_DEYE_APP_ID],
+            data[CONF_DEYE_APP_SECRET],
+            data[CONF_DEYE_LOGIN],
+            data[CONF_DEYE_PASSWORD_HASH],
+            company_id=data.get(CONF_DEYE_COMPANY_ID),
+        )
+        return await client.async_list_inverters()
+
+
+def _inverter_label(inverter: dict[str, Any]) -> str:
+    parts = [str(inverter["deviceSn"])]
+    if inverter.get("stationName"):
+        parts.append(str(inverter["stationName"]))
+    return " — ".join(parts)
 
 
 async def _async_validate_credentials(
@@ -94,7 +152,22 @@ class SunsynkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        self._deyecloud: dict[str, Any] = {}
+        self._deyecloud_inverters: dict[str, str] = {}
+
     async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Choose the cloud the inverters report to."""
+        if user_input is not None:
+            # A Sunsynk form submitted to the first step, as before 2.1.
+            return await self.async_step_sunsynk(user_input)
+        return self.async_show_menu(
+            step_id="user", menu_options=["sunsynk", "deyecloud"]
+        )
+
+    async def async_step_sunsynk(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         errors: dict[str, str] = {}
@@ -136,13 +209,100 @@ class SunsynkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
 
         return self.async_show_form(
-            step_id="user",
+            step_id="sunsynk",
             data_schema=STEP_USER_SCHEMA,
             errors=errors,
             description_placeholders={
                 "api_sunsynk": API_SERVER_SUNSYNK,
                 "serial_hint": "Separate multiple serials with semicolons: SN1;SN2",
             },
+        )
+
+    async def async_step_deyecloud(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Deye Cloud: the user's developer app and Deye Cloud login."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = {
+                CONF_BACKEND: BACKEND_DEYECLOUD,
+                CONF_DEYE_REGION: user_input[CONF_DEYE_REGION],
+                # Pasted values often carry a stray space (#37).
+                CONF_DEYE_APP_ID: user_input[CONF_DEYE_APP_ID].strip(),
+                CONF_DEYE_APP_SECRET: user_input[CONF_DEYE_APP_SECRET].strip(),
+                CONF_DEYE_LOGIN: user_input[CONF_DEYE_LOGIN].strip(),
+                CONF_DEYE_PASSWORD_HASH: hash_password(user_input[CONF_PASSWORD]),
+                CONF_REFRESH_INTERVAL: user_input[CONF_REFRESH_INTERVAL],
+            }
+            company_id = (user_input.get(CONF_DEYE_COMPANY_ID) or "").strip()
+            if company_id:
+                data[CONF_DEYE_COMPANY_ID] = company_id
+            try:
+                inverters = await _async_list_deyecloud_inverters(data)
+            except DeyeCloudAuthError:
+                errors["base"] = "invalid_auth_deyecloud"
+            except DeyeCloudApiError:
+                errors["base"] = "cannot_connect_deyecloud"
+            except Exception:
+                _LOGGER.exception("Unexpected error during Deye Cloud setup")
+                errors["base"] = "cannot_connect_deyecloud"
+            else:
+                if not inverters:
+                    errors["base"] = "no_inverters"
+                else:
+                    await self.async_set_unique_id(
+                        f"{BACKEND_DEYECLOUD}_{data[CONF_DEYE_REGION]}_"
+                        f"{data[CONF_DEYE_LOGIN].lower()}"
+                    )
+                    self._abort_if_unique_id_configured()
+                    self._deyecloud = data
+                    self._deyecloud_inverters = {
+                        str(inverter["deviceSn"]): _inverter_label(inverter)
+                        for inverter in inverters
+                    }
+                    return await self.async_step_deyecloud_inverters()
+
+        return self.async_show_form(
+            step_id="deyecloud",
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_DEYECLOUD_SCHEMA,
+                {
+                    key: value
+                    for key, value in (user_input or {}).items()
+                    if key != CONF_PASSWORD
+                },
+            ),
+            errors=errors,
+        )
+
+    async def async_step_deyecloud_inverters(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Pick the inverters to add from those on the Deye Cloud account."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            serials = [
+                serial
+                for serial in self._deyecloud_inverters
+                if serial in user_input[CONF_SERIALS]
+            ]
+            if serials:
+                return self.async_create_entry(
+                    title=f"Deye Cloud ({', '.join(serials)})",
+                    data={**self._deyecloud, CONF_SERIALS: serials},
+                )
+            errors[CONF_SERIALS] = "invalid_serials"
+
+        return self.async_show_form(
+            step_id="deyecloud_inverters",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SERIALS, default=list(self._deyecloud_inverters)
+                    ): cv.multi_select(self._deyecloud_inverters),
+                }
+            ),
+            errors=errors,
         )
 
     @staticmethod
@@ -161,6 +321,8 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        if is_deyecloud(self._config_entry.data):
+            return await self.async_step_deyecloud(user_input)
         errors: dict[str, str] = {}
         placeholders: dict[str, str] = {}
         opts = self._config_entry.options
@@ -490,6 +652,35 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
             description_placeholders=placeholders,
+        )
+
+    async def async_step_deyecloud(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Deye Cloud entries are read-only for now: only how often to poll."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    **self._config_entry.options,
+                    CONF_REFRESH_INTERVAL: user_input[CONF_REFRESH_INTERVAL],
+                },
+            )
+        current = self._config_entry.options.get(
+            CONF_REFRESH_INTERVAL,
+            self._config_entry.data.get(
+                CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL
+            ),
+        )
+        return self.async_show_form(
+            step_id="deyecloud",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_REFRESH_INTERVAL, default=current
+                    ): _REFRESH_INTERVAL_FIELD,
+                }
+            ),
         )
 
     def _export_placeholders(self, saved_limit: Any) -> dict[str, str]:

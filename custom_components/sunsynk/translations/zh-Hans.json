@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "您的逆变器向哪个云平台上报数据？",
+        "description": "Sunsynk Connect / Inteless：适用于 Sunsynk 或 Inteless 账户中的逆变器；Deye Cloud：适用于使用 SOLARMAN / LSW 采集器的德业逆变器。",
+        "menu_options": {
+          "sunsynk": "Sunsynk Connect / Inteless",
+          "deyecloud": "Deye Cloud"
+        }
+      },
+      "sunsynk": {
         "title": "Sunsynk / Deye 逆变器设置",
         "description": "连接到 Sunsynk 云端 API。多个逆变器序列号请用分号分隔。",
         "data": {
@@ -15,12 +23,41 @@
           "serials": "多个逆变器示例：SN123456;SN789012",
           "refresh_interval": "轮询 Sunsynk API 的频率（最少 60 秒）"
         }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud",
+        "description": "在 developer.deyecloud.com 创建免费的开发者应用（使用您的 Deye Cloud 账户登录），并复制其 App ID 和 App Secret。Deye Cloud 逆变器目前仅支持读取：只有传感器，没有控制。",
+        "data": {
+          "region": "数据中心",
+          "app_id": "App ID",
+          "app_secret": "App Secret",
+          "login": "Deye Cloud 邮箱或用户名",
+          "password": "Deye Cloud 密码",
+          "company_id": "公司 ID（仅限企业账户）",
+          "refresh_interval": "刷新间隔（秒）"
+        },
+        "data_description": {
+          "region": "开发者应用上显示的数据中心：EMEA / APAC 对应 eu",
+          "login": "如果邮箱被拒绝，请使用 Deye Cloud 账户设置中的用户名",
+          "company_id": "个人账户请留空",
+          "refresh_interval": "德业采集器大约每 5 分钟上传一次数据，因此 300 是合适的值"
+        }
+      },
+      "deyecloud_inverters": {
+        "title": "选择逆变器",
+        "description": "您 Deye Cloud 账户中的逆变器。",
+        "data": {
+          "serials": "逆变器"
+        }
       }
     },
     "error": {
       "invalid_auth": "凭据无效，请检查 Sunsynk 邮箱和密码。",
       "cannot_connect": "无法连接到 Sunsynk API，请检查 API 服务器和网络连接。",
-      "invalid_serials": "序列号无效，请至少输入一个序列号。"
+      "invalid_serials": "序列号无效，请至少输入一个序列号。",
+      "invalid_auth_deyecloud": "Deye Cloud 拒绝登录。请检查 App ID、App Secret、数据中心、邮箱或用户名以及密码。",
+      "cannot_connect_deyecloud": "无法连接到 Deye Cloud。请检查数据中心和网络连接。",
+      "no_inverters": "此 Deye Cloud 账户中未找到逆变器。"
     },
     "abort": {
       "already_configured": "此 Sunsynk 账号已配置。"
@@ -83,6 +120,13 @@
           "price_stale_check": "默认关闭。开启后，如果购电电价传感器在超过“电价数据最大有效时长”的时间内没有上报，电价管理器将停止任何正在进行的充电或放电。如果您的电价长时间不变或由辅助实体设置，请保持关闭。",
           "tariff_test_mode": "开启后，电价管理器照常做出决策，并在 Tariff Mode、通知和日志中显示，但不会向逆变器发送任何内容，Virtual Slot Scheduler 也会忽略它。可用于安全地检查设置。",
           "price_max_age": "若电价传感器在此分钟数内未更新，将停止当前充/放电模式以确保安全，默认 90。"
+        }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud 选项",
+        "description": "Deye Cloud 逆变器目前仅支持读取，因此只能修改刷新间隔。",
+        "data": {
+          "refresh_interval": "刷新间隔（秒）"
         }
       }
     },

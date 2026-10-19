@@ -35,7 +35,10 @@ def _user_input(**updates):
 @pytest.mark.asyncio
 async def test_config_flow_all_user_outcomes():
     flow = SunsynkConfigFlow()
-    assert (await flow.async_step_user())["type"] == "form"
+    menu = await flow.async_step_user()
+    assert menu["type"] == "menu"
+    assert menu["menu_options"] == ["sunsynk", "deyecloud"]
+    assert (await flow.async_step_sunsynk())["step_id"] == "sunsynk"
     assert (await flow.async_step_user(_user_input(serials="  ")))["errors"]["serials"] == "invalid_serials"
 
     with patch(

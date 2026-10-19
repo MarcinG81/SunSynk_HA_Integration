@@ -348,3 +348,79 @@ async def test_price_age_check_applies_only_when_turned_on():
         assert await async_setup_entry(hass, entry) is True
 
     assert tariff_cls.call_args.kwargs["price_max_age_minutes"] == 45
+
+
+# ── Deye Cloud entries: sensors only, for now ──────────────────────────────
+
+
+def _deyecloud_entry(**data_updates) -> MagicMock:
+    entry = _entry(dashboard=True)
+    entry.data = {
+        "backend": "deyecloud",
+        "region": "eu",
+        "app_id": "app",
+        "app_secret": "secret",
+        "login": "me",
+        "password_hash": "hash",
+        "serials": ["2301"],
+        "refresh_interval": 300,
+        **data_updates,
+    }
+    entry.options = {
+        "price_entity": "sensor.import_price",
+        "create_dashboard": True,
+    }
+    return entry
+
+
+@pytest.mark.asyncio
+async def test_a_deyecloud_entry_gets_sensors_and_nothing_that_writes():
+    hass = _hass()
+    entry = _deyecloud_entry(company_id="42")
+    coordinator = MagicMock(serials=["2301"], write_target_serials=["2301"])
+    coordinator.async_config_entry_first_refresh = AsyncMock()
+    coordinator.async_close = AsyncMock()
+    store = MagicMock(async_load=AsyncMock(return_value={}), async_remove=AsyncMock())
+
+    with (
+        patch(
+            "custom_components.sunsynk.DeyeCloudCoordinator", return_value=coordinator
+        ) as made,
+        patch("custom_components.sunsynk.SunsynkCoordinator") as sunsynk,
+        patch("custom_components.sunsynk.TariffChargingManager") as tariff_cls,
+        patch("custom_components.sunsynk.VirtualSlotScheduler") as scheduler_cls,
+        patch("custom_components.sunsynk.Store", return_value=store),
+        patch("custom_components.sunsynk._async_enable_dashboard_frontend") as frontend,
+    ):
+        assert await async_setup_entry(hass, entry) is True
+        assert await async_unload_entry(hass, entry) is True
+
+    sunsynk.assert_not_called()
+    assert made.call_args.kwargs == {
+        "region": "eu",
+        "app_id": "app",
+        "app_secret": "secret",
+        "login": "me",
+        "password_hash": "hash",
+        "company_id": "42",
+        "serials": ["2301"],
+        "refresh_interval": 300,
+        "entry_id": "entry-1",
+    }
+    tariff_cls.assert_not_called()
+    scheduler_cls.assert_not_called()
+    frontend.assert_not_called()
+    platforms = hass.config_entries.async_forward_entry_setups.await_args.args[1]
+    assert [str(platform) for platform in platforms] == ["sensor"]
+    unloaded = hass.config_entries.async_unload_platforms.await_args.args[1]
+    assert unloaded == platforms
+    coordinator.async_close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_an_incomplete_deyecloud_entry_says_what_is_missing():
+    entry = _deyecloud_entry()
+    del entry.data["app_secret"]
+
+    with pytest.raises(ConfigEntryError, match="app_secret"):
+        await async_setup_entry(_hass(), entry)

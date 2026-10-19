@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "À quel cloud vos onduleurs envoient-ils leurs données ?",
+        "description": "Sunsynk Connect / Inteless pour les onduleurs d'un compte Sunsynk ou Inteless ; Deye Cloud pour les onduleurs Deye avec enregistreur SOLARMAN / LSW.",
+        "menu_options": {
+          "sunsynk": "Sunsynk Connect / Inteless",
+          "deyecloud": "Deye Cloud"
+        }
+      },
+      "sunsynk": {
         "title": "Configuration de l'onduleur Sunsynk / Deye",
         "description": "Connexion à l'API cloud Sunsynk. Séparez plusieurs numéros de série par des points-virgules.",
         "data": {
@@ -15,12 +23,41 @@
           "serials": "Pour plusieurs onduleurs : SN123456;SN789012",
           "refresh_interval": "Fréquence d'interrogation de l'API Sunsynk (minimum 60 secondes)"
         }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud",
+        "description": "Créez une application développeur gratuite sur developer.deyecloud.com (connectez-vous avec votre compte Deye Cloud) et copiez son App ID et son App Secret. Les onduleurs Deye Cloud sont pour l'instant en lecture seule : capteurs uniquement, sans commandes.",
+        "data": {
+          "region": "Centre de données",
+          "app_id": "App ID",
+          "app_secret": "App Secret",
+          "login": "E-mail ou nom d'utilisateur Deye Cloud",
+          "password": "Mot de passe Deye Cloud",
+          "company_id": "ID d'entreprise (comptes professionnels uniquement)",
+          "refresh_interval": "Intervalle d'actualisation (secondes)"
+        },
+        "data_description": {
+          "region": "Le centre de données indiqué sur votre application développeur : EMEA / APAC correspond à eu",
+          "login": "Si l'e-mail est refusé, utilisez le nom d'utilisateur défini dans les paramètres de votre compte Deye Cloud",
+          "company_id": "Laissez vide pour un compte personnel",
+          "refresh_interval": "Les enregistreurs Deye envoient des données environ toutes les 5 minutes, 300 est donc une bonne valeur"
+        }
+      },
+      "deyecloud_inverters": {
+        "title": "Choisissez les onduleurs",
+        "description": "Onduleurs de votre compte Deye Cloud.",
+        "data": {
+          "serials": "Onduleurs"
+        }
       }
     },
     "error": {
       "invalid_auth": "Identifiants invalides. Vérifiez l'adresse e-mail et le mot de passe Sunsynk.",
       "cannot_connect": "Impossible de se connecter à l'API Sunsynk. Vérifiez le serveur API et la connexion Internet.",
-      "invalid_serials": "Numéro(s) de série invalide(s). Entrez au moins un numéro de série."
+      "invalid_serials": "Numéro(s) de série invalide(s). Entrez au moins un numéro de série.",
+      "invalid_auth_deyecloud": "Deye Cloud a refusé la connexion. Vérifiez l'App ID, l'App Secret, le centre de données, l'e-mail ou le nom d'utilisateur et le mot de passe.",
+      "cannot_connect_deyecloud": "Impossible de se connecter à Deye Cloud. Vérifiez le centre de données et votre connexion internet.",
+      "no_inverters": "Aucun onduleur trouvé sur ce compte Deye Cloud."
     },
     "abort": {
       "already_configured": "Ce compte Sunsynk est déjà configuré."
@@ -83,6 +120,13 @@
           "price_stale_check": "Désactivé par défaut. Lorsqu'il est activé, le Gestionnaire de tarifs arrête toute charge ou décharge en cours si le capteur de prix d'achat n'a rien signalé depuis plus longtemps que Âge maximal des données de prix. Laissez-le désactivé si votre prix reste identique pendant de longues périodes ou est défini par une entrée d'aide.",
           "tariff_test_mode": "Activé, le Gestionnaire de tarifs décide comme d'habitude et l'affiche dans Tariff Mode, ses notifications et le journal, mais n'envoie rien à l'onduleur, et le Virtual Slot Scheduler l'ignore. Permet de vérifier vos réglages sans risque.",
           "price_max_age": "Si le capteur de prix ne s'est pas mis à jour dans ce délai (minutes), le mode actif est arrêté par mesure de sécurité. Défaut 90."
+        }
+      },
+      "deyecloud": {
+        "title": "Options Deye Cloud",
+        "description": "Les onduleurs Deye Cloud sont pour l'instant en lecture seule : seul l'intervalle d'actualisation peut être modifié.",
+        "data": {
+          "refresh_interval": "Intervalle d'actualisation (secondes)"
         }
       }
     },

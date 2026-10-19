@@ -34,6 +34,12 @@ from .const import (
     CONF_CHEAP_TARGET_SOC,
     CONF_CHEAP_THRESHOLD,
     CONF_CREATE_DASHBOARD,
+    CONF_DEYE_APP_ID,
+    CONF_DEYE_APP_SECRET,
+    CONF_DEYE_COMPANY_ID,
+    CONF_DEYE_LOGIN,
+    CONF_DEYE_PASSWORD_HASH,
+    CONF_DEYE_REGION,
     CONF_DISCHARGE_MIN_SOC,
     CONF_EXPENSIVE_THRESHOLD,
     CONF_EXPORT_PRICE_ENTITY,
@@ -60,10 +66,12 @@ from .const import (
     DEFAULT_PRICE_MAX_AGE,
     DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
+    is_deyecloud,
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
 from .current_limits import current_limit, describe_limit, group_sizes
 from .dashboard import build_dashboard
+from .deyecloud.coordinator import DeyeCloudCoordinator
 from .helpers import options_snapshot_key
 from .tariff import TariffChargingManager
 from .virtual_slots import (
@@ -86,6 +94,24 @@ PLATFORMS = [
     Platform.SWITCH,
     Platform.TEXT,
 ]
+
+# Deye Cloud entries are read-only for now (writes not tested on a real
+# inverter yet), so they get sensors only: no controls, Tariff Manager or
+# Virtual Slot Scheduler.
+READ_ONLY_PLATFORMS = [Platform.SENSOR]
+
+_DEYECLOUD_KEYS = (
+    CONF_DEYE_REGION,
+    CONF_DEYE_APP_ID,
+    CONF_DEYE_APP_SECRET,
+    CONF_DEYE_LOGIN,
+    CONF_DEYE_PASSWORD_HASH,
+)
+
+
+def _platforms(entry: ConfigEntry) -> list[Platform]:
+    return READ_ONLY_PLATFORMS if is_deyecloud(entry.data) else PLATFORMS
+
 
 SERVICE_FORCE_CHARGE = "force_charge"
 SERVICE_FORCE_DISCHARGE = "force_discharge"
@@ -565,9 +591,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_SERIALS, entry.data.get(CONF_SERIALS, [])
     )
 
+    deyecloud = is_deyecloud(entry.data)
     missing = [
         key
-        for key in (CONF_API_SERVER, CONF_USERNAME, CONF_PASSWORD)
+        for key in (
+            _DEYECLOUD_KEYS
+            if deyecloud
+            else (CONF_API_SERVER, CONF_USERNAME, CONF_PASSWORD)
+        )
         if key not in entry.data
     ]
     if missing:
@@ -581,19 +612,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "integration again."
         )
 
-    auth = SunsynkAuth(
-        api_server=entry.data[CONF_API_SERVER],
-        username=entry.data[CONF_USERNAME],
-        password=entry.data[CONF_PASSWORD],
-    )
-
-    coordinator = SunsynkCoordinator(
-        hass,
-        auth=auth,
-        serials=serials,
-        refresh_interval=refresh_interval,
-        entry_id=entry.entry_id,
-    )
+    coordinator: SunsynkCoordinator
+    if deyecloud:
+        coordinator = DeyeCloudCoordinator(
+            hass,
+            region=entry.data[CONF_DEYE_REGION],
+            app_id=entry.data[CONF_DEYE_APP_ID],
+            app_secret=entry.data[CONF_DEYE_APP_SECRET],
+            login=entry.data[CONF_DEYE_LOGIN],
+            password_hash=entry.data[CONF_DEYE_PASSWORD_HASH],
+            company_id=entry.data.get(CONF_DEYE_COMPANY_ID),
+            serials=serials,
+            refresh_interval=refresh_interval,
+            entry_id=entry.entry_id,
+        )
+    else:
+        auth = SunsynkAuth(
+            api_server=entry.data[CONF_API_SERVER],
+            username=entry.data[CONF_USERNAME],
+            password=entry.data[CONF_PASSWORD],
+        )
+        coordinator = SunsynkCoordinator(
+            hass,
+            auth=auth,
+            serials=serials,
+            refresh_interval=refresh_interval,
+            entry_id=entry.entry_id,
+        )
 
     await coordinator.async_config_entry_first_refresh()
 
@@ -654,7 +699,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     def _opt(key: str, default: Any = None) -> Any:
         return entry.options.get(key, entry.data.get(key, default))
 
-    if price_entity:
+    if price_entity and not deyecloud:
         tariff_manager = TariffChargingManager(
             hass=hass,
             coordinator=coordinator,
@@ -688,7 +733,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     legacy_data = await legacy_store.async_load() or {}
     legacy_slots = legacy_data.get("slots")
     vslot_schedulers: dict[str, VirtualSlotScheduler] = {}
-    for target_serial in coordinator.write_target_serials:
+    for target_serial in [] if deyecloud else coordinator.write_target_serials:
         scheduler = VirtualSlotScheduler(
             hass=hass,
             coordinator=coordinator,
@@ -736,7 +781,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(coordinator.async_add_listener(_async_check_write_targets))
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, _platforms(entry))
 
     # Start tariff manager after platforms are set up (switch/sensor already registered)
     tariff_manager = hass.data[DOMAIN].get(f"{entry.entry_id}_tariff")
@@ -749,7 +794,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if scheduler.wanted_enabled:
             scheduler.set_enabled(True)
 
-    if _dashboard_enabled(entry):
+    if _dashboard_enabled(entry) and not deyecloud:
         await _async_enable_dashboard_frontend(hass)
         hass.async_create_task(_async_setup_dashboard(hass, entry, coordinator))
 
@@ -801,7 +846,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     for scheduler in vslot_schedulers.values():
         scheduler.stop()
 
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry, _platforms(entry)
+    )
     if not unload_ok:
         if tariff_manager is not None:
             tariff_manager.start()

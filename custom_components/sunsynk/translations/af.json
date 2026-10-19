@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "Na watter wolk rapporteer jou omsetters?",
+        "description": "Sunsynk Connect / Inteless vir omsetters op 'n Sunsynk- of Inteless-rekening; Deye Cloud vir Deye-omsetters met 'n SOLARMAN- / LSW-logger.",
+        "menu_options": {
+          "sunsynk": "Sunsynk Connect / Inteless",
+          "deyecloud": "Deye Cloud"
+        }
+      },
+      "sunsynk": {
         "title": "Sunsynk / Deye Omvormer Opstelling",
         "description": "Koppel aan die Sunsynk wolkdiens-API. Skei verskeie reeksnommers met kommapunte.",
         "data": {
@@ -15,12 +23,41 @@
           "serials": "Vir verskeie omvormers: SN123456;SN789012",
           "refresh_interval": "Hoe gereeld die Sunsynk-API gepoleer word (minimum 60 sekondes)"
         }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud",
+        "description": "Skep 'n gratis ontwikkelaar-toepassing by developer.deyecloud.com (meld aan met jou Deye Cloud-rekening) en kopieer sy App ID en App Secret. Deye Cloud-omsetters is vir eers slegs leesbaar: net sensors, geen beheer nie.",
+        "data": {
+          "region": "Datasentrum",
+          "app_id": "App ID",
+          "app_secret": "App Secret",
+          "login": "Deye Cloud-e-pos of gebruikersnaam",
+          "password": "Deye Cloud-wagwoord",
+          "company_id": "Maatskappy-ID (slegs besigheidsrekeninge)",
+          "refresh_interval": "Herlaai-interval (sekondes)"
+        },
+        "data_description": {
+          "region": "Die datasentrum wat op jou ontwikkelaar-toepassing gewys word: EMEA / APAC is eu",
+          "login": "As die e-pos geweier word, gebruik die gebruikersnaam uit jou Deye Cloud-rekeninginstellings",
+          "company_id": "Laat leeg vir 'n persoonlike rekening",
+          "refresh_interval": "Deye-loggers stuur omtrent elke 5 minute data, so 300 is 'n goeie waarde"
+        }
+      },
+      "deyecloud_inverters": {
+        "title": "Kies omsetters",
+        "description": "Omsetters op jou Deye Cloud-rekening.",
+        "data": {
+          "serials": "Omsetters"
+        }
       }
     },
     "error": {
       "invalid_auth": "Ongeldige aanmeldbesonderhede. Kontroleer u Sunsynk e-posadres en wagwoord.",
       "cannot_connect": "Kan nie aan die Sunsynk-API koppel nie. Kontroleer die API-bediener en internetverbinding.",
-      "invalid_serials": "Ongeldige reeksnommer(s). Voer ten minste een reeksnommer in."
+      "invalid_serials": "Ongeldige reeksnommer(s). Voer ten minste een reeksnommer in.",
+      "invalid_auth_deyecloud": "Deye Cloud het die aanmelding geweier. Kontroleer die App ID, App Secret, datasentrum, e-pos of gebruikersnaam en wagwoord.",
+      "cannot_connect_deyecloud": "Kan nie aan Deye Cloud koppel nie. Kontroleer die datasentrum en jou internetverbinding.",
+      "no_inverters": "Geen omsetters op hierdie Deye Cloud-rekening gevind nie."
     },
     "abort": {
       "already_configured": "Hierdie Sunsynk-rekening is reeds opgestel."
@@ -83,6 +120,13 @@
           "price_stale_check": "By verstek af. Wanneer aan, stop die Tariefbestuurder enige aktiewe laai of ontlaai as die invoerprys-sensor langer as Maksimum ouderdom van prysdata nie gerapporteer het nie. Laat dit af as jou prys vir lang tydperke dieselfde bly of deur 'n helper gestel word.",
           "tariff_test_mode": "Wanneer aan, besluit die Tariefbestuurder soos gewoonlik en wys dit in Tariff Mode, sy kennisgewings en die log, maar stuur niks na die omsetter nie, en die Virtual Slot Scheduler ignoreer dit. Gebruik dit om jou instellings veilig te toets.",
           "price_max_age": "As die pryssensor nie binne hierdie aantal minute opgedateer het nie, word die aktiewe modus as veiligheidsmaatreel gestop. Verstek 90."
+        }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud-opsies",
+        "description": "Deye Cloud-omsetters is vir eers slegs leesbaar, so net die herlaai-interval kan verander word.",
+        "data": {
+          "refresh_interval": "Herlaai-interval (sekondes)"
         }
       }
     },

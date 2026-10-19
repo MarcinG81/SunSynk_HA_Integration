@@ -37,6 +37,26 @@ CONF_ADMIN_ONLY_CONTROL: Final = "admin_only_control"
 # parallel group shares it between its inverters. Blank = no limit set here.
 CONF_MAX_EXPORT_POWER: Final = "max_export_power"
 
+# Which cloud an entry reads from. Entries made before 2.1 have no backend
+# and are Sunsynk Connect / Inteless.
+CONF_BACKEND: Final = "backend"
+BACKEND_DEYECLOUD: Final = "deyecloud"
+# Deye Cloud (DeyeCloud OpenAPI): the user's own developer app and login.
+# Only the SHA-256 of the password is stored; Deye Cloud takes nothing else.
+CONF_DEYE_REGION: Final = "region"
+CONF_DEYE_APP_ID: Final = "app_id"
+CONF_DEYE_APP_SECRET: Final = "app_secret"
+CONF_DEYE_LOGIN: Final = "login"
+CONF_DEYE_PASSWORD_HASH: Final = "password_hash"
+CONF_DEYE_COMPANY_ID: Final = "company_id"
+DEYE_REGIONS: Final = ("eu", "us", "india")
+
+
+def is_deyecloud(data: Any) -> bool:
+    """Whether a config entry's data is for Deye Cloud."""
+    return data.get(CONF_BACKEND) == BACKEND_DEYECLOUD
+
+
 API_SERVER_SUNSYNK: Final = "api.sunsynk.net"
 API_SERVER_INTELESS: Final = "pv.inteless.com"
 

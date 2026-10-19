@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "Which cloud do your inverters report to?",
+        "description": "Sunsynk Connect / Inteless for inverters on a Sunsynk or Inteless account; Deye Cloud for Deye inverters on a SOLARMAN / LSW logger.",
+        "menu_options": {
+          "sunsynk": "Sunsynk Connect / Inteless",
+          "deyecloud": "Deye Cloud"
+        }
+      },
+      "sunsynk": {
         "title": "Sunsynk / Deye Inverter Setup",
         "description": "Connect to the Sunsynk cloud API. Separate multiple inverter serial numbers with semicolons.",
         "data": {
@@ -15,12 +23,41 @@
           "serials": "For multiple inverters: SN123456;SN789012",
           "refresh_interval": "How often to poll the Sunsynk API (minimum 60 seconds)"
         }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud",
+        "description": "Create a free developer app at developer.deyecloud.com (sign in with your Deye Cloud account) and copy its App ID and App Secret. Deye Cloud inverters are read-only for now: sensors only, no controls.",
+        "data": {
+          "region": "Data centre",
+          "app_id": "App ID",
+          "app_secret": "App Secret",
+          "login": "Deye Cloud email or username",
+          "password": "Deye Cloud password",
+          "company_id": "Company ID (business accounts only)",
+          "refresh_interval": "Refresh Interval (seconds)"
+        },
+        "data_description": {
+          "region": "The data centre shown on your developer app: EMEA / APAC is eu",
+          "login": "If the email is refused, try the username set in your Deye Cloud account settings",
+          "company_id": "Leave empty for a personal account",
+          "refresh_interval": "Deye loggers upload about every 5 minutes, so 300 is a good value"
+        }
+      },
+      "deyecloud_inverters": {
+        "title": "Choose inverters",
+        "description": "Inverters on your Deye Cloud account.",
+        "data": {
+          "serials": "Inverters"
+        }
       }
     },
     "error": {
       "invalid_auth": "Invalid credentials. Check your Sunsynk email and password.",
       "cannot_connect": "Cannot connect to the Sunsynk API. Check API server and internet connection.",
-      "invalid_serials": "Invalid serial number(s). Enter at least one serial."
+      "invalid_serials": "Invalid serial number(s). Enter at least one serial.",
+      "invalid_auth_deyecloud": "Deye Cloud refused the login. Check the App ID, App Secret, data centre, email or username and password.",
+      "cannot_connect_deyecloud": "Cannot connect to Deye Cloud. Check the data centre and your internet connection.",
+      "no_inverters": "No inverters found on this Deye Cloud account."
     },
     "abort": {
       "already_configured": "This Sunsynk account is already configured."
@@ -83,6 +120,13 @@
           "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
           "tariff_test_mode": "When on, Tariff Manager decides as usual and shows it in Tariff Mode, its notifications and the log, but sends nothing to the inverter, and the Virtual Slot Scheduler ignores it. Use it to check your settings safely.",
           "price_max_age": "Only used when “Stop when price data looks out of date” is on. If the import price sensor hasn't reported within this many minutes, any active charge/discharge mode is stopped. A separate export price sensor is never age-checked. Default 90."
+        }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud options",
+        "description": "Deye Cloud inverters are read-only for now, so only the refresh interval can be changed.",
+        "data": {
+          "refresh_interval": "Refresh Interval (seconds)"
         }
       }
     },

@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "Do której chmury raportują Twoje falowniki?",
+        "description": "Sunsynk Connect / Inteless dla falowników na koncie Sunsynk lub Inteless; Deye Cloud dla falowników Deye z loggerem SOLARMAN / LSW.",
+        "menu_options": {
+          "sunsynk": "Sunsynk Connect / Inteless",
+          "deyecloud": "Deye Cloud"
+        }
+      },
+      "sunsynk": {
         "title": "Konfiguracja falownika Sunsynk / Deye",
         "description": "Połącz z chmurowym API Sunsynk. Oddziel numery seryjne kilku falowników średnikami.",
         "data": {
@@ -15,12 +23,41 @@
           "serials": "Dla kilku falowników: SN123456;SN789012",
           "refresh_interval": "Jak często odpytywać API Sunsynk (minimum 60 sekund)"
         }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud",
+        "description": "Utwórz darmową aplikację deweloperską na developer.deyecloud.com (zaloguj się kontem Deye Cloud) i skopiuj jej App ID oraz App Secret. Falowniki Deye Cloud są na razie tylko do odczytu: same czujniki, bez sterowania.",
+        "data": {
+          "region": "Centrum danych",
+          "app_id": "App ID",
+          "app_secret": "App Secret",
+          "login": "E-mail lub nazwa użytkownika Deye Cloud",
+          "password": "Hasło Deye Cloud",
+          "company_id": "ID firmy (tylko konta firmowe)",
+          "refresh_interval": "Interwał odświeżania (sekundy)"
+        },
+        "data_description": {
+          "region": "Centrum danych widoczne w aplikacji deweloperskiej: EMEA / APAC to eu",
+          "login": "Jeśli e-mail zostanie odrzucony, użyj nazwy użytkownika z ustawień konta Deye Cloud",
+          "company_id": "Zostaw puste dla konta prywatnego",
+          "refresh_interval": "Loggery Deye wysyłają dane mniej więcej co 5 minut, więc 300 to dobra wartość"
+        }
+      },
+      "deyecloud_inverters": {
+        "title": "Wybierz falowniki",
+        "description": "Falowniki na Twoim koncie Deye Cloud.",
+        "data": {
+          "serials": "Falowniki"
+        }
       }
     },
     "error": {
       "invalid_auth": "Nieprawidłowe dane logowania. Sprawdź adres e-mail i hasło konta Sunsynk.",
       "cannot_connect": "Nie można połączyć z API Sunsynk. Sprawdź serwer API i połączenie z internetem.",
-      "invalid_serials": "Nieprawidłowy numer(y) seryjny. Podaj co najmniej jeden numer."
+      "invalid_serials": "Nieprawidłowy numer(y) seryjny. Podaj co najmniej jeden numer.",
+      "invalid_auth_deyecloud": "Deye Cloud odrzucił logowanie. Sprawdź App ID, App Secret, centrum danych, e-mail lub nazwę użytkownika i hasło.",
+      "cannot_connect_deyecloud": "Nie można połączyć z Deye Cloud. Sprawdź centrum danych i połączenie z internetem.",
+      "no_inverters": "Na tym koncie Deye Cloud nie ma falowników."
     },
     "abort": {
       "already_configured": "To konto Sunsynk jest już skonfigurowane."
@@ -83,6 +120,13 @@
           "price_stale_check": "Domyślnie wyłączone. Po włączeniu Menedżer taryf zatrzymuje aktywne ładowanie lub rozładowanie, jeśli czujnik ceny zakupu nie zgłaszał danych dłużej niż Maksymalny wiek danych cenowych. Zostaw wyłączone, jeśli cena długo się nie zmienia albo ustawia ją pomocnik.",
           "tariff_test_mode": "Po włączeniu Menedżer taryf decyduje jak zwykle i pokazuje to w Tariff Mode, powiadomieniach i logu, ale niczego nie wysyła do falownika, a Virtual Slot Scheduler go pomija. Pozwala bezpiecznie sprawdzić ustawienia.",
           "price_max_age": "Jeśli czujnik ceny nie zaktualizował się w ciągu podanej liczby minut, aktywny tryb ładowania/rozładowania zostanie zatrzymany. Domyślnie 90."
+        }
+      },
+      "deyecloud": {
+        "title": "Opcje Deye Cloud",
+        "description": "Falowniki Deye Cloud są na razie tylko do odczytu, więc można zmienić tylko interwał odświeżania.",
+        "data": {
+          "refresh_interval": "Interwał odświeżania (sekundy)"
         }
       }
     },

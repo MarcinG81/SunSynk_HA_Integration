@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "Do kterého cloudu odesílají vaše střídače data?",
+        "description": "Sunsynk Connect / Inteless pro střídače na účtu Sunsynk nebo Inteless; Deye Cloud pro střídače Deye s loggerem SOLARMAN / LSW.",
+        "menu_options": {
+          "sunsynk": "Sunsynk Connect / Inteless",
+          "deyecloud": "Deye Cloud"
+        }
+      },
+      "sunsynk": {
         "title": "Nastavení měniče Sunsynk / Deye",
         "description": "Připojte se ke cloudovému API Sunsynk. Více sériových čísel oddělte středníky.",
         "data": {
@@ -15,12 +23,41 @@
           "serials": "Pro více měničů: SN123456;SN789012",
           "refresh_interval": "Jak často dotazovat API Sunsynk (minimum 60 sekund)"
         }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud",
+        "description": "Vytvořte si bezplatnou vývojářskou aplikaci na developer.deyecloud.com (přihlaste se účtem Deye Cloud) a zkopírujte její App ID a App Secret. Střídače Deye Cloud jsou zatím jen pro čtení: pouze senzory, bez ovládání.",
+        "data": {
+          "region": "Datové centrum",
+          "app_id": "App ID",
+          "app_secret": "App Secret",
+          "login": "E-mail nebo uživatelské jméno Deye Cloud",
+          "password": "Heslo Deye Cloud",
+          "company_id": "ID firmy (jen firemní účty)",
+          "refresh_interval": "Interval obnovení (sekundy)"
+        },
+        "data_description": {
+          "region": "Datové centrum uvedené u vaší vývojářské aplikace: EMEA / APAC je eu",
+          "login": "Pokud je e-mail odmítnut, použijte uživatelské jméno z nastavení účtu Deye Cloud",
+          "company_id": "U osobního účtu nechte prázdné",
+          "refresh_interval": "Loggery Deye odesílají data zhruba každých 5 minut, proto je 300 vhodná hodnota"
+        }
+      },
+      "deyecloud_inverters": {
+        "title": "Vyberte střídače",
+        "description": "Střídače na vašem účtu Deye Cloud.",
+        "data": {
+          "serials": "Střídače"
+        }
       }
     },
     "error": {
       "invalid_auth": "Neplatné přihlašovací údaje. Zkontrolujte e-mail a heslo účtu Sunsynk.",
       "cannot_connect": "Nelze se připojit k API Sunsynk. Zkontrolujte API server a připojení k internetu.",
-      "invalid_serials": "Neplatné sériové číslo/čísla. Zadejte alespoň jedno sériové číslo."
+      "invalid_serials": "Neplatné sériové číslo/čísla. Zadejte alespoň jedno sériové číslo.",
+      "invalid_auth_deyecloud": "Deye Cloud odmítl přihlášení. Zkontrolujte App ID, App Secret, datové centrum, e-mail nebo uživatelské jméno a heslo.",
+      "cannot_connect_deyecloud": "Nelze se připojit k Deye Cloud. Zkontrolujte datové centrum a připojení k internetu.",
+      "no_inverters": "Na tomto účtu Deye Cloud nebyly nalezeny žádné střídače."
     },
     "abort": {
       "already_configured": "Tento účet Sunsynk je již nakonfigurován."
@@ -83,6 +120,13 @@
           "price_stale_check": "Ve výchozím stavu vypnuto. Je-li zapnuto, Správce tarifů zastaví aktivní nabíjení nebo vybíjení, pokud senzor nákupní ceny nehlásil déle než Maximální stáří dat o ceně. Nechte vypnuté, pokud vaše cena zůstává dlouho stejná nebo ji nastavuje pomocník.",
           "tariff_test_mode": "Je-li zapnuto, Správce tarifů rozhoduje jako obvykle a ukazuje to v Tariff Mode, oznámeních a logu, ale nic neposílá do střídače a Virtual Slot Scheduler jej ignoruje. Slouží k bezpečnému ověření nastavení.",
           "price_max_age": "Pokud se senzor ceny neaktualizoval v průběhu tohoto počtu minut, aktivní režim se jako bezpečnostní opatření zastaví. Výchozí 90."
+        }
+      },
+      "deyecloud": {
+        "title": "Možnosti Deye Cloud",
+        "description": "Střídače Deye Cloud jsou zatím jen pro čtení, proto lze změnit pouze interval obnovení.",
+        "data": {
+          "refresh_interval": "Interval obnovení (sekundy)"
         }
       }
     },

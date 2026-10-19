@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "¿A qué nube informan sus inversores?",
+        "description": "Sunsynk Connect / Inteless para inversores en una cuenta Sunsynk o Inteless; Deye Cloud para inversores Deye con registrador SOLARMAN / LSW.",
+        "menu_options": {
+          "sunsynk": "Sunsynk Connect / Inteless",
+          "deyecloud": "Deye Cloud"
+        }
+      },
+      "sunsynk": {
         "title": "Configuración del inversor Sunsynk / Deye",
         "description": "Conectar a la API en la nube de Sunsynk. Separe varios números de serie con puntos y comas.",
         "data": {
@@ -15,12 +23,41 @@
           "serials": "Para varios inversores: SN123456;SN789012",
           "refresh_interval": "Frecuencia de consulta a la API Sunsynk (mínimo 60 segundos)"
         }
+      },
+      "deyecloud": {
+        "title": "Deye Cloud",
+        "description": "Cree una aplicación de desarrollador gratuita en developer.deyecloud.com (inicie sesión con su cuenta de Deye Cloud) y copie su App ID y App Secret. Por ahora los inversores de Deye Cloud son de solo lectura: solo sensores, sin controles.",
+        "data": {
+          "region": "Centro de datos",
+          "app_id": "App ID",
+          "app_secret": "App Secret",
+          "login": "Correo o nombre de usuario de Deye Cloud",
+          "password": "Contraseña de Deye Cloud",
+          "company_id": "ID de empresa (solo cuentas de empresa)",
+          "refresh_interval": "Intervalo de actualización (segundos)"
+        },
+        "data_description": {
+          "region": "El centro de datos que muestra su aplicación de desarrollador: EMEA / APAC es eu",
+          "login": "Si el correo es rechazado, use el nombre de usuario de la configuración de su cuenta de Deye Cloud",
+          "company_id": "Déjelo vacío para una cuenta personal",
+          "refresh_interval": "Los registradores Deye envían datos cada 5 minutos aproximadamente, así que 300 es un buen valor"
+        }
+      },
+      "deyecloud_inverters": {
+        "title": "Elija los inversores",
+        "description": "Inversores de su cuenta de Deye Cloud.",
+        "data": {
+          "serials": "Inversores"
+        }
       }
     },
     "error": {
       "invalid_auth": "Credenciales inválidas. Compruebe su correo electrónico y contraseña de Sunsynk.",
       "cannot_connect": "No se puede conectar a la API de Sunsynk. Compruebe el servidor API y la conexión a Internet.",
-      "invalid_serials": "Número(s) de serie inválido(s). Introduzca al menos un número de serie."
+      "invalid_serials": "Número(s) de serie inválido(s). Introduzca al menos un número de serie.",
+      "invalid_auth_deyecloud": "Deye Cloud rechazó el inicio de sesión. Compruebe App ID, App Secret, centro de datos, correo o nombre de usuario y contraseña.",
+      "cannot_connect_deyecloud": "No se puede conectar con Deye Cloud. Compruebe el centro de datos y su conexión a internet.",
+      "no_inverters": "No se encontraron inversores en esta cuenta de Deye Cloud."
     },
     "abort": {
       "already_configured": "Esta cuenta de Sunsynk ya está configurada."
@@ -83,6 +120,13 @@
           "price_stale_check": "Desactivado por defecto. Si está activado, el Gestor de tarifas detiene cualquier carga o descarga activa si el sensor de precio de importación no ha informado durante más tiempo que Antigüedad máxima de los datos de precio. Déjelo desactivado si su precio se mantiene igual durante largos periodos o lo fija un ayudante.",
           "tariff_test_mode": "Si está activado, el Gestor de tarifas decide como siempre y lo muestra en Tariff Mode, sus notificaciones y el registro, pero no envía nada al inversor, y el Virtual Slot Scheduler lo ignora. Sirve para comprobar sus ajustes sin riesgo.",
           "price_max_age": "Si el sensor de precio no se ha actualizado en este número de minutos, el modo activo se detiene como medida de seguridad. Por defecto 90."
+        }
+      },
+      "deyecloud": {
+        "title": "Opciones de Deye Cloud",
+        "description": "Por ahora los inversores de Deye Cloud son de solo lectura, así que solo se puede cambiar el intervalo de actualización.",
+        "data": {
+          "refresh_interval": "Intervalo de actualización (segundos)"
         }
       }
     },
