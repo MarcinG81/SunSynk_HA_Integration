@@ -1,6 +1,8 @@
 """Tests for diagnostics.py (custom_components/sunsynk/diagnostics.py)."""
 from __future__ import annotations
 
+import json
+
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -230,3 +232,28 @@ def test_real_api_payload_identifiers_are_redacted():
     text = str(redacted)
     for secret in ("E4701", "owner@", "0700", "Solar Ltd", "51.08", "-0.72", "Jane Doe", "installer@", "example.invalid"):
         assert secret not in text
+
+
+@pytest.mark.asyncio
+async def test_deyecloud_credentials_are_redacted(hass_with_entry):
+    """A diagnostics file is posted publicly: no App ID, secret or login."""
+    hass, entry, coordinator = hass_with_entry
+    entry.data = {
+        "backend": "deyecloud",
+        "region": "eu",
+        "app_id": "202310190001",
+        "app_secret": "s3cret",
+        "login": "ihor_84",
+        "password_hash": "ab" * 32,
+        "company_id": "42",
+        "serials": ["SN1"],
+    }
+    coordinator.data["SN1"]["inverter"]["alias"] = "ihor_84's inverter"
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+
+    text = json.dumps(result)
+    for secret in ("202310190001", "s3cret", "ihor_84", "ab" * 32, '"42"'):
+        assert secret not in text
+    assert result["entry_data"]["backend"] == "deyecloud"
+    assert result["entry_data"]["region"] == "eu"

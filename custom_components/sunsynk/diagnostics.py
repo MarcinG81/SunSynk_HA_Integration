@@ -10,6 +10,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_DEYE_APP_ID,
+    CONF_DEYE_APP_SECRET,
+    CONF_DEYE_COMPANY_ID,
+    CONF_DEYE_LOGIN,
+    CONF_DEYE_PASSWORD_HASH,
     CONF_EXPORT_PRICE_ENTITY,
     CONF_LATITUDE,
     CONF_LONGITUDE,
@@ -49,6 +54,12 @@ _TO_REDACT = {
     "principal",
     "thumbUrl",
     "custCode",
+    # Deye Cloud entries: the developer app, the login and its password hash.
+    CONF_DEYE_APP_ID,
+    CONF_DEYE_APP_SECRET,
+    CONF_DEYE_LOGIN,
+    CONF_DEYE_PASSWORD_HASH,
+    CONF_DEYE_COMPANY_ID,
 }
 
 
@@ -110,8 +121,10 @@ async def async_get_config_entry_diagnostics(
         str(serial): f"inverter_{index}"
         for index, serial in enumerate(serials, start=1)
     }
-    username = str(entry.data.get("username", ""))
-    replacements = {**serial_aliases, username: "**REDACTED**"}
+    replacements = dict(serial_aliases)
+    for key in ("username", CONF_DEYE_LOGIN):
+        if entry.data.get(key):
+            replacements[str(entry.data[key])] = "**REDACTED**"
 
     redacted_inverter_data = {
         serial_aliases.get(str(serial), "inverter_unknown"): _redacted_data(
