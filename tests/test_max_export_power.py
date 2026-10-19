@@ -33,6 +33,8 @@ def _scheduler(inverters: int, max_export_power, tariff_manager=None):
         MASTER: {"inverter": {"ratePower": 12000}, "settings": {}, "battery": {}},
     }
     coordinator.async_write_settings = AsyncMock()
+    if tariff_manager is not None:
+        tariff_manager.is_busy = False
     scheduler = VirtualSlotScheduler(
         MagicMock(),
         coordinator,

@@ -84,5 +84,11 @@ def mock_coordinator(mock_hass):
         }
     }
     coordinator.async_write_setting = AsyncMock()
-    coordinator.async_write_settings = AsyncMock()
+
+    async def _write_settings(serial, settings):
+        # As the real coordinator, report what was written until a poll says
+        # otherwise.
+        coordinator.data.get(serial, {}).setdefault("settings", {}).update(settings)
+
+    coordinator.async_write_settings = AsyncMock(side_effect=_write_settings)
     return coordinator

@@ -244,7 +244,7 @@ async def test_export_quality_failure_stops_discharge(mock_hass, mock_coordinato
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("in_schedule", "price", "soc"),
-    [(False, 0.5, 50), (True, 0.5, 10)],
+    [(False, 0.5, 50), (True, 0.2, 50)],
 )
 async def test_discharge_stop_reason_branches(
     mock_hass, mock_coordinator, in_schedule, price, soc
@@ -602,11 +602,11 @@ async def test_evaluate_never_writes_to_a_parallel_slave(mock_hass, mock_coordin
 async def test_evaluate_tracks_independent_inverters_separately(
     mock_hass, mock_coordinator
 ):
-    """Each physical target starts and stops from its own SOC state."""
+    """Each physical target decides from its own SOC."""
     mock_hass.states.get.return_value = _price_state("0.05")
     mock_coordinator.write_target_serials = ["INV1", "INV2"]
     mock_coordinator.data = {
-        "INV1": {"battery": {"soc": 50}},
+        "INV1": {"battery": {"soc": 95}},  # already above the 90% target
         "INV2": {"battery": {"soc": 50}},
     }
     mgr = _make_manager(mock_hass, mock_coordinator, target_soc=90)
@@ -614,20 +614,8 @@ async def test_evaluate_tracks_independent_inverters_separately(
 
     await mgr._evaluate()
 
-    mock_coordinator.async_write_setting.assert_any_await(
-        "INV1", "chargeCurrent", 100
-    )
-    mock_coordinator.async_write_setting.assert_any_await(
-        "INV2", "chargeCurrent", 100
-    )
-    assert mgr.per_inverter_modes == {"INV1": "charging", "INV2": "charging"}
-
-    mock_coordinator.async_write_setting.reset_mock()
-    mock_coordinator.data["INV1"]["battery"]["soc"] = 95
-    await mgr._evaluate()
-
     mock_coordinator.async_write_setting.assert_awaited_once_with(
-        "INV1", "chargeCurrent", 50
+        "INV2", "chargeCurrent", 100
     )
     assert mgr.per_inverter_modes == {"INV1": "idle", "INV2": "charging"}
     assert mgr.mode == "mixed"
@@ -1228,3 +1216,112 @@ async def test_failed_write_on_one_inverter_does_not_skip_the_next(
 
     assert "B" in {c.args[0] for c in mock_coordinator.async_write_setting.call_args_list}
     assert mgr._charging_active_serials == {"A"}
+
+
+
+# ── Charge and discharge for the whole price period (#36) ──────────────────
+
+
+@pytest.mark.asyncio
+async def test_charging_holds_at_the_target_until_the_cheap_period_ends(
+    mock_hass, mock_coordinator
+):
+    """At the target the slot's own SOC stops the inverter and holds the
+    battery, with the house on the grid. Stopping here instead let the house
+    drain it to 99% and started charging again, over and over."""
+    mgr = _make_manager(mock_hass, mock_coordinator, target_soc=100)
+
+    await mgr._evaluate_charging("TEST123", 0.05, 80, True)
+    assert "TEST123" in mgr._charging_active_serials
+    mock_coordinator.async_write_setting.reset_mock()
+
+    for soc in (100, 99, 100):
+        await mgr._evaluate_charging("TEST123", 0.05, soc, True)
+    assert "TEST123" in mgr._charging_active_serials
+    mock_coordinator.async_write_setting.assert_not_called()
+
+    await mgr._evaluate_charging("TEST123", 0.25, 100, True)  # cheap period over
+    assert "TEST123" not in mgr._charging_active_serials
+
+
+@pytest.mark.asyncio
+async def test_charging_doesnt_start_with_the_battery_already_full(
+    mock_hass, mock_coordinator
+):
+    mgr = _make_manager(mock_hass, mock_coordinator, target_soc=90)
+
+    await mgr._evaluate_charging("TEST123", 0.05, 90, True)
+
+    assert "TEST123" not in mgr._charging_active_serials
+    mock_coordinator.async_write_setting.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_discharging_stops_at_the_minimum_and_hands_back_the_battery(
+    mock_hass, mock_coordinator
+):
+    """Holding the slot at the minimum would put the house on the grid for
+    the rest of the peak. Stopping puts the user's own timer back, which
+    normally lets the house run from the battery (#36)."""
+    mgr = _make_manager(mock_hass, mock_coordinator, normal_discharge=50)
+
+    await mgr._evaluate_discharging("TEST123", 0.40, 50, True)
+    assert "TEST123" in mgr._discharging_active_serials
+    mock_coordinator.async_write_setting.reset_mock()
+
+    await mgr._evaluate_discharging("TEST123", 0.40, 10, True)
+
+    assert "TEST123" not in mgr._discharging_active_serials
+    mock_coordinator.async_write_setting.assert_awaited_once_with(
+        "TEST123", "dischargeCurrent", 50
+    )
+    assert mgr._discharge_reason("TEST123", 0.40, 10, True) == (
+        "battery reached the minimum 10% in this expensive period"
+    )
+    message = mock_hass.services.async_call.call_args.args[2]["message"]
+    assert "reached the minimum 10%" in message
+
+
+@pytest.mark.asyncio
+async def test_discharging_doesnt_restart_in_the_same_peak(
+    mock_hass, mock_coordinator
+):
+    """A little solar lifting the SOC above the minimum must not bounce."""
+    mgr = _make_manager(mock_hass, mock_coordinator)
+    await mgr._evaluate_discharging("TEST123", 0.40, 50, True)
+    await mgr._evaluate_discharging("TEST123", 0.40, 10, True)
+    mock_coordinator.async_write_setting.reset_mock()
+
+    for soc in (11, 15):
+        await mgr._evaluate_discharging("TEST123", 0.40, soc, True)
+    assert "TEST123" not in mgr._discharging_active_serials
+    mock_coordinator.async_write_setting.assert_not_called()
+
+    # The next expensive period starts afresh.
+    await mgr._evaluate_discharging("TEST123", 0.20, 15, True)
+    await mgr._evaluate_discharging("TEST123", 0.40, 15, True)
+    assert "TEST123" in mgr._discharging_active_serials
+
+
+@pytest.mark.asyncio
+async def test_discharging_holds_above_the_minimum_until_the_peak_ends(
+    mock_hass, mock_coordinator
+):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+
+    await mgr._evaluate_discharging("TEST123", 0.40, 50, True)
+    for soc in (40, 11, 30):
+        await mgr._evaluate_discharging("TEST123", 0.40, soc, True)
+    assert "TEST123" in mgr._discharging_active_serials
+
+    await mgr._evaluate_discharging("TEST123", 0.40, 30, False)  # schedule over
+    assert "TEST123" not in mgr._discharging_active_serials
+
+
+@pytest.mark.asyncio
+async def test_discharging_doesnt_start_at_the_minimum(mock_hass, mock_coordinator):
+    mgr = _make_manager(mock_hass, mock_coordinator)
+
+    await mgr._evaluate_discharging("TEST123", 0.40, 10, True)
+
+    assert "TEST123" not in mgr._discharging_active_serials

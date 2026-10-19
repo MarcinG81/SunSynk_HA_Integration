@@ -78,7 +78,7 @@ async def test_without_test_mode_the_inverter_is_written():
 
 @pytest.mark.parametrize(("test_mode", "override"), [(True, False), (False, True)])
 def test_virtual_slot_scheduler_ignores_a_test_mode_override(test_mode, override):
-    tariff = MagicMock(test_mode=test_mode, discharge_min_soc=10)
+    tariff = MagicMock(test_mode=test_mode, discharge_min_soc=10, is_busy=False)
     tariff.is_charging_active_for.return_value = False
     tariff.is_discharging_active_for.return_value = True
     coordinator = MagicMock(data={"INV1": {"inverter": {}}})

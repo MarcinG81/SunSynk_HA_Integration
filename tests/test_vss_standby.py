@@ -8,11 +8,13 @@ without leaving the schedule changed (#21).
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.sunsynk.tariff import TariffChargingManager
 from custom_components.sunsynk.virtual_slots import (
     MODE_CHARGE,
     MODE_IDLE,
@@ -61,7 +63,13 @@ def _setup(tariff=None, *, stored=None):
         }
     }
     coordinator.async_write_setting = AsyncMock()
-    coordinator.async_write_settings = AsyncMock()
+
+    async def write(serial, settings):
+        # As the real coordinator, report what was written until a poll says
+        # otherwise.
+        coordinator.data[serial]["settings"].update(settings)
+
+    coordinator.async_write_settings = AsyncMock(side_effect=write)
     scheduler = VirtualSlotScheduler(
         MagicMock(), coordinator, "entry", SERIAL, tariff_manager=tariff
     )
@@ -73,7 +81,7 @@ def _setup(tariff=None, *, stored=None):
 
 
 def _tariff(discharging=False):
-    tariff = MagicMock(discharge_min_soc=10, target_soc=90)
+    tariff = MagicMock(discharge_min_soc=10, target_soc=90, is_busy=False)
     tariff.is_charging_active_for.return_value = False
     tariff.is_discharging_active_for.return_value = discharging
     return tariff
@@ -332,3 +340,168 @@ async def test_a_capture_from_before_six_slots_is_completed_before_takeover():
     assert scheduler._original_settings == _USER_TIMER
     saved = scheduler._store.async_save.call_args_list[0].args[0]
     assert saved["original_settings"]["sellTime4"] == "16:00"
+
+
+# ── Charge straight into discharge (#36) ───────────────────────────────────
+
+
+def _real_tariff(coordinator):
+    hass = MagicMock()
+    hass.async_create_task.side_effect = lambda coroutine: coroutine.close()
+    tariff = TariffChargingManager(
+        hass=hass,
+        coordinator=coordinator,
+        price_entity="sensor.price",
+        cheap_threshold=0.10,
+        cheap_current=100,
+        normal_charge_current=50,
+        target_soc=100,
+        expensive_threshold=0.16,
+        peak_discharge_current=100,
+        normal_discharge_current=50,
+        discharge_min_soc=10,
+        start_hour=None,
+        end_hour=None,
+    )
+    tariff._enabled = True
+    return tariff
+
+
+@pytest.mark.asyncio
+async def test_charge_straight_into_discharge_never_puts_the_user_timer_back():
+    """At 05:30 the cheap period ended and the export price was already
+    high: idle and discharging in the same second. The scheduler acted on
+    the idle in between, put the user's timer back and took over again, and
+    the two writes crossed: the discharge slots had no Sell ticked."""
+    coordinator, scheduler = _setup()
+    tariff = _real_tariff(coordinator)
+    scheduler._tariff_manager = tariff
+
+    async def write(serial, settings):
+        await asyncio.sleep(0)  # a real write lets other tasks run
+        coordinator.data[serial]["settings"].update(settings)
+
+    async def write_one(serial, key, value):
+        await write(serial, {key: value})
+
+    coordinator.async_write_setting.side_effect = write_one
+    coordinator.async_write_settings.side_effect = write
+    tasks = []
+    scheduler._hass.async_create_task.side_effect = lambda coroutine: tasks.append(
+        asyncio.ensure_future(coroutine)
+    )
+    tariff.async_add_listener(scheduler._on_tick)
+
+    await tariff._evaluate_charging(SERIAL, 0.05, 90, True)
+    await scheduler._async_bootstrap()
+    assert scheduler.active_source == "price_override"
+    await asyncio.gather(*tasks)
+    coordinator.async_write_settings.reset_mock()
+    tasks.clear()
+
+    async with tariff._evaluate_lock:
+        await tariff._evaluate_charging(SERIAL, 0.20, 100, True)
+        await tariff._evaluate_discharging(SERIAL, 0.20, 100, True)
+        await asyncio.sleep(0)
+    tariff._notify_listeners()
+    while tasks:
+        await tasks.pop(0)
+
+    writes = _writes(coordinator)
+    assert _USER_TIMER not in writes
+    settings = coordinator.data[SERIAL]["settings"]
+    for n in range(1, 7):
+        assert settings[f"sellTime{n}En"] == 1
+        assert settings[f"time{n}on"] == 0
+
+
+@pytest.mark.asyncio
+async def test_nothing_is_done_while_the_tariff_manager_is_busy():
+    tariff = _tariff(discharging=True)
+    tariff.is_busy = True
+    coordinator, scheduler = _setup(tariff)
+
+    await scheduler._async_bootstrap()
+
+    assert _writes(coordinator) == []
+    assert scheduler.active_source == "none"
+
+
+@pytest.mark.asyncio
+async def test_tariff_manager_is_busy_while_evaluating():
+    coordinator, _ = _setup()
+    tariff = _real_tariff(coordinator)
+
+    assert tariff.is_busy is False
+    async with tariff._evaluate_lock:
+        assert tariff.is_busy is True
+
+
+# ── A slot the inverter doesn't report as written is written again (#36) ──
+
+
+async def _discharging(coordinator, scheduler, tariff):
+    tariff.is_discharging_active_for.return_value = True
+    await scheduler._async_bootstrap()
+    coordinator.async_write_settings.reset_mock()
+
+
+@pytest.mark.asyncio
+async def test_a_lost_sell_flag_is_written_again():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _discharging(coordinator, scheduler, tariff)
+
+    # The inverter reports Sell unticked on slot 3 after the write.
+    coordinator.data[SERIAL]["settings"]["sellTime3En"] = "0"
+    await scheduler._async_tick_locked()
+
+    (rewrite,) = _writes(coordinator)
+    assert rewrite["sellTime3En"] == 1
+    assert rewrite["sellTime3Pac"] == 12000
+
+
+@pytest.mark.asyncio
+async def test_a_slot_the_inverter_refuses_is_given_up_after_three_rewrites(caplog):
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _discharging(coordinator, scheduler, tariff)
+
+    for _ in range(6):
+        coordinator.data[SERIAL]["settings"]["sellTime3En"] = "0"
+        await scheduler._async_tick_locked()
+
+    assert len(_writes(coordinator)) == 3
+    assert caplog.text.count("giving up until the window changes") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_slot_the_inverter_reports_as_written_is_left_alone():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _discharging(coordinator, scheduler, tariff)
+    # Reported in the inverter's own format.
+    coordinator.data[SERIAL]["settings"].update(
+        {"sellTime3En": "1", "time3on": "false", "cap3": "10.0"}
+    )
+
+    await scheduler._async_tick_locked()
+
+    assert _writes(coordinator) == []
+
+
+@pytest.mark.asyncio
+async def test_rewrites_start_again_for_a_new_window():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _discharging(coordinator, scheduler, tariff)
+    for _ in range(5):
+        coordinator.data[SERIAL]["settings"]["sellTime3En"] = "0"
+        await scheduler._async_tick_locked()
+    assert scheduler._rewrites[3] == 4
+
+    tariff.is_discharging_active_for.return_value = False
+    tariff.is_charging_active_for.return_value = True
+    await scheduler._async_tick_locked()
+
+    assert 3 not in scheduler._rewrites

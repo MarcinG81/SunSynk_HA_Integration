@@ -108,6 +108,10 @@ _SELL_FLAG_KEYS = frozenset(
     {key for keys in _PHYSICAL_KEYS.values() for key in (keys["en"], keys["en_alt"])}
 )
 _GRID_CHARGE_KEYS = tuple(keys["on"] for keys in _PHYSICAL_KEYS.values())
+# Rewrites of a window the inverter doesn't report as written, before giving
+# up until the window changes: an inverter that refuses a value must not be
+# written to on every refresh.
+_MAX_REWRITES = 3
 
 # Restore slot data fields before the Grid Charge ticks so the inverter never
 # briefly charges in a partially restored slot. Currents return to configured
@@ -289,6 +293,9 @@ class VirtualSlotScheduler:
         self._current_source = "none"
         self._next_boundary: datetime | None = None
         self._last_written: dict[int, tuple] = {}
+        # Rewrites of a window the inverter doesn't report as written, per
+        # timer slot, for the window last written there.
+        self._rewrites: dict[int, int] = {}
         self._last_current_key: tuple[str, int] | _CurrentState | None = None
         self._original_settings: dict[str, Any] | None = None
         # Normal currents a shutdown could not write back yet; retried until
@@ -985,6 +992,13 @@ class VirtualSlotScheduler:
             return
         if not self._drives_inverter():
             return
+        if self._tariff_manager is not None and self._tariff_manager.is_busy:
+            # Tariff Manager is part-way through a change, e.g. idle between
+            # stopping a charge and starting a discharge in the same second.
+            # Acting on that put the user's timer back and took the slots over
+            # again straight after, and the two writes crossed: the discharge
+            # slots ended up without Sell ticked (#36). It notifies once done.
+            return
 
         if self._original_settings is None and not (
             await self._async_capture_user_timer()
@@ -1101,8 +1115,6 @@ class VirtualSlotScheduler:
             pac = share
         sell_en = resolution.mode == MODE_DISCHARGE
         cache_key = (on, cap, pac, start, sell_en)
-        if self._last_written.get(index) == cache_key:
-            return False
 
         keys = _PHYSICAL_KEYS[index]
         window = {
@@ -1121,6 +1133,46 @@ class VirtualSlotScheduler:
         )
         if sell_key is not None:
             window[sell_key] = 1 if sell_en else 0
+
+        if self._last_written.get(index) == cache_key:
+            # Written before, but check the inverter has it: a write can be
+            # lost, e.g. one crossing another, and the slot would then stay
+            # wrong until the window changed (#36). Until the inverter
+            # confirms a write, the coordinator reports the value sent, so
+            # this only acts on what the inverter actually reports.
+            differs = [
+                key
+                for key, value in window.items()
+                if not SunsynkCoordinator._values_match(value, settings.get(key))
+            ]
+            if not differs:
+                self._rewrites.pop(index, None)
+                return False
+            attempts = self._rewrites.get(index, 0)
+            if attempts >= _MAX_REWRITES:
+                if attempts == _MAX_REWRITES:
+                    _LOGGER.warning(
+                        "Virtual slots [%s]: timer slot %s still reports %s "
+                        "after %s rewrites, giving up until the window changes",
+                        self._serial,
+                        index,
+                        {key: settings.get(key) for key in differs},
+                        _MAX_REWRITES,
+                    )
+                    self._rewrites[index] = attempts + 1
+                return False
+            self._rewrites[index] = attempts + 1
+            _LOGGER.warning(
+                "Virtual slots [%s]: timer slot %s reports %s instead of %s, "
+                "writing it again",
+                self._serial,
+                index,
+                {key: settings.get(key) for key in differs},
+                {key: window[key] for key in differs},
+            )
+        else:
+            self._rewrites.pop(index, None)
+
         await self._coordinator.async_write_settings(self._serial, window)
 
         self._last_written[index] = cache_key
