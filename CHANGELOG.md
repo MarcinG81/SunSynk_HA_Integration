@@ -11,6 +11,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - **`sunsynk.set_work_mode` and the work mode number accept 0–2 only.** Modes 3 ("Self Use") and 4 ("Time of Use") were listed but don't exist on Sunsynk / Deye inverters.
 
+## [Unreleased]
+
+### Fixed
+- **A Tariff Manager discharge put the house on the grid once the battery reached the minimum SOC.** Since beta.17 Tariff Manager stayed in discharge mode for the whole expensive period, so the slot holding the minimum stayed in force and the inverter supplied the house from the grid until the period ended. Discharging now stops at the minimum again and your own timer is put back, which normally has a lower SOC, so the house runs from the battery. It isn't started again in the same expensive period, so a little solar can't make it bounce at the minimum. Charging still holds the target for the whole cheap period. Found by pay4property. (#36)
+- **A discharge straight after a charge could export nothing.** When the cheap period ended and the export price was already above the threshold, Tariff Manager went from charging to idle to discharging in the same second. The Virtual Slot Scheduler acted on the idle in between: it put your own timer back and took the slots over again straight after, and the two writes crossed, so the discharge slots had the right power and SOC but no Sell ticked. The scheduler now waits until Tariff Manager has finished deciding. (#36)
+- **A slot the inverter didn't take stayed wrong until the window changed.** The scheduler only remembered what it had written, so a lost write was never noticed. It now also checks what the inverter reports once a write is confirmed, and writes a slot again if it differs, at most three times for the same window, with a warning in the log if the inverter still refuses it. (#36)
+
+## [2.0.0-beta.17] - 2026-10-18
+
+### Fixed
+- **Charging bounced between 100% and 99% until the cheap period ended.** Tariff Manager stopped charging as soon as the battery reached the target SOC. With the Virtual Slot Scheduler on, that also handed the timer back, so the house ran from the battery, and at 1% below the target charging started again, each time with another round of writes to the inverter. Tariff Manager now stays in charge mode for the whole cheap period, as a slot on the inverter does. The slot carries the target SOC, so the inverter itself stops charging there and holds it, with the house on the grid. The target only decides whether to start: charging doesn't start when the battery is already at it. Discharging works the same way at the minimum SOC. Found by pay4property in test mode. (#36)
+
 ## [2.0.0-beta.16] - 2026-10-17
 
 ### Fixed

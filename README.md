@@ -155,15 +155,17 @@ Any inverter accessible through the Sunsynk cloud API, including:
 
 ### Options (Configure)
 
-**Settings → Devices & Services → Sunsynk → Configure** lets you change everything above, plus:
+**Settings → Devices & Services → Sunsynk → Configure** lets you change everything above, plus the options below.
+
+> **This README describes 2.0, currently in beta.** Options marked *2.0* don't exist in the stable 1.9.x releases.
 
 | Option | Description |
 |---|---|
-| **Create and maintain Sunsynk dashboard** | Off by default since 2.0. See [Dashboard](#dashboard) |
-| **Allow only administrators to use control actions** | Off by default. When ticked, the `sunsynk.*` actions can only be run by HA administrators; automations and scripts are unaffected. It covers the actions, not the integration's number/switch/text entities |
+| **Create and maintain Sunsynk dashboard** | Off by default on 2.0. On 1.9.x it's there from 1.9.16 and on by default, as 1.9 always created the dashboard. See [Dashboard](#dashboard) |
+| **Allow only administrators to use control actions** *(2.0)* | Off by default. When ticked, the `sunsynk.*` actions can only be run by HA administrators; automations and scripts are unaffected. It covers the actions, not the integration's number/switch/text entities |
 | **Solar Forecast** fields | See [Solar Forecast Setup](#solar-forecast-setup) |
 | **Tariff Manager** fields | See [Tariff Manager Setup](#tariff-manager-setup) |
-| **Maximum export power, whole system (W)** | Optional, e.g. your G99/G100 limit (11000 for 11 kW). The most a selling time slot set by the Virtual Slot Scheduler may put out, including Tariff Manager discharges. In a parallel system enter the total: it is shared between the inverters (11000 W → 5500 W each). It does **not** limit solar export, which follows the inverter's own Max Sell Power, and doesn't replace your installation's own export limitation |
+| **Maximum export power, whole system (W)** *(2.0)* | Optional, e.g. your G99/G100 limit (11000 for 11 kW). The most a selling time slot set by the Virtual Slot Scheduler may put out, including Tariff Manager discharges. In a parallel system enter the total: it is shared between the inverters (11000 W → 5500 W each). It does **not** limit solar export, which follows the inverter's own Max Sell Power, and doesn't replace your installation's own export limitation |
 
 A field you clear stays cleared when you save.
 
@@ -481,9 +483,9 @@ The Tariff Manager automatically charges the battery when electricity is cheap a
 | **Normal discharge current (A)** | Current restored when expensive rate ends |
 | **Minimum SOC (%)** | Stop discharging when battery reaches this SOC (default 10) |
 | **Active from / Active until** | Optional hours to restrict tariff activity (supports midnight wrap, e.g. 22–06) |
-| **Stop when price data looks out of date** | Off by default. When ticked, an active charge or discharge stops if the import price sensor hasn't reported for longer than *Price max age* |
+| **Stop when price data looks out of date** *(2.0)* | Off by default. When ticked, an active charge or discharge stops if the import price sensor hasn't reported for longer than *Price max age* |
 | **Price max age (minutes)** | Used only when the option above is ticked (default 90) |
-| **Test mode** | Off by default. Tariff Manager decides as usual and shows it in Tariff Mode, its notifications and the log, but sends nothing to the inverter |
+| **Test mode** *(2.0)* | Off by default. Tariff Manager decides as usual and shows it in Tariff Mode, its notifications and the log, but sends nothing to the inverter |
 
 3. After setup, go to your inverter device and **turn on the Tariff Manager switch** — it starts **off** by default.
 
