@@ -67,6 +67,8 @@ def test_next_start_after():
 
 
 def _make_scheduler(mock_hass, mock_coordinator, tariff_manager=None) -> VirtualSlotScheduler:
+    if tariff_manager is not None:
+        tariff_manager.is_busy = False
     return VirtualSlotScheduler(
         hass=mock_hass,
         coordinator=mock_coordinator,

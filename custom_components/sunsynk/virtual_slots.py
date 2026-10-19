@@ -74,6 +74,10 @@ _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
     for n in range(1, 7)
 }
 _GRID_CHARGE_KEYS = tuple(keys["on"] for keys in _PHYSICAL_KEYS.values())
+# Rewrites of a window the inverter doesn't report as written, before giving
+# up until the window changes: an inverter that refuses a value must not be
+# written to on every refresh.
+_MAX_REWRITES = 3
 
 
 def _parse_hhmm(value: str) -> tuple[int, int]:
@@ -229,6 +233,9 @@ class VirtualSlotScheduler:
         self._current_source = "none"
         self._next_boundary: datetime | None = None
         self._last_written: dict[int, tuple] = {}
+        # Rewrites of a window the inverter doesn't report as written, per
+        # timer slot, for the window last written there.
+        self._rewrites: dict[int, int] = {}
         self._last_current_key: tuple | None = None
 
         self._listeners: list[Callable[[], None]] = []
@@ -521,6 +528,13 @@ class VirtualSlotScheduler:
     async def _async_tick(self) -> None:
         if not self._enabled:
             return
+        if self._tariff_manager is not None and self._tariff_manager.is_busy:
+            # Tariff Manager is part-way through a change, e.g. idle between
+            # stopping a charge and starting a discharge in the same second.
+            # Writing the idle slots and then the discharge ones straight
+            # after let the two writes cross: the discharge slots ended up
+            # without Sell ticked (#36). It notifies once done.
+            return
 
         now = self._now()
         plan = self._plan(now)
@@ -578,10 +592,8 @@ class VirtualSlotScheduler:
         )
         sell_en = resolution.mode == MODE_DISCHARGE
         cache_key = (on, resolution.target_soc, pac, start, sell_en)
-        if self._last_written.get(index) == cache_key:
-            return False
-
         keys = _PHYSICAL_KEYS[index]
+        windows = {}
         for serial in self._coordinator.write_target_serials:
             settings = (
                 (self._coordinator.data or {}).get(serial, {}).get("settings", {})
@@ -604,6 +616,48 @@ class VirtualSlotScheduler:
             )
             if sell_key is not None:
                 window[sell_key] = 1 if sell_en else 0
+            windows[serial] = (window, settings)
+
+        if self._last_written.get(index) == cache_key:
+            # Written before, but check the inverter has it: a write can be
+            # lost, e.g. one crossing another, and the slot would then stay
+            # wrong until the window changed (#36). Until the inverter
+            # confirms a write, the coordinator reports the value sent.
+            differs = {
+                serial: {
+                    key: settings.get(key)
+                    for key, value in window.items()
+                    if not SunsynkCoordinator._values_match(value, settings.get(key))
+                }
+                for serial, (window, settings) in windows.items()
+            }
+            differs = {serial: keys_ for serial, keys_ in differs.items() if keys_}
+            if not differs:
+                self._rewrites.pop(index, None)
+                return False
+            attempts = self._rewrites.get(index, 0)
+            if attempts >= _MAX_REWRITES:
+                if attempts == _MAX_REWRITES:
+                    _LOGGER.warning(
+                        "Virtual slots: timer slot %s still reports %s after %s "
+                        "rewrites, giving up until the window changes",
+                        index,
+                        differs,
+                        _MAX_REWRITES,
+                    )
+                    self._rewrites[index] = attempts + 1
+                return False
+            self._rewrites[index] = attempts + 1
+            _LOGGER.warning(
+                "Virtual slots: timer slot %s reports %s, writing it again",
+                index,
+                differs,
+            )
+            windows = {serial: windows[serial] for serial in differs}
+        else:
+            self._rewrites.pop(index, None)
+
+        for serial, (window, _settings) in windows.items():
             # One request for the whole window rather than one per field.
             await self._coordinator.async_write_settings(serial, window)
 

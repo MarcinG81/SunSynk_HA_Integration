@@ -110,6 +110,8 @@ class TariffChargingManager:
         self._price_quality: str = QUALITY_NOT_FOUND
         self._export_price_quality: str = QUALITY_NOT_FOUND
         self._listeners: list[Callable[[], None]] = []
+        # Evaluations under way; listeners are notified when the last ends.
+        self._evaluations = 0
         self._unsub_price: Any = None
         self._unsub_coordinator: Any = None
 
@@ -311,7 +313,26 @@ class TariffChargingManager:
 
     # ── Core evaluation ────────────────────────────────────────────────────
 
+    @property
+    def is_busy(self) -> bool:
+        """Whether an evaluation is under way.
+
+        Its mode can be part-way through a change then, e.g. idle between
+        stopping a charge and starting a discharge. Listeners are notified
+        once it has finished.
+        """
+        return self._evaluations > 0
+
     async def _evaluate(self) -> None:
+        self._evaluations += 1
+        try:
+            await self._evaluate_now()
+        finally:
+            self._evaluations -= 1
+            if not self._evaluations:
+                self._notify_listeners()
+
+    async def _evaluate_now(self) -> None:
         """Re-check both price entities and act on each side independently.
 
         Import price quality only gates charging; export price quality only
