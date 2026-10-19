@@ -505,3 +505,138 @@ async def test_rewrites_start_again_for_a_new_window():
     await scheduler._async_tick_locked()
 
     assert 3 not in scheduler._rewrites
+
+
+# ── The user's timer put back must be what the inverter has (#36) ──────────
+
+
+async def _discharge_then_restore_lost(coordinator, scheduler, tariff):
+    """A discharge ends, and the write putting the user's timer back is lost:
+    the inverter still reports the discharge layout, Sell ticked."""
+    await scheduler._async_bootstrap()
+    tariff.is_discharging_active_for.return_value = True
+    await scheduler._async_tick_locked()
+    layout = dict(coordinator.data[SERIAL]["settings"])
+    tariff.is_discharging_active_for.return_value = False
+    await scheduler._async_tick_locked()
+    assert scheduler._standing_by is True
+    coordinator.data[SERIAL]["settings"] = layout
+    coordinator.async_write_settings.reset_mock()
+    return layout
+
+
+@pytest.mark.asyncio
+async def test_a_lost_put_back_is_written_again_and_not_taken_as_the_user_timer():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _discharge_then_restore_lost(coordinator, scheduler, tariff)
+
+    await scheduler._async_tick_locked()
+
+    (rewrite,) = _writes(coordinator)
+    assert rewrite["sellTime1En"] == "0"
+    assert all(rewrite[f"sellTime{n}En"] == _USER_TIMER[f"sellTime{n}En"]
+               for n in range(1, 7) if f"sellTime{n}En" in rewrite)
+    assert scheduler._original_settings == _USER_TIMER
+
+    # The inverter now reports the user's timer: done, nothing more written.
+    coordinator.async_write_settings.reset_mock()
+    await scheduler._async_tick_locked()
+    assert _writes(coordinator) == []
+    assert scheduler._restore_pending is False
+    assert scheduler._written_layout == {}
+
+
+@pytest.mark.asyncio
+async def test_a_put_back_the_inverter_keeps_refusing_raises_a_notification(caplog):
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    layout = await _discharge_then_restore_lost(coordinator, scheduler, tariff)
+
+    for _ in range(6):
+        coordinator.data[SERIAL]["settings"] = dict(layout)
+        await scheduler._async_tick_locked()
+
+    assert len(_writes(coordinator)) == 3
+    assert scheduler._original_settings == _USER_TIMER
+    assert caplog.text.count("attempts to put your own timer back") == 1
+    notification = scheduler._hass.services.async_call.call_args
+    assert notification.args[:2] == ("persistent_notification", "create")
+    assert "Sell" in notification.args[2]["message"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_rewrite_is_tried_again():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    layout = await _discharge_then_restore_lost(coordinator, scheduler, tariff)
+    coordinator.async_write_settings.side_effect = RuntimeError("cloud down")
+
+    await scheduler._async_tick_locked()
+
+    assert scheduler._original_settings == _USER_TIMER
+    coordinator.async_write_settings.side_effect = None
+    coordinator.data[SERIAL]["settings"] = dict(layout)
+    await scheduler._async_tick_locked()
+    assert len(_writes(coordinator)) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_change_made_in_the_app_after_the_put_back_is_kept():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _discharge_then_restore_lost(coordinator, scheduler, tariff)
+    # Not the scheduler's layout: the user set their own value meanwhile.
+    coordinator.data[SERIAL]["settings"] = {
+        **_USER_TIMER,
+        "sellTime6Pac": 4321,
+    }
+
+    await scheduler._async_tick_locked()
+
+    assert _writes(coordinator) == []
+    assert scheduler._original_settings["sellTime6Pac"] == 4321
+    assert scheduler._restore_pending is False
+
+
+@pytest.mark.asyncio
+async def test_once_put_back_a_later_app_change_is_never_reverted():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    layout = await _discharge_then_restore_lost(coordinator, scheduler, tariff)
+    coordinator.data[SERIAL]["settings"] = dict(_USER_TIMER)
+    await scheduler._async_tick_locked()  # the inverter has the user's timer
+
+    # The user then ticks Sell on slot 1, as the scheduler's layout had it.
+    coordinator.data[SERIAL]["settings"]["sellTime1En"] = layout["sellTime1En"]
+    await scheduler._async_tick_locked()
+
+    assert _writes(coordinator) == []
+    assert scheduler._original_settings["sellTime1En"] == layout["sellTime1En"]
+
+
+@pytest.mark.asyncio
+async def test_after_a_restart_its_own_layout_is_still_recognised():
+    """HA restarted mid-discharge: the user's timer is put back from the
+    store, the write is lost, and the layout read from the store keeps the
+    discharge slots from being taken for the user's timer."""
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _discharge_then_restore_lost(coordinator, scheduler, tariff)
+    saved = scheduler._store.async_save.call_args.args[0]
+    assert saved["written_layout"]["sellTime1En"] == 1
+
+    layout = dict(coordinator.data[SERIAL]["settings"])
+    coordinator2, restarted = _setup(tariff, stored=dict(_USER_TIMER))
+    restarted._store.async_load.return_value = saved
+    await restarted.async_load()
+    coordinator2.data[SERIAL]["settings"] = dict(layout)
+
+    await restarted._async_bootstrap()  # puts the user's timer back
+    coordinator2.data[SERIAL]["settings"] = dict(layout)  # ...and it's lost
+    coordinator2.async_write_settings.reset_mock()
+    await restarted._async_tick_locked()
+
+    (rewrite,) = _writes(coordinator2)
+    assert rewrite["sellTime1En"] == "0"
+    assert restarted._original_settings == _USER_TIMER

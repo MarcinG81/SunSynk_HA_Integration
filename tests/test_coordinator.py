@@ -900,6 +900,14 @@ async def _settle_verification(coordinator) -> None:
     await asyncio.gather(*list(coordinator._verify_tasks))
 
 
+async def _settle_all_verification(coordinator) -> None:
+    """Also let confirmations of writes sent again finish."""
+    while coordinator._verify_tasks:
+        await _settle_verification(coordinator)
+        # asyncio.sleep is patched out here, so drop finished tasks directly.
+        coordinator._verify_tasks -= {t for t in coordinator._verify_tasks if t.done()}
+
+
 def _gated_sleep():
     """A patched sleep that holds background confirmation until released."""
     gate = asyncio.Event()
@@ -931,8 +939,10 @@ def _client(read_backs, baseline=None) -> MagicMock:
 async def test_write_verification_raises_issue_only_after_last_offset(
     fake_coordinator,
 ):
+    """The inverter never applies it: sent again three times, then reported."""
     stale = {**fake_coordinator.data["TEST123"]["settings"], "time1on": "false"}
-    mock_client = _client([stale] * 5)
+    # Each round: the fresh read before the write, then five confirmations.
+    mock_client = _client([stale] * 23)
     gate, gated_sleep = _gated_sleep()
 
     with (
@@ -948,9 +958,10 @@ async def test_write_verification_raises_issue_only_after_last_offset(
         fake_coordinator.async_update_listeners.assert_called_once_with()
         mock_ir.async_create_issue.assert_not_called()
         gate.set()
-        await _settle_verification(fake_coordinator)
+        await _settle_all_verification(fake_coordinator)
 
-    assert mock_client.async_get_settings.await_count == 6
+    assert mock_client.async_get_settings.await_count == 24
+    assert mock_client.async_write_settings.await_count == 4
     mock_ir.async_create_issue.assert_called_once()
     args, kwargs = mock_ir.async_create_issue.call_args
     assert args[:3] == (fake_coordinator.hass, DOMAIN, "setting_write_mismatch_TEST123_time1on")
@@ -1609,3 +1620,79 @@ def test_before_any_plant_is_known_the_only_master_is_used():
     coordinator.data["2406060175"]["inverter"]["plant"] = {"id": 7}
 
     assert SunsynkCoordinator.resolve_write_target(coordinator, "2406060175") == "2406060181"
+
+
+# ── A lost write is sent again (#36) ───────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_a_lost_write_is_sent_again_and_lands(fake_coordinator):
+    """Two writes close together crossed and one never landed: the inverter
+    still reported the old value. Sent again, it lands, nothing reported."""
+    stale = {**fake_coordinator.data["TEST123"]["settings"], "time1on": "false"}
+    applied = {**stale, "time1on": "true"}
+    mock_client = _client([stale] * 5 + [stale, applied])
+
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await _settle_all_verification(fake_coordinator)
+
+    assert mock_client.async_write_settings.await_count == 2
+    resent = mock_client.async_write_settings.await_args_list[1].args[2]
+    assert resent["time1on"] == "true"
+    mock_ir.async_create_issue.assert_not_called()
+    assert fake_coordinator._resends == {}
+
+
+@pytest.mark.asyncio
+async def test_a_value_changed_elsewhere_is_not_sent_again(fake_coordinator):
+    """Neither what was sent nor what was there before: e.g. the app."""
+    other = {**fake_coordinator.data["TEST123"]["settings"], "cap1": "77"}
+    mock_client = _client([other] * 5)
+
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "cap1", 60)
+        await _settle_all_verification(fake_coordinator)
+
+    assert mock_client.async_write_settings.await_count == 1
+    mock_ir.async_create_issue.assert_called_once()
+    assert fake_coordinator.data["TEST123"]["settings"]["cap1"] == "77"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_resend_is_logged(fake_coordinator, caplog):
+    stale = {**fake_coordinator.data["TEST123"]["settings"], "time1on": "false"}
+    mock_client = _client([stale] * 6)
+    mock_client.async_write_settings.side_effect = [None, SunsynkApiError("down")]
+
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.ir"),
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await _settle_all_verification(fake_coordinator)
+
+    assert "Could not send time1on to inverter TEST123 again" in caplog.text
+
+
+def test_a_new_value_starts_counting_again(fake_coordinator):
+    SunsynkCoordinator._ensure_write_state(fake_coordinator)
+    fake_coordinator._unconfirmed_writes = {"TEST123": {"cap1": (7, "60")}}
+    fake_coordinator._resends = {("TEST123", "cap1"): ("50", 3)}
+
+    assert SunsynkCoordinator._was_lost(
+        fake_coordinator, "TEST123", "cap1", "60", "40", "40", 7
+    )
+    assert fake_coordinator._resends[("TEST123", "cap1")] == ("60", 1)
