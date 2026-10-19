@@ -296,6 +296,14 @@ class VirtualSlotScheduler:
         # Rewrites of a window the inverter doesn't report as written, per
         # timer slot, for the window last written there.
         self._rewrites: dict[int, int] = {}
+        # Every slot value this scheduler wrote since taking over, so that
+        # after putting the user's timer back its own layout can be told
+        # apart from a change made in the app (#36).
+        self._written_layout: dict[str, Any] = {}
+        # The user's timer was written back but the inverter hasn't been
+        # seen reporting it yet, and how often it was written again.
+        self._restore_pending = False
+        self._restore_rewrites = 0
         self._last_current_key: tuple[str, int] | _CurrentState | None = None
         self._original_settings: dict[str, Any] | None = None
         # Normal currents a shutdown could not write back yet; retried until
@@ -359,6 +367,9 @@ class VirtualSlotScheduler:
         # later disable restores the user's timer, not the scheduler's own.
         self._original_settings = data.get("original_settings") or None
         self._pending_current_restore = data.get("pending_current_restore") or None
+        # What this scheduler had written, so that after a restart its own
+        # layout still isn't taken for the user's timer (#36).
+        self._written_layout = dict(data.get("written_layout") or {})
         if migrated:
             await self._async_persist()
 
@@ -369,6 +380,7 @@ class VirtualSlotScheduler:
                 "enabled": self._wanted_enabled,
                 "original_settings": self._original_settings,
                 "pending_current_restore": self._pending_current_restore,
+                "written_layout": self._written_layout,
             }
         )
 
@@ -509,6 +521,8 @@ class VirtualSlotScheduler:
         if self._standing_by:
             if getattr(self._coordinator, "last_update_success", True) is not False:
                 current = self._current_managed_settings()
+                if self._restore_pending and await self._async_check_restore(current):
+                    return False
                 if current and current != self._original_settings:
                     self._original_settings = current
                     await self._async_persist()
@@ -533,10 +547,99 @@ class VirtualSlotScheduler:
         self._standing_by = True
         self._last_written = {}
         self._last_current_key = None
+        self._restore_pending = bool(self._original_settings)
+        self._restore_rewrites = 0
         _LOGGER.info(
             "Virtual slots [%s]: nothing to do, your own timer is back in place",
             self._serial,
         )
+        return True
+
+    async def _async_check_restore(self, current: dict[str, Any]) -> bool:
+        """Make sure the user's timer put back is what the inverter has.
+
+        A write can be lost when it crosses another (#36): the discharge
+        layout stayed, Sell ticked on every slot, and the inverter exported
+        over 20 kW for the rest of the evening. Standing by, the captured
+        timer follows the inverter, so that layout would even have been
+        taken for the user's own. Until the inverter reports the timer put
+        back, a slot still holding what this scheduler wrote is written back
+        again (three times at most, then a notification). A difference that
+        isn't this scheduler's layout is a change made in the app.
+
+        Returns True when the inverter still holds the scheduler's layout,
+        so the caller doesn't take it as the user's timer.
+        """
+        original = self._original_settings or {}
+        differs = {
+            key: current[key]
+            for key, value in original.items()
+            if key in current
+            and not SunsynkCoordinator._values_match(value, current[key])
+        }
+        if not differs:
+            self._restore_pending = False
+            self._written_layout = {}
+            await self._async_persist()
+            return False
+        lingering = all(
+            key in self._written_layout
+            and SunsynkCoordinator._values_match(self._written_layout[key], value)
+            for key, value in differs.items()
+        )
+        if not lingering:
+            # Changed in the app since: that is the user's timer now.
+            self._restore_pending = False
+            self._written_layout = {}
+            await self._async_persist()
+            return False
+        if self._restore_rewrites >= _MAX_REWRITES:
+            if self._restore_rewrites == _MAX_REWRITES:
+                self._restore_rewrites += 1
+                _LOGGER.error(
+                    "Virtual slots [%s]: the inverter still reports %s after "
+                    "%s attempts to put your own timer back (%s)",
+                    self._serial,
+                    differs,
+                    _MAX_REWRITES,
+                    {key: original[key] for key in differs},
+                )
+                self._hass.async_create_task(
+                    self._hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": "Sunsynk: your own timer could not be put back",
+                            "message": (
+                                f"Inverter {self._serial} still has the Virtual "
+                                "Slot Scheduler's timer slots after "
+                                f"{_MAX_REWRITES} attempts to put yours back. "
+                                "Check the System Mode timer (especially Sell) "
+                                "in the Sunsynk app."
+                            ),
+                            "notification_id": f"{DOMAIN}_vss_restore_{self._serial}",
+                        },
+                    )
+                )
+            return True
+        self._restore_rewrites += 1
+        _LOGGER.warning(
+            "Virtual slots [%s]: the inverter still reports %s instead of your "
+            "own timer, writing it back again",
+            self._serial,
+            differs,
+        )
+        try:
+            await self._coordinator.async_write_settings(
+                self._serial, {key: original[key] for key in differs}
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error(
+                "Virtual slots [%s]: could not put your own timer back, "
+                "will retry on the next update: %s",
+                self._serial,
+                err,
+            )
         return True
 
     async def _async_take_over(self) -> None:
@@ -561,6 +664,8 @@ class VirtualSlotScheduler:
         self._standing_by = False
         self._last_written = {}
         self._last_current_key = None
+        self._restore_pending = False
+        self._written_layout = {}
 
     async def _async_shutdown(self, force_disable: bool = True) -> bool:
         """Restore the exact settings captured before taking ownership."""
@@ -1174,6 +1279,8 @@ class VirtualSlotScheduler:
             self._rewrites.pop(index, None)
 
         await self._coordinator.async_write_settings(self._serial, window)
+        self._written_layout.update(window)
+        await self._async_persist()
 
         self._last_written[index] = cache_key
         return True

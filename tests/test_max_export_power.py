@@ -43,6 +43,7 @@ def _scheduler(inverters: int, max_export_power, tariff_manager=None):
         tariff_manager=tariff_manager,
         max_export_power=max_export_power,
     )
+    scheduler._store = MagicMock(async_save=AsyncMock())
     return coordinator, scheduler
 
 
