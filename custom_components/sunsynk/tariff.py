@@ -765,8 +765,7 @@ class TariffChargingManager:
                 reason = "outside active schedule"
             elif expensive_now:
                 reason = (
-                    f"battery {soc:.0f}% reached the minimum "
-                    f"{self._discharge_min_soc}%"
+                    f"battery {soc:.0f}% reached the minimum {self._discharge_min_soc}%"
                 )
                 self._discharged_to_min_serials.add(serial)
             else:
