@@ -34,6 +34,16 @@ _LOGGER = logging.getLogger(__name__)
 # hasn't arrived after the last offset is reported as rejected.
 _VERIFY_WRITE_OFFSETS = (5, 10, 15, 30, 60)
 
+# A write the inverter still hasn't applied after the last offset, while it
+# still reports the value from before the write, was lost rather than
+# refused: two writes close together can cross, and one of them never lands
+# (#36: a discharge left Sell ticked and the inverter exported over 20 kW).
+# It is sent again this many times before it is reported. A different value
+# by then means something else changed it, e.g. the Sunsynk app, and it is
+# left alone.
+_MAX_RESENDS = 3
+_UNKNOWN = object()
+
 
 class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Manages data fetching for all inverters in one config entry."""
@@ -352,10 +362,16 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             # it, so later writes and polls don't fall back to the old value.
             if self.data is not None and serial in self.data:
                 self.data[serial].setdefault("settings", {}).update(payload)
-            for key in changes:
+            for key, value in changes.items():
                 SunsynkCoordinator._track_unconfirmed_write(
-                    self, serial, key, payload[key]
+                    self,
+                    serial,
+                    key,
+                    payload[key],
+                    current_settings.get(key, _UNKNOWN),
+                    value,
                 )
+            current_settings.update(payload)
 
         await self.async_request_refresh()
 
@@ -367,8 +383,17 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             self._write_seq = 0
         if not hasattr(self, "_verify_tasks"):
             self._verify_tasks = set()
+        if not hasattr(self, "_resends"):
+            self._resends = {}
 
-    def _track_unconfirmed_write(self, serial: str, setting_key: str, value: Any) -> None:
+    def _track_unconfirmed_write(
+        self,
+        serial: str,
+        setting_key: str,
+        value: Any,
+        before: Any = _UNKNOWN,
+        requested: Any = _UNKNOWN,
+    ) -> None:
         """Hold a just-written value until the inverter confirms it.
 
         Until confirmation, regular polls keep the value we sent rather than
@@ -385,7 +410,13 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         )
         task = asyncio.get_running_loop().create_task(
             SunsynkCoordinator._async_confirm_write(
-                self, serial, setting_key, write_id, value
+                self,
+                serial,
+                setting_key,
+                write_id,
+                value,
+                before,
+                value if requested is _UNKNOWN else requested,
             )
         )
         self._verify_tasks.add(task)
@@ -410,7 +441,13 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         return await client.async_get_settings(session, serial)
 
     async def _async_confirm_write(
-        self, serial: str, setting_key: str, write_id: int, value: Any
+        self,
+        serial: str,
+        setting_key: str,
+        write_id: int,
+        value: Any,
+        before: Any = _UNKNOWN,
+        requested: Any = _UNKNOWN,
     ) -> None:
         """Confirm one write in the background, stopping at the first match.
 
@@ -423,7 +460,7 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         """
         try:
             await SunsynkCoordinator._async_confirm_write_until_settled(
-                self, serial, setting_key, write_id, value
+                self, serial, setting_key, write_id, value, before, requested
             )
         except Exception:
             _LOGGER.exception("Could not confirm write of %s for %s", setting_key, serial)
@@ -435,7 +472,13 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 del self._unconfirmed_writes[serial][setting_key]
 
     async def _async_confirm_write_until_settled(
-        self, serial: str, setting_key: str, write_id: int, value: Any
+        self,
+        serial: str,
+        setting_key: str,
+        write_id: int,
+        value: Any,
+        before: Any = _UNKNOWN,
+        requested: Any = _UNKNOWN,
     ) -> None:
         loop = asyncio.get_running_loop()
         started = loop.time()
@@ -474,8 +517,29 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
         issue_id = f"setting_write_mismatch_{serial}_{setting_key}"
         if SunsynkCoordinator._values_match(value, actual):
+            self._resends.pop((serial, setting_key), None)
             ir.async_delete_issue(self.hass, DOMAIN, issue_id)
             return
+
+        if SunsynkCoordinator._was_lost(self, serial, setting_key, value, actual, before):
+            _LOGGER.warning(
+                "Inverter %s still reports the old %s after %ss, the write was "
+                "lost: sending it again",
+                serial, setting_key, _VERIFY_WRITE_OFFSETS[-1],
+            )
+            try:
+                await SunsynkCoordinator.async_write_settings(
+                    self,
+                    serial,
+                    {setting_key: value if requested is _UNKNOWN else requested},
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.error(
+                    "Could not send %s to inverter %s again: %s",
+                    setting_key, serial, err,
+                )
+            return
+        self._resends.pop((serial, setting_key), None)
 
         if self.data is not None and serial in self.data and actual is not None:
             self.data[serial].setdefault("settings", {})[setting_key] = actual
@@ -498,6 +562,32 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 "actual": str(actual),
             },
         )
+
+    def _was_lost(
+        self, serial: str, key: str, sent: Any, actual: Any, before: Any
+    ) -> bool:
+        """Whether a write never landed and should be sent again.
+
+        Only while the inverter still reports the value from before the
+        write, and it hasn't been sent _MAX_RESENDS times already.
+        """
+        if (
+            before is _UNKNOWN
+            or actual is None
+            or SunsynkCoordinator._values_match(sent, before)
+            or not SunsynkCoordinator._values_match(before, actual)
+        ):
+            return False
+        last_sent, count = self._resends.get((serial, key), (_UNKNOWN, 0))
+        if last_sent is _UNKNOWN or not SunsynkCoordinator._values_match(
+            last_sent, sent
+        ):
+            count = 0
+        if count >= _MAX_RESENDS:
+            self._resends.pop((serial, key), None)
+            return False
+        self._resends[(serial, key)] = (sent, count + 1)
+        return True
 
     _TRUE_STRINGS = frozenset({"true", "1"})
     _FALSE_STRINGS = frozenset({"false", "0"})

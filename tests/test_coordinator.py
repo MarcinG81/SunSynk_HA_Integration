@@ -353,6 +353,13 @@ async def _settle_verification(coordinator) -> None:
     await asyncio.gather(*list(coordinator._verify_tasks))
 
 
+async def _settle_all_verification(coordinator) -> None:
+    """Also let confirmations of writes sent again finish."""
+    while coordinator._verify_tasks:
+        await _settle_verification(coordinator)
+        coordinator._verify_tasks -= {t for t in coordinator._verify_tasks if t.done()}
+
+
 def _gated_sleep():
     """A patched sleep that holds background confirmation until released."""
     gate = asyncio.Event()
@@ -413,8 +420,10 @@ async def test_write_verification_clears_issue_on_match(fake_coordinator, real_c
 async def test_write_verification_raises_issue_only_after_last_offset(
     fake_coordinator, real_confirm,
 ):
+    """The inverter never applies it: sent again three times, then reported."""
     stale = {**fake_coordinator.data["TEST123"]["settings"], "time1on": "false"}
-    mock_client = _client([stale] * 5)
+    # Each round: the fresh read before the write, then five confirmations.
+    mock_client = _client([stale] * 23)
     gate, gated_sleep = _gated_sleep()
 
     with (
@@ -429,9 +438,10 @@ async def test_write_verification_raises_issue_only_after_last_offset(
         assert fake_coordinator.data["TEST123"]["settings"]["time1on"] == "true"
         mock_ir.async_create_issue.assert_not_called()
         gate.set()
-        await _settle_verification(fake_coordinator)
+        await _settle_all_verification(fake_coordinator)
 
-    assert mock_client.async_get_settings.await_count == 6
+    assert mock_client.async_get_settings.await_count == 24
+    assert mock_client.async_write_settings.await_count == 4
     mock_ir.async_create_issue.assert_called_once()
     args, kwargs = mock_ir.async_create_issue.call_args
     assert args[:3] == (fake_coordinator.hass, DOMAIN, "setting_write_mismatch_TEST123_time1on")
@@ -798,3 +808,42 @@ def test_a_master_of_unknown_plant_is_not_chosen_once_plants_are_known():
 
     assert SunsynkCoordinator._resolve_parallel_write_target(coordinator, "slave_B", "x") == "slave_B"
     assert SunsynkCoordinator._resolve_parallel_write_target(coordinator, "slave_A", "x") == "master_A"
+
+
+@pytest.mark.asyncio
+async def test_a_lost_write_is_sent_again_and_lands(fake_coordinator, real_confirm):
+    """#36: two writes crossed and one never landed. Sent again, it lands."""
+    stale = {**fake_coordinator.data["TEST123"]["settings"], "time1on": "false"}
+    applied = {**stale, "time1on": "true"}
+    mock_client = _client([stale] * 5 + [stale, applied])
+
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await _settle_all_verification(fake_coordinator)
+
+    assert mock_client.async_write_settings.await_count == 2
+    assert mock_client.async_write_settings.await_args_list[1].args[2]["time1on"] == "true"
+    mock_ir.async_create_issue.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_value_changed_elsewhere_is_not_sent_again(fake_coordinator, real_confirm):
+    other = {**fake_coordinator.data["TEST123"]["settings"], "cap1": "77"}
+    mock_client = _client([other] * 5)
+
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch("custom_components.sunsynk.coordinator.ir") as mock_ir,
+    ):
+        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "cap1", 60)
+        await _settle_all_verification(fake_coordinator)
+
+    assert mock_client.async_write_settings.await_count == 1
+    mock_ir.async_create_issue.assert_called_once()
