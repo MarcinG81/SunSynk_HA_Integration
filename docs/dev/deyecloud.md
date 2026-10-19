@@ -39,6 +39,28 @@ Nothing here has been tested against a live account by us yet.
 
 Done: `custom_components/sunsynk/deyecloud/client.py` (all of the above, with tests) and `scripts/deyecloud_probe.py` (read-only, redacted dump for testers).
 
+## Real data (poligor84, #37, 2026-10-19)
+
+Personal account (no company ID), developer app with Station and Device Monitoring only. Three inverters:
+
+| | 1 | 2 | 3 |
+|---|---|---|---|
+| RatedPower | 8000 W | 8000 W | 15000 W |
+| Phases | single (`…L1L2` keys) | single | three (`…L1/L2/L3` keys) |
+| Measure points | 55 | 58 | 96 |
+| `/config/system`, `/config/battery`, `/config/tou` | all `2106001` "config point not supported" | same | all succeed |
+
+- **Login and reading work with monitoring-only permissions.** The earlier "auth appId not found" went away with the updated probe (which strips pasted spaces); the exact cause isn't known.
+- **Settings can be read for some inverters on the same login and not others**: the 15 kW three-phase works, both 8 kW single-phase units give `2106001`. Not known yet whether that's the model or the tester's access (some stations on the account are shared with him by their owners); asked in #37. Either way the backend must treat `2106001` as "this inverter can't be configured through Deye Cloud" (read-only entities, no Tariff Manager/VSS), not as an error.
+- **`TotalSolarPower` is missing on single-phase.** Use `TotalSolarPower` when present, otherwise the sum of `DCPowerPV1..n` (`TotalDCInputPower` was 0.00 at night on both, so may also work).
+- **Signs** match the reports: `BatteryPower` −36 W with `BatteryCurrent` −0.63 A at 99% (charging is negative); `TotalGridPower` +666 W with `DailyGridFeedIn` 0 (importing is positive).
+- **Single-phase keys** differ from three-phase: `InverterOutputPowerL1L2`, `GridVoltageL1L2`, `GridCurrentL1L2`, `ExternalCTPowerL1L2`, `LoadVoltageL1L2`; three-phase has per-phase `GridPowerL1..3`, `LoadPowerL1..3`, `TotalInverterOutputPower`, `TotalExternalCTPower`.
+- **Battery current** is `BatteryCurrent` on single-phase; three-phase has `BatteryCurrent1`, `BatteryCurrent2` and `BatteryTotalCurrent`.
+- **Lifetime counters** differ by model: single-phase has `CumulativeGridFeedIn`, `CumulativeEnergyPurchased`, `CumulativeConsumption`; three-phase has `TotalEnergySell`, `TotalEnergyBuy`, `TotalConsumption`. Both have the `Daily*` counters, so use those.
+- **Config values** (15 kW): `systemWorkMode` "ZERO_EXPORT_TO_LOAD", `energyPattern` "BATTERY_FIRST", `maxSellPower` 30000 (above the rated 15000, so don't treat it as a hardware limit), `maxSolarPower` 12000, `zeroExportPower` 20; battery `battCapacity` 300 (Ah), `battLowCapacity` 25, `battShutDownCapacity` 20, `maxChargeCurrent` 80, `maxDischargeCurrent` 170.
+- **TOU read** confirmed: `touAction` "on", six `timeUseSettingItems` with `time` "HHMM", `power`, `soc`, `voltage`, `enableGridCharge`, `enableGeneration`, and no `enableSell`.
+- Firmware strings come as `MAIN` / `HMI` / `ProtocolVersion`; `LithiumBatteryVersionNumber` is "0000" without a BMS link.
+
 ## Differences that shape the design
 
 1. **Per-slot Sell exists, but can't be read back.** The update takes `enableSell` per slot (Swagger; the samples never use it), so VSS can work as on Sunsynk. `/config/tou` doesn't report it, so the user's own sell ticks can't be captured for restore: either assume off, or read them through another route. To decide with a tester.
@@ -58,7 +80,5 @@ Done: `custom_components/sunsynk/deyecloud/client.py` (all of the above, with te
 
 ## Open questions for a tester
 
-- Exact measure-point keys and units from `/device/latest` for a hybrid with a battery.
-- Field names in `/config/system` and `/config/battery`.
 - Whether a personal account can send control orders, or a company ID is needed.
 - How long orders take on a real logger, and whether the inverter's own timer screen reflects TOU writes.
