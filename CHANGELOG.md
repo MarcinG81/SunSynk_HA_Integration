@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.9.18] - 2026-10-19
 
 ### Fixed
 - **A lost write was never sent again.** Two writes close together can cross, and one of them never lands (#36: a discharge left Sell ticked and the inverter kept exporting at full power). Every write is now checked: one the inverter still hasn't applied after a minute, while it still reports the value from before, is sent again, up to three times, and only then reported under Repairs. A value changed elsewhere, e.g. in the Sunsynk app, is left alone. (#36)
