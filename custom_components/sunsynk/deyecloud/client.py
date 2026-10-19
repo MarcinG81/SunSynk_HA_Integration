@@ -44,6 +44,7 @@ _LOGGER = logging.getLogger(__name__)
 REGIONS: dict[str, str] = {
     "eu": "https://eu1-developer.deyecloud.com/v1.0",
     "us": "https://us1-developer.deyecloud.com/v1.0",
+    "india": "https://india-developer.deyecloud.com/v1.0",
 }
 
 _TIMEOUT = aiohttp.ClientTimeout(total=30)
@@ -56,6 +57,12 @@ _AUTH_HINTS = ("invalid token", "token invalid", "token expired", "expired token
 # One order at a time per inverter: another one is still running. Retry
 # later; it isn't a refusal.
 _BUSY_CODES = frozenset({2104004})
+# "config point not supported": this inverter's settings can't be read or
+# changed through Deye Cloud. Seen for every config group of two
+# single-phase 8 kW inverters while a three-phase one on the same login
+# answered (#37); whether that is the model or the user's access to them
+# isn't known yet.
+_UNSUPPORTED_CODES = frozenset({2106001})
 # Deye has announced quotas but not their error codes, so match the message.
 _RATE_LIMIT_HINTS = (
     "rate limit",
@@ -112,6 +119,10 @@ class DeyeCloudRateLimitError(DeyeCloudApiError):
 
 class DeyeCloudOrderError(DeyeCloudApiError):
     """A setting change was accepted but the inverter didn't apply it."""
+
+
+class DeyeCloudUnsupportedError(DeyeCloudApiError):
+    """This inverter's settings aren't available through Deye Cloud."""
 
 
 class DeyeCloudBusyError(DeyeCloudApiError):
@@ -183,6 +194,10 @@ class DeyeCloudClient:
         self._clock = clock
         self._token: str | None = None
         self._token_expires_at = 0.0
+
+    @property
+    def session(self) -> aiohttp.ClientSession:
+        return self._session
 
     # ── Authentication ───────────────────────────────────────────────────
 
@@ -289,6 +304,8 @@ class DeyeCloudClient:
                 raise DeyeCloudAuthError(f"{message} (code {code})")
             if code in _BUSY_CODES:
                 raise DeyeCloudBusyError(f"{path}: {message} (code {code})")
+            if code in _UNSUPPORTED_CODES:
+                raise DeyeCloudUnsupportedError(f"{path}: {message} (code {code})")
             if _is_rate_limit(message):
                 raise DeyeCloudRateLimitError(f"{message} (code {code})")
             raise DeyeCloudApiError(f"{path}: {message} (code {code})")

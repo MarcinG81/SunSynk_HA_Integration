@@ -21,6 +21,7 @@ from custom_components.sunsynk.deyecloud.client import (
     DeyeCloudClient,
     DeyeCloudOrderError,
     DeyeCloudRateLimitError,
+    DeyeCloudUnsupportedError,
     hash_password,
     tou_time,
 )
@@ -78,7 +79,7 @@ def test_impossible_tou_times_are_refused(value):
 def test_unknown_region_is_refused():
     with pytest.raises(ValueError, match="region"):
         DeyeCloudClient(fake_session(), "mars", "a", "b", "c", "d")
-    assert set(REGIONS) == {"eu", "us"}
+    assert set(REGIONS) == {"eu", "us", "india"}
 
 
 def test_errors_are_the_integrations_own():
@@ -473,3 +474,14 @@ async def test_turning_the_timer_off_sends_no_days():
     await _client(session).async_set_tou_enabled("SN1", False)
 
     assert session.post.call_args.kwargs["json"] == {"deviceSn": "SN1", "action": "off"}
+
+
+@pytest.mark.asyncio
+async def test_settings_an_inverter_doesnt_offer_are_their_own_error():
+    """Seen for every config group of two single-phase 8 kW inverters (#37)."""
+    session = fake_session(
+        post=[FakeResponse(TOKEN_OK), FakeResponse({"code": "2106001", "msg": "config point not supported"})]
+    )
+
+    with pytest.raises(DeyeCloudUnsupportedError, match="not supported"):
+        await _client(session).async_get_config("SN1", "battery")

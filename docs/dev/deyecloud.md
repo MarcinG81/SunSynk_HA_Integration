@@ -72,8 +72,9 @@ Personal account (no company ID), developer app with Station and Device Monitori
 ## Plan
 
 1. ✅ API client + tests, aligned with the Swagger definition; probe script for testers.
-2. **Collect real data** from a tester (poligor84, #37): run `python -m scripts.deyecloud_probe`, share the redacted output. Needed for measure-point keys, config field names, units.
-3. **Backend interface:** the coordinator reads through a backend (`SunsynkBackend` = today's code, `DeyeCloudBackend` = new) that returns the same data shape (inverter / pv / grid / battery / load / settings), and writes Sunsynk-style setting keys, which the Deye backend maps to orders: `sysWorkMode` → work mode, `energyMode` → energy pattern, `solarSell` → solar sell, `batteryMaxCurrentCharge/Discharge` and `chargeCurrent/dischargeCurrent` → battery parameters, `solarMaxSellPower` → max sell power, `sellTime{n}` / `cap{n}` / `sellTime{n}Pac` / `time{n}on` → one TOU order.
+2. ✅ **Real data** from poligor84 (#37), above; kept as `tests/fixtures/deyecloud_37.json` without serials.
+3. ✅ **Reading:** `deyecloud/mapping.py` turns measure points and config groups into the Sunsynk-shaped sections; `deyecloud/coordinator.py` (`DeyeCloudCoordinator`, a `SunsynkCoordinator` subclass so entities, Tariff Manager and VSS see the same interface) reads live data every refresh and settings every 30 minutes, skips config groups that answer `2106001`, and refuses every write for now.
+3a. **Writes** (after a control test with a tester): `DeyeCloudCoordinator.async_write_settings` takes the same Sunsynk-style setting keys as today and maps them to orders: `sysWorkMode` → work mode, `energyMode` → energy pattern, `solarSell` → solar sell, `batteryMaxCurrentCharge/Discharge` and `chargeCurrent/dischargeCurrent` → battery parameters, `solarMaxSellPower` → max sell power, `sellTime{n}` / `cap{n}` / `sellTime{n}Pac` / `time{n}on` → one TOU order.
 4. **Config flow:** choose the cloud (Sunsynk Connect / Inteless / Deye Cloud); for Deye Cloud: region, App ID, App Secret, login, password (hashed before storing), optional company ID; pick inverters from the account.
 5. **VSS on Deye Cloud:** selling via work mode (difference 1), all six slots per write, user's timer and work mode captured and put back.
 6. **Beta for testers** before 2.1.0.
