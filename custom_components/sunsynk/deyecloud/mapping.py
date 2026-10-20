@@ -40,7 +40,16 @@ PROVIDED: dict[str, frozenset[str]] = {
     ),
     "pv": frozenset({"pac", "etoday", "etotal"}),
     "grid": frozenset(
-        {"pac", "fac", "etodayFrom", "etodayTo", "etotalFrom", "etotalTo"}
+        {
+            "pac",
+            "qac",
+            "fac",
+            "etodayFrom",
+            "etodayTo",
+            "etotalFrom",
+            "etotalTo",
+            "limiterTotalPower",
+        }
     ),
     "battery": frozenset(
         {
@@ -82,6 +91,12 @@ def _first(points: dict[str, Any], *keys: str) -> float | None:
         if number is not None:
             return number
     return None
+
+
+def _temperature(points: dict[str, Any], key: str) -> float | None:
+    """A temperature, or None for Deye's "no sensor" value (-100)."""
+    value = _first(points, key)
+    return value if value is not None and value > -50 else None
 
 
 def _drop_missing(section: dict[str, Any]) -> dict[str, Any]:
@@ -158,11 +173,16 @@ def _grid(points: dict[str, Any], three_phase: bool) -> dict[str, Any]:
     return _drop_missing(
         {
             "pac": _first(points, "TotalGridPower"),
+            "qac": _first(points, "TotalGridReactivePower"),
             "fac": _first(points, "GridFrequency"),
             "etodayFrom": _first(points, "DailyEnergyPurchased"),
             "etodayTo": _first(points, "DailyGridFeedIn"),
             "etotalFrom": _first(points, "CumulativeEnergyPurchased", "TotalEnergyBuy"),
             "etotalTo": _first(points, "CumulativeGridFeedIn", "TotalEnergySell"),
+            # The external CT (meter / limiter) reading.
+            "limiterTotalPower": _first(
+                points, "TotalExternalCTPower", "ExternalCTPowerL1L2"
+            ),
             "vip": vip,
         }
     )
@@ -235,7 +255,7 @@ def _battery(points: dict[str, Any]) -> dict[str, Any]:
             "power": _first(points, "BatteryPower"),
             "voltage": _first(points, "BatteryVoltage"),
             "current": _first(points, "BatteryCurrent", "BatteryTotalCurrent"),
-            "temp": _first(points, "Temperature- Battery"),
+            "temp": _temperature(points, "Temperature- Battery"),
             "etodayChg": _first(points, "DailyChargingEnergy"),
             "etodayDischg": _first(points, "DailyDischargingEnergy"),
             "etotalChg": _first(points, "TotalChargeEnergy"),
@@ -266,6 +286,21 @@ def _inverter(serial: str, points: dict[str, Any], pv: dict[str, Any]) -> dict:
             "version": versions or None,
         }
     )
+
+
+def _generator(points: dict[str, Any]) -> dict[str, Any]:
+    """Generator power, for the Generator Power sensor.
+
+    Deye reports the generator port whether or not anything is wired to it
+    (with a few volts of noise), so the sensor is only added once the port
+    has delivered power.
+    """
+    power = _first(
+        points, "TotalGenPower", "GeneratorActivePower", "TotalGeneratorPower"
+    )
+    if power is None:
+        return {}
+    return {"genPower": power, "existsGen": power != 0}
 
 
 def _hhmm(value: Any) -> str | None:
@@ -332,9 +367,10 @@ def sections(
         "output": _output(points, three_phase),
         "temp": _drop_missing(
             {
-                "dc_temp": _first(points, "DC Temperature"),
-                "igbt_temp": _first(points, "AC Temperature"),
+                "dc_temp": _temperature(points, "DC Temperature"),
+                "igbt_temp": _temperature(points, "AC Temperature"),
             }
         ),
+        "flow": _generator(points),
         "settings": settings(config),
     }

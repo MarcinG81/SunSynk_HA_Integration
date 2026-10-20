@@ -61,6 +61,17 @@ Personal account (no company ID), developer app with Station and Device Monitori
 - **TOU read** confirmed: `touAction` "on", six `timeUseSettingItems` with `time` "HHMM", `power`, `soc`, `voltage`, `enableGridCharge`, `enableGeneration`, and no `enableSell`.
 - Firmware strings come as `MAIN` / `HMI` / `ProtocolVersion`; `LithiumBatteryVersionNumber` is "0000" without a BMS link.
 
+### Second test, 17 inverters (poligor84, 2026-10-20)
+
+Diagnostics from the first Home Assistant build: 12 single-phase (6, 8 kW) and 5 three-phase (12–30 kW) inverters.
+
+- **Settings by model:** all 12 single-phase answer `2106001` for every config group; all 5 three-phase return system and time-of-use settings, 4 of them battery settings too. The tester owns the single-phase ones and can change their settings in the Deye Cloud app, so it isn't access: the OpenAPI doesn't offer settings for those models (or that firmware). To ask Deye.
+- Names and signs hold across all 17: battery positive while discharging, grid positive while importing; PV + grid + battery − load leaves 50–90 W (inverter losses).
+- One inverter reports a battery temperature of `-100`: no sensor. Temperatures below -50 are dropped.
+- Unused points worth having, now mapped: `TotalExternalCTPower` / `ExternalCTPowerL1L2` (meter, Sunsynk `limiterTotalPower`), `TotalGridReactivePower` (`qac`), `TotalGenPower` / `GeneratorActivePower` (generator; the port reports noise with nothing connected, so the sensor appears once it delivers power). Not mapped: per-phase reactive power, generator counters and run time, `ProtocolVersion`, three-phase `BatteryCurrent1/2`.
+- 17 of the 18 inverters on the account were listed; which one is missing, and why, is still to find out.
+- The logger uploads about every 5 minutes, so the cloud can't give second-by-second data. Local access (Solarman V5 on the logger, TCP 8899) would; out of scope for 2.1.
+
 ## Differences that shape the design
 
 1. **Per-slot Sell exists, but can't be read back.** The update takes `enableSell` per slot (Swagger; the samples never use it), so VSS can work as on Sunsynk. `/config/tou` doesn't report it, so the user's own sell ticks can't be captured for restore: either assume off, or read them through another route. To decide with a tester.

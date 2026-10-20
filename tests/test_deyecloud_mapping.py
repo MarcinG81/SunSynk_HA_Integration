@@ -172,3 +172,27 @@ def test_provided_lists_exactly_what_the_mapping_fills(points):
     other = sections("SN", THREE if points is SINGLE else SINGLE, {})
     for name, provided in PROVIDED.items():
         assert provided <= filled[name] | _leaf_keys(other[name]), name
+
+
+def test_meter_reactive_power_and_generator():
+    single = sections("SN1", SINGLE, {})
+    three = sections("SN3", THREE, {})
+
+    assert single["grid"]["limiterTotalPower"] == 0
+    assert three["grid"]["limiterTotalPower"] == 20
+    assert three["grid"]["qac"] == 0
+    # The generator port reports 0 W with nothing on it: no sensor yet.
+    assert single["flow"] == {"genPower": 0, "existsGen": False}
+    running = sections("SN1", {**SINGLE, "TotalGenPower": "2400"}, {})
+    assert running["flow"] == {"genPower": 2400, "existsGen": True}
+    assert sections("SN1", {}, {})["flow"] == {}
+
+
+@pytest.mark.parametrize("key", ["Temperature- Battery", "DC Temperature", "AC Temperature"])
+def test_no_sensor_temperature_is_left_out(key):
+    """One inverter reported a battery at -100 °C: no sensor connected (#37)."""
+    data = sections("SN1", {**SINGLE, key: "-100.00"}, {})
+
+    assert "temp" not in data["battery"] or key != "Temperature- Battery"
+    assert data["battery"].get("temp") != -100
+    assert -100 not in data["temp"].values()
