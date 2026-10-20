@@ -135,6 +135,8 @@ async def async_setup_entry(
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
         for description in static_sensors:
+            if deyecloud and not _deyecloud_reports(coordinator, serial, description):
+                continue
             uid = f"{serial}_{description.key}"
             registered_uids.add(uid)
             entities.append(
@@ -153,7 +155,9 @@ async def async_setup_entry(
         new_entities: list[SunsynkSensor] = []
         for serial in coordinator.serials:
             device_info = build_device_info(coordinator, serial)
-            for desc in _build_dynamic_descriptions(coordinator, serial):
+            for desc in _build_dynamic_descriptions(
+                coordinator, serial, only_reported=deyecloud
+            ):
                 uid = f"{serial}_{desc.key}"
                 if uid not in registered_uids:
                     registered_uids.add(uid)
@@ -211,10 +215,33 @@ async def async_setup_entry(
         )
 
 
+def _deyecloud_reports(
+    coordinator: SunsynkCoordinator,
+    serial: str,
+    description: SunsynkSensorEntityDescription,
+) -> bool:
+    """Whether a Deye Cloud inverter reports this sensor's value.
+
+    Models report different points (single-phase has no reactive power,
+    three-phase no DC temperature), so a sensor is only added where there is
+    a value. An inverter without data yet gets every sensor Deye Cloud can
+    fill, rather than none.
+    """
+    serial_data = (coordinator.data or {}).get(serial, {})
+    if not any(serial_data.get(section) for section in DEYECLOUD_PROVIDED):
+        return True
+    endpoint_data = serial_data.get(description.endpoint) or {}
+    return _resolve_value(endpoint_data, description.data_key) not in (None, "")
+
+
 def _build_dynamic_descriptions(
-    coordinator: SunsynkCoordinator, serial: str
+    coordinator: SunsynkCoordinator, serial: str, *, only_reported: bool = False
 ) -> list[SunsynkSensorEntityDescription]:
-    """Build sensor descriptions for MPPT strings and grid/load/output phases."""
+    """Build sensor descriptions for MPPT strings and grid/load/output phases.
+
+    With `only_reported`, a phase field nobody reports (Deye Cloud gives no
+    current for load phases) gets no sensor.
+    """
     descriptions: list[SunsynkSensorEntityDescription] = []
     serial_data = (coordinator.data or {}).get(serial, {})
 
@@ -259,6 +286,8 @@ def _build_dynamic_descriptions(
                 ),
                 ("power", "Power", UnitOfPower.WATT, SensorDeviceClass.POWER),
             ]:
+                if only_reported and field_key not in phases[idx]:
+                    continue
                 descriptions.append(
                     SunsynkSensorEntityDescription(
                         key=f"{prefix}{idx}_{field_key}",

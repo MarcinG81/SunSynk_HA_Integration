@@ -338,6 +338,7 @@ def test_identifiers_are_shown_as_text(platform_context):
 async def test_deyecloud_inverters_get_only_sensors_with_data(platform_context):
     hass, entry, coordinator, *_ = platform_context
     entry.data = {"backend": "deyecloud"}
+    coordinator.data["INV1"]["grid"]["pac"] = 460
     added: list[object] = []
 
     await setup_sensors(hass, entry, added.extend)
@@ -350,3 +351,37 @@ async def test_deyecloud_inverters_get_only_sensors_with_data(platform_context):
     assert {"battery_soc", "pv_pac", "grid_pac", "inverter_sn"} <= keys
     assert not keys & {"battery_bms_soc", "inverter_status", "battery_soh", "inverter_model"}
     assert not any(isinstance(entity, PlantEnergyPriceSensor) for entity in added)
+
+
+@pytest.mark.asyncio
+async def test_each_deyecloud_inverter_gets_only_what_it_reports(platform_context):
+    """Single-phase reports no reactive power, and load phases come without
+    a current: no sensor that would only show "Unknown" (#37)."""
+    hass, entry, coordinator, *_ = platform_context
+    entry.data = {"backend": "deyecloud"}
+    coordinator.data = {
+        "INV1": {
+            "inverter": {"sn": "INV1"},
+            "grid": {"pac": 5, "vip": [{"volt": 230, "current": 1, "power": 5}]},
+            "load": {"totalPower": 7, "vip": [{"volt": 230, "power": 7}]},
+        },
+        "INV2": {},  # no data yet: every sensor Deye Cloud can fill
+    }
+    added: list[object] = []
+
+    await setup_sensors(hass, entry, added.extend)
+    coordinator.async_add_listener.call_args.args[0]()  # dynamic sensors
+
+    keys = {
+        serial: {
+            e.entity_description.key
+            for e in added
+            if isinstance(e, SunsynkSensor) and e._serial == serial
+        }
+        for serial in ("INV1", "INV2")
+    }
+    assert {"grid_pac", "load_total_power", "inverter_sn"} <= keys["INV1"]
+    assert "grid_qac" not in keys["INV1"]
+    assert {"grid_phase0_current", "load_phase0_power"} <= keys["INV1"]
+    assert "load_phase0_current" not in keys["INV1"]
+    assert {"grid_qac", "battery_soc"} <= keys["INV2"]
