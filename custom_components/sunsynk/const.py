@@ -112,6 +112,9 @@ class SunsynkSensorEntityDescription(SensorEntityDescription):
     value_fn: Callable[[dict[str, Any]], Any] | None = (
         None  # overrides data_key lookup when set
     )
+    # An identifier or version shown as reported, never as a number: a Deye
+    # serial is all digits and showed as "2301316667.0" (#37).
+    text: bool = False
 
 
 def _model_value(d: dict[str, Any]) -> str | None:
@@ -266,6 +269,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="sn",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_alias",
@@ -273,6 +277,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="alias",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_gsn",
@@ -280,6 +285,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="gsn",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_brand",
@@ -330,6 +336,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="version.masterVer",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_soft_ver",
@@ -337,6 +344,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="version.softVer",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_hard_ver",
@@ -344,6 +352,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="version.hardVer",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_hmi_ver",
@@ -351,6 +360,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="version.hmiVer",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_bms_ver",
@@ -358,6 +368,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="version.bmsVer",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_comm_ver",
@@ -365,6 +376,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="version.commVer",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_plant_name",
@@ -372,6 +384,7 @@ INVERTER_SENSORS: tuple[SunsynkSensorEntityDescription, ...] = (
         endpoint="inverter",
         data_key="plant.name",
         entity_category=EntityCategory.DIAGNOSTIC,
+        text=True,
     ),
     SunsynkSensorEntityDescription(
         key="inverter_address",

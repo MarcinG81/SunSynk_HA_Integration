@@ -21,6 +21,48 @@ from typing import Any
 
 from .client import ENERGY_PATTERNS, TOU_SLOTS, WORK_MODES
 
+# The fields `sections` can fill, per section. Sensors for anything else
+# (BMS details, status codes, plant info, ...) would only ever show
+# "Unknown" on a Deye Cloud inverter, so they aren't created (#37).
+PROVIDED: dict[str, frozenset[str]] = {
+    "inverter": frozenset(
+        {
+            "sn",
+            "brand",
+            "ratePower",
+            "pac",
+            "etoday",
+            "etotal",
+            "version.masterVer",
+            "version.hmiVer",
+            "version.bmsVer",
+        }
+    ),
+    "pv": frozenset({"pac", "etoday", "etotal"}),
+    "grid": frozenset(
+        {"pac", "fac", "etodayFrom", "etodayTo", "etotalFrom", "etotalTo"}
+    ),
+    "battery": frozenset(
+        {
+            "soc",
+            "power",
+            "voltage",
+            "current",
+            "temp",
+            "etodayChg",
+            "etodayDischg",
+            "etotalChg",
+            "etotalDischg",
+            "capacity",
+        }
+    ),
+    "load": frozenset(
+        {"totalPower", "dailyUsed", "totalUsed", "loadFac", "upsPowerTotal"}
+    ),
+    "output": frozenset({"pac", "fac"}),
+    "temp": frozenset({"dc_temp", "igbt_temp"}),
+}
+
 _WORK_MODE_VALUES = {name: value for value, name in WORK_MODES.items()}
 _ENERGY_PATTERN_VALUES = {name: value for value, name in ENERGY_PATTERNS.items()}
 

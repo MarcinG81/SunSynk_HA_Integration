@@ -7,7 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.sunsynk.const import DOMAIN, SunsynkSensorEntityDescription
+from custom_components.sunsynk.const import (
+    ALL_STATIC_SENSORS,
+    DOMAIN,
+    SunsynkSensorEntityDescription,
+)
 from custom_components.sunsynk.number import (
     PlantEnergyPriceNumberEntity,
     SunsynkNumberEntity,
@@ -312,3 +316,37 @@ async def test_sensor_listener_lifecycles(platform_context):
         await entity.async_will_remove_from_hass()
         assert unsubscribe.called
         assert entity._unsub is None
+
+
+def test_identifiers_are_shown_as_text(platform_context):
+    """A Deye serial is all digits and showed as "2301316667.0" (#37)."""
+    _hass, _entry, coordinator, *_ = platform_context
+    coordinator.data["INV1"]["inverter"]["sn"] = "2301316667"
+    coordinator.data["INV1"]["inverter"]["version"] = {"bmsVer": "0000"}
+    by_key = {d.key: d for d in ALL_STATIC_SENSORS}
+
+    serial = SunsynkSensor(coordinator, "INV1", by_key["inverter_sn"], MagicMock())
+    bms = SunsynkSensor(coordinator, "INV1", by_key["inverter_bms_ver"], MagicMock())
+
+    assert serial.native_value == "2301316667"
+    assert bms.native_value == "0000"
+    coordinator.data["INV1"]["inverter"]["sn"] = ""
+    assert serial.native_value is None
+
+
+@pytest.mark.asyncio
+async def test_deyecloud_inverters_get_only_sensors_with_data(platform_context):
+    hass, entry, coordinator, *_ = platform_context
+    entry.data = {"backend": "deyecloud"}
+    added: list[object] = []
+
+    await setup_sensors(hass, entry, added.extend)
+
+    keys = {
+        entity.entity_description.key
+        for entity in added
+        if isinstance(entity, SunsynkSensor) and entity._serial == "INV1"
+    }
+    assert {"battery_soc", "pv_pac", "grid_pac", "inverter_sn"} <= keys
+    assert not keys & {"battery_bms_soc", "inverter_status", "battery_soh", "inverter_model"}
+    assert not any(isinstance(entity, PlantEnergyPriceSensor) for entity in added)

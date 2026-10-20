@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from custom_components.sunsynk.deyecloud.mapping import sections, settings
+from custom_components.sunsynk.deyecloud.mapping import PROVIDED, sections, settings
 
 _DATA = json.loads(
     (Path(__file__).parent / "fixtures" / "deyecloud_37.json").read_text("utf-8")
@@ -147,3 +147,28 @@ def test_nothing_reported_gives_empty_sections():
     assert data["battery"] == {}
     assert data["grid"] == {"vip": []}
     assert data["inverter"] == {"sn": "SN1", "brand": "Deye"}
+
+
+def _leaf_keys(section: dict, prefix: str = "") -> set[str]:
+    keys = set()
+    for key, value in section.items():
+        if isinstance(value, dict):
+            keys |= _leaf_keys(value, f"{prefix}{key}.")
+        elif not isinstance(value, list):
+            keys.add(f"{prefix}{key}")
+    return keys
+
+
+@pytest.mark.parametrize("points", [SINGLE, THREE], ids=["single", "three"])
+def test_provided_lists_exactly_what_the_mapping_fills(points):
+    """Sensors are created from PROVIDED: anything missing from it would
+    never get a sensor, anything extra would always be "Unknown"."""
+    data = sections("SN", points, {})
+
+    for name, provided in PROVIDED.items():
+        assert _leaf_keys(data[name]) <= provided, name
+    filled = {name: _leaf_keys(data[name]) for name in PROVIDED}
+    # Every listed field is filled by at least one of the two models.
+    other = sections("SN", THREE if points is SINGLE else SINGLE, {})
+    for name, provided in PROVIDED.items():
+        assert provided <= filled[name] | _leaf_keys(other[name]), name

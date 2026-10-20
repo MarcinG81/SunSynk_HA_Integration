@@ -32,8 +32,10 @@ from .const import (
     ALL_STATIC_SENSORS,
     DOMAIN,
     SunsynkSensorEntityDescription,
+    is_deyecloud,
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
+from .deyecloud.mapping import PROVIDED as DEYECLOUD_PROVIDED
 from .helpers import build_device_info
 
 if TYPE_CHECKING:
@@ -120,16 +122,28 @@ async def async_setup_entry(
     registered_uids: set[str] = set()
     entities: list[SensorEntity] = []
 
+    deyecloud = is_deyecloud(entry.data)
+    static_sensors = [
+        description
+        for description in ALL_STATIC_SENSORS
+        if not deyecloud
+        or (
+            description.value_fn is None
+            and description.data_key in DEYECLOUD_PROVIDED.get(description.endpoint, ())
+        )
+    ]
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
-        for description in ALL_STATIC_SENSORS:
+        for description in static_sensors:
             uid = f"{serial}_{description.key}"
             registered_uids.add(uid)
             entities.append(
                 SunsynkSensor(coordinator, serial, description, device_info)
             )
         entities.append(InverterInternalPowerSensor(coordinator, serial, device_info))
-        entities.append(PlantEnergyPriceSensor(coordinator, serial, device_info))
+        if not deyecloud:
+            # Deye Cloud has no plant energy price.
+            entities.append(PlantEnergyPriceSensor(coordinator, serial, device_info))
 
     async_add_entities(entities)
 
@@ -401,6 +415,8 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
             )
         if value is None:
             return None
+        if self.entity_description.text:
+            return str(value) if value != "" else None
 
         try:
             return float(value)
