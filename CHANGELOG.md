@@ -8,13 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - **Deye Cloud inverters (read-only for now).** Deye inverters on a SOLARMAN / LSW logger report to Deye Cloud, not to Sunsynk Connect or Inteless, so they couldn't be added (#37). When adding the integration you can now choose Deye Cloud, enter the App ID and App Secret of your own free developer app from developer.deyecloud.com and your Deye Cloud login, and pick inverters from the account. They get the same sensors as Sunsynk inverters, single- and three-phase, mapped from real data shared by poligor84. Controls, Tariff Manager and the Virtual Slot Scheduler follow once changing settings through Deye Cloud has been tested on a real inverter. Only a hash of the password is stored.
 - **Deye Cloud inverters get only the sensors Deye Cloud reports.** The first test build added every Sunsynk sensor, so about half of them (BMS details, status codes, plant info) only ever showed "Unknown": over 1,800 entities for 17 inverters. Now 37 per inverter, plus PV strings and phases. Found by poligor84. (#37)
-
-### Fixed
-- **Serial numbers and firmware versions made only of digits showed as numbers**, e.g. a Deye serial as "2301316667.0" or a BMS version "0000" as "0.0". They are now shown exactly as reported. (#37)
 - **System Work Mode as a select** with the three modes the Sunsynk portal offers: Selling First, Zero Export + Limit to Load Only, Limited to Home, translated into every language. It replaces the number entity, which is kept for existing automations but disabled on new installs.
 
 ### Changed
 - **`sunsynk.set_work_mode` and the work mode number accept 0–2 only.** Modes 3 ("Self Use") and 4 ("Time of Use") were listed but don't exist on Sunsynk / Deye inverters.
+
+### Fixed
+- **Serial numbers and firmware versions made only of digits showed as numbers**, e.g. a Deye serial as "2301316667.0" or a BMS version "0000" as "0.0". They are now shown exactly as reported. (#37)
 
 ## [2.0.0-beta.18] - 2026-10-19
 
