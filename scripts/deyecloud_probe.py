@@ -46,7 +46,9 @@ _SENSITIVE_KEYS = re.compile(
 
 def _mask(value: Any) -> Any:
     text = str(value)
-    return text[:2] + "*" * max(0, len(text) - 4) + text[-2:] if len(text) > 4 else "****"
+    return (
+        text[:2] + "*" * max(0, len(text) - 4) + text[-2:] if len(text) > 4 else "****"
+    )
 
 
 def redact(data: Any, key: str = "") -> Any:
