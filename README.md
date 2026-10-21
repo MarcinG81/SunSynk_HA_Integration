@@ -355,6 +355,11 @@ These appear under **Settings** entities on the device page.
 | System Work Mode | Selling First · Zero Export + Limit to Load Only · Limited to Home |
 | Energy Mode | Battery First · Load First (what solar power goes to first) |
 
+System Work Mode:
+- **Selling First:** exporting energy to the grid comes first.
+- **Zero Export + Limit to Load Only:** supplies only what is connected to the inverter's LOAD / UPS output, with no export to the grid.
+- **Limited to Home:** also supplies the rest of the house, limiting export based on the CT (meter) reading.
+
 The older *System Work Mode (number)* (0–2) and *Energy Mode (number)* (0 = Battery First, 1 = Load First) entities are still there for existing automations, but are disabled on new installs.
 
 #### Switches (on/off)
