@@ -75,6 +75,11 @@ _RATE_LIMIT_HINTS = (
 _TOKEN_MARGIN = 3600
 # The latest-data endpoint takes at most this many devices per request.
 LATEST_BATCH = 10
+# Added to each inverter's measure points from the latest-data answer: when
+# the logger took them (Unix seconds) and Deye's device state.
+COLLECTION_TIME = "_collectionTime"
+DEVICE_STATE = "_deviceState"
+DEVICE_OFFLINE = 3  # 1 online, 2 alert, 3 offline
 
 # Order status: 0 to be sent, 100 sending, 300 during a firmware upgrade,
 # 400 terminated, 500 failed, 666 succeeded.
@@ -354,6 +359,12 @@ class DeyeCloudClient:
                     for item in device.get("dataList") or []
                     if item.get("key")
                 }
+                for meta, key in (
+                    (COLLECTION_TIME, "collectionTime"),
+                    (DEVICE_STATE, "deviceState"),
+                ):
+                    if device.get(key) is not None:
+                        latest[serial][meta] = device[key]
         return latest
 
     async def async_get_config(self, serial: str, kind: str) -> dict[str, Any]:

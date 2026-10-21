@@ -15,17 +15,21 @@ Deye's quotas.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from ..const import DOMAIN
 from ..coordinator import SunsynkCoordinator
 from . import mapping
 from .client import (
+    DEVICE_OFFLINE,
+    DEVICE_STATE,
     DeyeCloudApiError,
     DeyeCloudAuthError,
     DeyeCloudClient,
@@ -36,6 +40,10 @@ _LOGGER = logging.getLogger(__name__)
 
 _CONFIG_GROUPS = ("system", "battery", "tou")
 _CONFIG_MAX_AGE = 1800
+# Deye Cloud keeps answering with an offline logger's last points. Older
+# than this, they are treated as no data: loggers upload about every 5
+# minutes, and two inverters in #37 showed the same values for hours.
+_STALE_AFTER = timedelta(minutes=30)
 
 READ_ONLY_MESSAGE = (
     "Changing settings through Deye Cloud isn't supported yet; "
@@ -132,29 +140,52 @@ class DeyeCloudCoordinator(SunsynkCoordinator):
                 # As for Sunsynk: keep the rest, never a stale SOC.
                 result[serial] = dict((self.data or {}).get(serial, {}))
                 result[serial]["battery"] = {}
-                ir.async_create_issue(
-                    self.hass,
-                    DOMAIN,
-                    f"inverter_offline_{serial}",
-                    is_fixable=False,
-                    severity=ir.IssueSeverity.WARNING,
-                    translation_key="inverter_offline",
-                    translation_placeholders={"serial": serial},
-                )
+                self._offline(serial)
                 continue
-            ir.async_delete_issue(self.hass, DOMAIN, f"inverter_offline_{serial}")
             try:
                 config = await self._async_config(client, serial)
             except DeyeCloudAuthError as err:
                 raise self._auth_failed(err) from err
             result[serial] = mapping.sections(serial, points, config)
             result[serial]["plant"] = {}
+            if self._is_stale(serial, points):
+                # Shown as last reported, with when; but never a stale SOC
+                # for Tariff Manager to act on.
+                result[serial]["battery"] = {}
+                self._offline(serial)
+            else:
+                ir.async_delete_issue(self.hass, DOMAIN, f"inverter_offline_{serial}")
 
         if self.serials and len(missing) == len(self.serials):
             raise UpdateFailed(
                 f"Deye Cloud reported no data for any inverter ({', '.join(missing)})"
             )
         return result
+
+    def _is_stale(self, serial: str, points: dict[str, Any]) -> bool:
+        if points.get(DEVICE_STATE) == DEVICE_OFFLINE:
+            _LOGGER.warning("Deye Cloud reports inverter %s offline", serial)
+            return True
+        when = mapping.collected_at(points)
+        if when is not None and dt_util.utcnow() - when > _STALE_AFTER:
+            _LOGGER.warning(
+                "Inverter %s last reported to Deye Cloud at %s",
+                serial,
+                dt_util.as_local(when).isoformat(),
+            )
+            return True
+        return False
+
+    def _offline(self, serial: str) -> None:
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            f"inverter_offline_{serial}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="inverter_offline",
+            translation_placeholders={"serial": serial},
+        )
 
     async def _async_config(
         self, client: DeyeCloudClient, serial: str

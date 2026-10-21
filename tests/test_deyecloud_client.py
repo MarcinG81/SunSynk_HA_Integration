@@ -485,3 +485,34 @@ async def test_settings_an_inverter_doesnt_offer_are_their_own_error():
 
     with pytest.raises(DeyeCloudUnsupportedError, match="not supported"):
         await _client(session).async_get_config("SN1", "battery")
+
+
+@pytest.mark.asyncio
+async def test_latest_data_carries_when_it_was_collected_and_the_device_state():
+    session = fake_session(
+        post=[
+            FakeResponse(TOKEN_OK),
+            _ok(
+                {
+                    "deviceDataList": [
+                        {
+                            "deviceSn": "SN1",
+                            "collectionTime": 1761048000,
+                            "deviceState": 3,
+                            "dataList": [{"key": "SOC", "value": "50"}],
+                        },
+                        {"deviceSn": "SN2", "dataList": []},
+                    ]
+                }
+            ),
+        ]
+    )
+
+    latest = await _client(session).async_get_latest(["SN1", "SN2"])
+
+    assert latest["SN1"] == {
+        "SOC": "50",
+        "_collectionTime": 1761048000,
+        "_deviceState": 3,
+    }
+    assert latest["SN2"] == {}

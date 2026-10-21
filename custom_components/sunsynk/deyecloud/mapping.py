@@ -17,9 +17,10 @@ positive while importing.
 from __future__ import annotations
 
 import math
+from datetime import UTC, datetime
 from typing import Any
 
-from .client import ENERGY_PATTERNS, TOU_SLOTS, WORK_MODES
+from .client import COLLECTION_TIME, ENERGY_PATTERNS, TOU_SLOTS, WORK_MODES
 
 # The fields `sections` can fill, per section. Sensors for anything else
 # (BMS details, status codes, plant info, ...) would only ever show
@@ -29,6 +30,7 @@ PROVIDED: dict[str, frozenset[str]] = {
         {
             "sn",
             "brand",
+            "updateAt",
             "ratePower",
             "pac",
             "etoday",
@@ -265,6 +267,14 @@ def _battery(points: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def collected_at(points: dict[str, Any]) -> datetime | None:
+    """When the logger took these measure points, if Deye said."""
+    seconds = _number(points.get(COLLECTION_TIME))
+    if seconds is None or seconds <= 0:
+        return None
+    return datetime.fromtimestamp(seconds, UTC)
+
+
 def _inverter(serial: str, points: dict[str, Any], pv: dict[str, Any]) -> dict:
     versions = _drop_missing(
         {
@@ -277,6 +287,7 @@ def _inverter(serial: str, points: dict[str, Any], pv: dict[str, Any]) -> dict:
         {
             "sn": serial,
             "brand": "Deye",
+            "updateAt": (when.isoformat() if (when := collected_at(points)) else None),
             "ratePower": _first(points, "RatedPower"),
             "pac": _first(
                 points, "TotalInverterOutputPower", "InverterOutputPowerL1L2"

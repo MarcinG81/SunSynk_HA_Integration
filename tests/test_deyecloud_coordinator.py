@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from custom_components.sunsynk.deyecloud import coordinator as module
 from custom_components.sunsynk.deyecloud.client import (
@@ -212,3 +213,44 @@ async def test_the_client_is_made_once_per_session():
     assert first.session is session
     assert first._company_id == "42"
     assert first._base.startswith("https://eu1-developer")
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "meta",
+    [
+        {"_deviceState": 3},  # Deye says offline
+        {"_collectionTime": 1_000_000_000},  # 2001: hours old
+    ],
+    ids=["offline", "old"],
+)
+async def test_an_offline_logger_s_last_values_are_not_taken_as_now(
+    coordinator, client, issues, meta
+):
+    """Deye Cloud keeps answering with an offline logger's last points: two
+    inverters in #37 showed the same values for hours. No SOC from them."""
+    client.async_get_latest.return_value = {"SN1": {**SINGLE, **meta}, "SN3": THREE}
+
+    data = await coordinator._async_update_data()
+
+    assert data["SN1"]["battery"] == {}
+    assert data["SN1"]["pv"]["etoday"] == 1.4  # still shown as last reported
+    assert data["SN3"]["battery"]["soc"] == 31
+    create, _ = issues
+    assert create.call_args.args[2] == "inverter_offline_SN1"
+
+
+@pytest.mark.asyncio
+async def test_recent_points_are_used(coordinator, client, issues):
+    now = dt_util.utcnow().timestamp()
+    client.async_get_latest.return_value = {
+        "SN1": {**SINGLE, "_collectionTime": now - 300, "_deviceState": 1},
+        "SN3": THREE,
+    }
+
+    data = await coordinator._async_update_data()
+
+    assert data["SN1"]["battery"]["soc"] == 100
+    create, _ = issues
+    create.assert_not_called()

@@ -163,13 +163,15 @@ def _leaf_keys(section: dict, prefix: str = "") -> set[str]:
 def test_provided_lists_exactly_what_the_mapping_fills(points):
     """Sensors are created from PROVIDED: anything missing from it would
     never get a sensor, anything extra would always be "Unknown"."""
+    # The probe didn't keep the collection time; the integration gets it.
+    points = {**points, "_collectionTime": 1761048000}
     data = sections("SN", points, {})
 
     for name, provided in PROVIDED.items():
         assert _leaf_keys(data[name]) <= provided, name
     filled = {name: _leaf_keys(data[name]) for name in PROVIDED}
     # Every listed field is filled by at least one of the two models.
-    other = sections("SN", THREE if points is SINGLE else SINGLE, {})
+    other = sections("SN", THREE if "GridVoltageL1L2" in points else SINGLE, {})
     for name, provided in PROVIDED.items():
         assert provided <= filled[name] | _leaf_keys(other[name]), name
 
@@ -196,3 +198,10 @@ def test_no_sensor_temperature_is_left_out(key):
     assert "temp" not in data["battery"] or key != "Temperature- Battery"
     assert data["battery"].get("temp") != -100
     assert -100 not in data["temp"].values()
+
+
+def test_collection_time_becomes_last_update():
+    data = sections("SN", {**SINGLE, "_collectionTime": 1761048000}, {})
+
+    assert data["inverter"]["updateAt"] == "2025-10-21T12:00:00+00:00"
+    assert "updateAt" not in sections("SN", {**SINGLE, "_collectionTime": 0}, {})["inverter"]
