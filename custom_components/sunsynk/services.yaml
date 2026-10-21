@@ -1,3 +1,77 @@
+charge_now_start:
+  name: Charge Now
+  description: >
+    Charge the battery now, from the grid if needed, at the Tariff Manager's
+    cheap-rate charge current up to its target SOC, whatever the price and
+    whether Tariff Manager is on or off. Needs the Virtual Slot Scheduler on to
+    charge from the grid. Stops with Charge Now Stop, after the duration, or
+    when Tariff Manager is switched off or Home Assistant restarts.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Exactly one target inverter. A parallel slave is routed to its master.
+      required: true
+      selector:
+        text:
+    duration:
+      name: Duration
+      description: Minutes to charge for. Without it, until stopped.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+          mode: box
+
+charge_now_stop:
+  name: Charge Now Stop
+  description: Stop a charge started with Charge Now. Tariff Manager then decides by price again.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Exactly one target inverter. A parallel slave is routed to its master.
+      required: true
+      selector:
+        text:
+
+discharge_now_start:
+  name: Discharge Now
+  description: >
+    Discharge the battery now, exporting to the grid, at the Tariff Manager's
+    peak discharge current down to its minimum SOC, whatever the price and
+    whether Tariff Manager is on or off. Needs the Virtual Slot Scheduler on to
+    export. Stops with Discharge Now Stop, after the duration, at the minimum
+    SOC, or when Tariff Manager is switched off or Home Assistant restarts.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Exactly one target inverter. A parallel slave is routed to its master.
+      required: true
+      selector:
+        text:
+    duration:
+      name: Duration
+      description: Minutes to discharge for. Without it, until stopped or the minimum SOC.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+          mode: box
+
+discharge_now_stop:
+  name: Discharge Now Stop
+  description: Stop a discharge started with Discharge Now. Tariff Manager then decides by price again.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Exactly one target inverter. A parallel slave is routed to its master.
+      required: true
+      selector:
+        text:
+
 force_charge:
   name: Force Charge
   description: >

@@ -77,6 +77,10 @@ async def test_setup_static_path_failure_still_registers_services():
         integration.SERVICE_SET_WORK_MODE,
         integration.SERVICE_SET_VIRTUAL_SLOT,
         integration.SERVICE_CLEAR_VIRTUAL_SLOT,
+        integration.SERVICE_CHARGE_NOW_START,
+        integration.SERVICE_CHARGE_NOW_STOP,
+        integration.SERVICE_DISCHARGE_NOW_START,
+        integration.SERVICE_DISCHARGE_NOW_STOP,
     }
 
 
@@ -86,7 +90,7 @@ async def test_setup_static_path_legacy_api_success():
     hass.http.async_register_static_paths = AsyncMock(side_effect=AttributeError)
     assert await integration.async_setup(hass, {}) is True
     hass.http.register_static_path.assert_called_once()
-    assert hass.services.async_register.call_count == 5
+    assert hass.services.async_register.call_count == 9
 
 
 @pytest.mark.asyncio

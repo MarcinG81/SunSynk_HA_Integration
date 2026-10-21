@@ -423,6 +423,10 @@ Five services are available for use in automations and scripts (**Developer Tool
 
 | Service | Description |
 |---|---|
+| `sunsynk.charge_now_start` | Charge now (from the grid if needed) at the Tariff Manager's cheap-rate current up to its target SOC, whatever the price, with Tariff Manager on or off. Optional `duration` in minutes. Needs the Virtual Slot Scheduler on to charge from the grid. |
+| `sunsynk.charge_now_stop` | Stop it; Tariff Manager decides by price again. |
+| `sunsynk.discharge_now_start` | Discharge now (exporting) at the Tariff Manager's peak discharge current down to its minimum SOC, whatever the price, with Tariff Manager on or off. Optional `duration` in minutes. Needs the Virtual Slot Scheduler on to export. |
+| `sunsynk.discharge_now_stop` | Stop it; Tariff Manager decides by price again. |
 | `sunsynk.force_charge` | Set battery charge current from 0–300 A. Call again with your normal value to restore. Only changes the current — whether the battery charges from the grid still depends on the active timer slot. |
 | `sunsynk.force_discharge` | Set battery discharge current from 0–300 A. Only changes the current — exporting still needs a selling timer slot. |
 | `sunsynk.set_work_mode` | Set the System Work Mode: 0 = Selling First, 1 = Zero Export + Limit to Load Only, 2 = Limited to Home. The System Work Mode select does the same. |

@@ -73,7 +73,7 @@ from .current_limits import current_limit, describe_limit, group_sizes
 from .dashboard import build_dashboard
 from .deyecloud.coordinator import DeyeCloudCoordinator
 from .helpers import options_snapshot_key
-from .tariff import TariffChargingManager
+from .tariff import MANUAL_CHARGE, MANUAL_DISCHARGE, TariffChargingManager
 from .virtual_slots import (
     MAX_VIRTUAL_SLOTS,
     MODE_CHARGE,
@@ -113,6 +113,10 @@ def _platforms(entry: ConfigEntry) -> list[Platform]:
     return READ_ONLY_PLATFORMS if is_deyecloud(entry.data) else PLATFORMS
 
 
+SERVICE_CHARGE_NOW_START = "charge_now_start"
+SERVICE_CHARGE_NOW_STOP = "charge_now_stop"
+SERVICE_DISCHARGE_NOW_START = "discharge_now_start"
+SERVICE_DISCHARGE_NOW_STOP = "discharge_now_stop"
 SERVICE_FORCE_CHARGE = "force_charge"
 SERVICE_FORCE_DISCHARGE = "force_discharge"
 SERVICE_SET_WORK_MODE = "set_work_mode"
@@ -127,6 +131,14 @@ _SERVICE_SERIAL_CURRENT_SCHEMA = vol.Schema(
         ),
     }
 )
+_SERVICE_NOW_START_SCHEMA = vol.Schema(
+    {
+        vol.Required("serial"): str,
+        # Minutes; without it, until stopped (or, discharging, the minimum SOC).
+        vol.Optional("duration"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+    }
+)
+_SERVICE_NOW_STOP_SCHEMA = vol.Schema({vol.Required("serial"): str})
 _SERVICE_SET_WORK_MODE_SCHEMA = vol.Schema(
     {
         vol.Required("serial"): str,
@@ -544,6 +556,49 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         if scheduler is None:
             raise ValueError("Virtual slot scheduler not initialised for this inverter")
         await scheduler.async_clear_slot(call.data["slot_id"])
+
+    def _manual_target(serial: str) -> tuple[TariffChargingManager, str]:
+        coordinator = _find_coordinator(hass, serial)
+        if coordinator is None:
+            raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
+        entry_id = _find_entry_id_for_serial(hass, serial)
+        manager = hass.data[DOMAIN].get(f"{entry_id}_tariff")
+        if manager is None:
+            raise ServiceValidationError(
+                "Tariff Manager isn't set up for this inverter: choose a price "
+                "entity and its currents in Configure first. It doesn't have to "
+                "be switched on."
+            )
+        return manager, coordinator.resolve_write_target(serial)
+
+    def _manual_handler(mode: str, start: bool):
+        async def _handle(call: ServiceCall) -> None:
+            serial: str = call.data["serial"]
+            await _async_ensure_control_allowed(hass, call, serial)
+            manager, target = _manual_target(serial)
+            if start:
+                await manager.async_start_manual(
+                    target, mode, call.data.get("duration")
+                )
+            else:
+                await manager.async_stop_manual(target, mode)
+
+        return _handle
+
+    for service, mode, start, schema in (
+        (SERVICE_CHARGE_NOW_START, MANUAL_CHARGE, True, _SERVICE_NOW_START_SCHEMA),
+        (SERVICE_CHARGE_NOW_STOP, MANUAL_CHARGE, False, _SERVICE_NOW_STOP_SCHEMA),
+        (
+            SERVICE_DISCHARGE_NOW_START,
+            MANUAL_DISCHARGE,
+            True,
+            _SERVICE_NOW_START_SCHEMA,
+        ),
+        (SERVICE_DISCHARGE_NOW_STOP, MANUAL_DISCHARGE, False, _SERVICE_NOW_STOP_SCHEMA),
+    ):
+        hass.services.async_register(
+            DOMAIN, service, _manual_handler(mode, start), schema
+        )
 
     hass.services.async_register(
         DOMAIN,
