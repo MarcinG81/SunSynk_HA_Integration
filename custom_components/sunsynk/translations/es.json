@@ -95,7 +95,12 @@
           "price_stale_check": "Detener cuando los datos de precio parezcan desactualizados",
           "tariff_test_mode": "Modo de prueba: decidir sin cambiar el inversor",
           "price_max_age": "Antigüedad máxima de los datos de precio (minutos)",
-          "negative_price_protection": "Detener la venta solar con precio de exportación negativo"
+          "negative_price_protection": "Detener la venta solar con precio de exportación negativo",
+          "manual_charge_current": "Cargar ahora: corriente (A)",
+          "manual_target_soc": "Cargar ahora: SOC objetivo (%)",
+          "manual_discharge_current": "Descargar ahora: corriente (A)",
+          "manual_min_soc": "Descargar ahora: SOC mínimo (%)",
+          "manual_discharge_power": "Descargar ahora: potencia de exportación (W)"
         },
         "data_description": {
           "password": "Déjelo en blanco para conservar la contraseña guardada. Introduzca una nueva contraseña después de cambiarla en el portal de Sunsynk o Deye.",
@@ -121,7 +126,12 @@
           "price_stale_check": "Desactivado por defecto. Si está activado, el Gestor de tarifas detiene cualquier carga o descarga activa si el sensor de precio de importación no ha informado durante más tiempo que Antigüedad máxima de los datos de precio. Déjelo desactivado si su precio se mantiene igual durante largos periodos o lo fija un ayudante.",
           "tariff_test_mode": "Si está activado, el Gestor de tarifas decide como siempre y lo muestra en Tariff Mode, sus notificaciones y el registro, pero no envía nada al inversor, y el Virtual Slot Scheduler lo ignora. Sirve para comprobar sus ajustes sin riesgo.",
           "price_max_age": "Si el sensor de precio no se ha actualizado en este número de minutos, el modo activo se detiene como medida de seguridad. Por defecto 90.",
-          "negative_price_protection": "Desactivado por defecto. Si se activa, Tariff Manager desactiva Solar Sell mientras el precio de exportación esté por debajo de cero, para que el inversor no pague por exportar, y lo vuelve a activar cuando deja de estarlo. Solo donde Solar Sell estaba activado: su propio ajuste nunca se cambia."
+          "negative_price_protection": "Desactivado por defecto. Si se activa, Tariff Manager desactiva Solar Sell mientras el precio de exportación esté por debajo de cero, para que el inversor no pague por exportar, y lo vuelve a activar cuando deja de estarlo. Solo donde Solar Sell estaba activado: su propio ajuste nunca se cambia.",
+          "manual_charge_current": "Para la acción Cargar ahora cuando no la indica. Vacío: la corriente de carga de tarifa barata.",
+          "manual_target_soc": "Cargar ahora deja de cargar aquí. Vacío: el SOC objetivo de tarifa barata.",
+          "manual_discharge_current": "Para la acción Descargar ahora cuando no la indica. Vacío: la corriente de descarga en punta.",
+          "manual_min_soc": "Descargar ahora termina aquí. Vacío: el SOC mínimo de Tariff Manager.",
+          "manual_discharge_power": "Lo máximo que exporta Descargar ahora, p. ej. 3000 para 3 kW. Vacío: la potencia máxima de exportación, o la potencia nominal del inversor."
         }
       },
       "deyecloud": {

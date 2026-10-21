@@ -37,6 +37,11 @@ from .const import (
     CONF_EXPORT_PRICE_ENTITY,
     CONF_LATITUDE,
     CONF_LONGITUDE,
+    CONF_MANUAL_CHARGE_CURRENT,
+    CONF_MANUAL_DISCHARGE_CURRENT,
+    CONF_MANUAL_DISCHARGE_POWER,
+    CONF_MANUAL_MIN_SOC,
+    CONF_MANUAL_TARGET_SOC,
     CONF_MAX_EXPORT_POWER,
     CONF_NEGATIVE_PRICE_PROTECTION,
     CONF_NORMAL_CHARGE_CURRENT,
@@ -90,6 +95,15 @@ STEP_USER_SCHEMA = vol.Schema(
     }
 )
 
+
+# Charge / discharge now defaults, with the range each may take.
+_MANUAL_FIELDS: dict[str, tuple[int, int]] = {
+    CONF_MANUAL_CHARGE_CURRENT: (1, MAX_CURRENT_A),
+    CONF_MANUAL_TARGET_SOC: (1, 100),
+    CONF_MANUAL_DISCHARGE_CURRENT: (1, MAX_CURRENT_A),
+    CONF_MANUAL_MIN_SOC: (0, 100),
+    CONF_MANUAL_DISCHARGE_POWER: (1, MAX_POWER_W),
+}
 
 _REFRESH_INTERVAL_FIELD = vol.All(
     vol.Coerce(int),
@@ -636,6 +650,13 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     CONF_NEGATIVE_PRICE_PROTECTION,
                     default=bool(_opt(CONF_NEGATIVE_PRICE_PROTECTION, False)),
                 ): bool,
+                # Charge / discharge now (blank = the Tariff Manager values)
+                **{
+                    vol.Optional(
+                        key, description={"suggested_value": _opt_str(key)}
+                    ): str
+                    for key in _MANUAL_FIELDS
+                },
                 vol.Optional(
                     CONF_PRICE_MAX_AGE,
                     default=_opt(CONF_PRICE_MAX_AGE, DEFAULT_PRICE_MAX_AGE),
@@ -721,8 +742,22 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
             return
         serials = list(coordinator.write_target_serials)
         for direction, fields in (
-            ("charge", (CONF_CHEAP_CHARGE_CURRENT, CONF_NORMAL_CHARGE_CURRENT)),
-            ("discharge", (CONF_PEAK_DISCHARGE_CURRENT, CONF_NORMAL_DISCHARGE_CURRENT)),
+            (
+                "charge",
+                (
+                    CONF_CHEAP_CHARGE_CURRENT,
+                    CONF_NORMAL_CHARGE_CURRENT,
+                    CONF_MANUAL_CHARGE_CURRENT,
+                ),
+            ),
+            (
+                "discharge",
+                (
+                    CONF_PEAK_DISCHARGE_CURRENT,
+                    CONF_NORMAL_DISCHARGE_CURRENT,
+                    CONF_MANUAL_DISCHARGE_CURRENT,
+                ),
+            ),
         ):
             limit = current_limit(
                 coordinator.data, serials, direction, group_sizes(coordinator)
@@ -824,4 +859,11 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
         result[CONF_NEGATIVE_PRICE_PROTECTION] = bool(
             user_input.get(CONF_NEGATIVE_PRICE_PROTECTION, False)
         )
+        for key, (low, high) in _MANUAL_FIELDS.items():
+            value = _parse_int(key)
+            if value is None:
+                continue
+            if not low <= value <= high:
+                raise ValueError(f"{key} must be {low}-{high}")
+            result[key] = value
         return result

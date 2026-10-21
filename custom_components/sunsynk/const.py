@@ -101,6 +101,13 @@ CONF_PRICE_STALE_CHECK: Final = "price_stale_check"
 CONF_TARIFF_TEST_MODE: Final = "tariff_test_mode"
 # Solar Sell off while the export price is below zero (2.1).
 CONF_NEGATIVE_PRICE_PROTECTION: Final = "negative_price_protection"
+# Defaults for the charge / discharge now actions (2.1, #39); blank = the
+# Tariff Manager's own values.
+CONF_MANUAL_CHARGE_CURRENT: Final = "manual_charge_current"
+CONF_MANUAL_TARGET_SOC: Final = "manual_target_soc"
+CONF_MANUAL_DISCHARGE_CURRENT: Final = "manual_discharge_current"
+CONF_MANUAL_MIN_SOC: Final = "manual_min_soc"
+CONF_MANUAL_DISCHARGE_POWER: Final = "manual_discharge_power"
 # Remembers the Tariff Manager switch across restarts (#30).
 CONF_TARIFF_ENABLED: Final = "tariff_enabled"
 DEFAULT_PRICE_MAX_AGE: Final = 90  # minutes

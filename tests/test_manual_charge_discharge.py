@@ -12,7 +12,11 @@ from homeassistant.util import dt as dt_util
 
 from custom_components import sunsynk as integration
 from custom_components.sunsynk.const import DOMAIN
-from custom_components.sunsynk.tariff import MANUAL_CHARGE, MANUAL_DISCHARGE
+from custom_components.sunsynk.tariff import (
+    MANUAL_CHARGE,
+    MANUAL_DISCHARGE,
+    ManualSession,
+)
 from tests.test_tariff import _make_manager, _price_state
 
 SERIAL = "TEST123"
@@ -249,9 +253,7 @@ def test_the_tariff_mode_sensor_shows_it(mock_hass, mock_coordinator):
     sensor = TariffStateSensor("entry", manager, MagicMock())
     assert "manual" not in sensor.extra_state_attributes
 
-    manager._manual[SERIAL] = __import__(
-        "custom_components.sunsynk.tariff", fromlist=["_Manual"]
-    )._Manual(MANUAL_CHARGE)
+    manager._manual[SERIAL] = ManualSession(MANUAL_CHARGE)
 
     assert sensor.native_value == "manual_charge"
     assert sensor.extra_state_attributes["manual"] == {
@@ -284,10 +286,23 @@ def _call(data):
 @pytest.mark.parametrize(
     ("service", "method", "args"),
     [
-        ("charge_now_start", "async_start_manual", ("MASTER", MANUAL_CHARGE, 30)),
-        ("charge_now_stop", "async_stop_manual", ("MASTER", MANUAL_CHARGE)),
-        ("discharge_now_start", "async_start_manual", ("MASTER", MANUAL_DISCHARGE, 30)),
-        ("discharge_now_stop", "async_stop_manual", ("MASTER", MANUAL_DISCHARGE)),
+        (
+            "charge_now_start",
+            "async_start_manual",
+            ("MASTER", MANUAL_CHARGE, 30, {"current": None, "soc": None, "power": None}),
+        ),
+        ("charge_now_stop", "async_stop_manual", ("MASTER", MANUAL_CHARGE, {})),
+        (
+            "discharge_now_start",
+            "async_start_manual",
+            (
+                "MASTER",
+                MANUAL_DISCHARGE,
+                30,
+                {"current": None, "soc": None, "power": None},
+            ),
+        ),
+        ("discharge_now_stop", "async_stop_manual", ("MASTER", MANUAL_DISCHARGE, {})),
     ],
 )
 async def test_actions_go_to_the_tariff_manager_of_the_write_target(
@@ -307,7 +322,7 @@ async def test_actions_go_to_the_tariff_manager_of_the_write_target(
     ):
         await handlers[service](_call({"serial": "SLAVE", "duration": 30}))
 
-    getattr(manager, method).assert_awaited_once_with(*args)
+    getattr(manager, method).assert_awaited_once_with(*args[:-1], **args[-1])
 
 
 @pytest.mark.asyncio
@@ -334,3 +349,106 @@ async def test_actions_refuse_an_unknown_inverter(actions):
         pytest.raises(ValueError, match="No Sunsynk inverter"),
     ):
         await handlers["discharge_now_stop"](_call({"serial": "NOPE"}))
+
+
+
+# ── Current, SOC and power: the action, the options, Tariff Manager (#39) ──
+
+
+@pytest.mark.asyncio
+async def test_the_action_s_values_win(mock_hass, mock_coordinator):
+    manager = _make_manager(mock_hass, mock_coordinator, cheap_current=100)
+    manager._manual_defaults[MANUAL_CHARGE] = (60, 70, None)
+
+    await manager.async_start_manual(SERIAL, MANUAL_CHARGE, current=40, soc=80)
+
+    assert _written(mock_coordinator) == [("chargeCurrent", 40)]
+    session = manager.manual_for(SERIAL)
+    assert (session.current, session.soc, session.power) == (40, 80, None)
+
+
+@pytest.mark.asyncio
+async def test_the_options_come_next(mock_hass, mock_coordinator):
+    manager = _make_manager(
+        mock_hass, mock_coordinator, peak_discharge=100, discharge_min_soc=10
+    )
+    manager._manual_defaults[MANUAL_DISCHARGE] = (60, 30, 3000)
+
+    await manager.async_start_manual(SERIAL, MANUAL_DISCHARGE)
+
+    assert _written(mock_coordinator) == [("dischargeCurrent", 60)]
+    session = manager.manual_for(SERIAL)
+    assert (session.current, session.soc, session.power) == (60, 30, 3000)
+
+    # Its own minimum: 30 %, not Tariff Manager's 10 %.
+    mock_coordinator.data[SERIAL]["battery"]["soc"] = 30
+    await manager._evaluate()
+    assert manager.manual_for(SERIAL) is None
+
+
+@pytest.mark.asyncio
+async def test_a_current_from_the_options_is_enough_without_tariff_manager_s(
+    mock_hass, mock_coordinator
+):
+    manager = _make_manager(mock_hass, mock_coordinator, cheap_current=None)
+    manager._manual_defaults[MANUAL_CHARGE] = (50, None, None)
+
+    await manager.async_start_manual(SERIAL, MANUAL_CHARGE)
+
+    assert _written(mock_coordinator) == [("chargeCurrent", 50)]
+
+
+@pytest.mark.asyncio
+async def test_the_scheduler_uses_the_session_s_soc_and_power(
+    mock_hass, mock_coordinator
+):
+    from custom_components.sunsynk.virtual_slots import VirtualSlotScheduler
+
+    manager = _make_manager(mock_hass, mock_coordinator)
+    scheduler = VirtualSlotScheduler(
+        MagicMock(), mock_coordinator, "entry", SERIAL, tariff_manager=manager
+    )
+
+    await manager.async_start_manual(SERIAL, MANUAL_DISCHARGE, soc=40, power=3000)
+    discharge = scheduler._resolve_override()
+    assert (discharge.target_soc, discharge.sell_power) == (40, 3000)
+
+    await manager.async_start_manual(SERIAL, MANUAL_CHARGE, soc=60)
+    charge = scheduler._resolve_override()
+    assert charge.target_soc == 60
+
+    await manager.async_stop_manual(SERIAL, MANUAL_CHARGE)
+    manager._charging_active_serials.add(SERIAL)  # a price charge: its own values
+    assert scheduler._resolve_override().target_soc == manager.target_soc
+
+
+@pytest.mark.asyncio
+async def test_the_action_checks_current_and_power_limits(actions):
+    hass, handlers = actions
+    coordinator = MagicMock()
+    coordinator.resolve_write_target.return_value = "MASTER"
+    manager = MagicMock(async_start_manual=AsyncMock())
+    hass.data = {DOMAIN: {"entry_tariff": manager}}
+    scheduler = MagicMock()
+    scheduler.sell_power_limit.return_value = (5000, "rated power")
+
+    with (
+        patch.object(integration, "_async_ensure_control_allowed", AsyncMock()),
+        patch.object(integration, "_find_coordinator", return_value=coordinator),
+        patch.object(integration, "_find_entry_id_for_serial", return_value="entry"),
+        patch.object(integration, "_find_virtual_slot_scheduler", return_value=scheduler),
+        patch.object(integration, "_ensure_current_within_limit") as check,
+    ):
+        with pytest.raises(ServiceValidationError, match="may sell at most 5000 W"):
+            await handlers["discharge_now_start"](
+                _call({"serial": "INV1", "current": 80, "power": 6000})
+            )
+        check.assert_called_once_with(coordinator, "MASTER", "discharge", 80)
+
+        await handlers["discharge_now_start"](
+            _call({"serial": "INV1", "min_soc": 30, "power": 3000})
+        )
+
+    manager.async_start_manual.assert_awaited_once_with(
+        "MASTER", MANUAL_DISCHARGE, None, current=None, soc=30, power=3000
+    )

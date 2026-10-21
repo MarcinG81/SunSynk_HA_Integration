@@ -95,7 +95,12 @@
           "price_stale_check": "Stop wanneer prysdata verouderd lyk",
           "tariff_test_mode": "Toetsmodus: besluit, maar verander nie die omsetter nie",
           "price_max_age": "Maksimum ouderdom van prysdata (minute)",
-          "negative_price_protection": "Stop sonverkope by 'n negatiewe uitvoerprys"
+          "negative_price_protection": "Stop sonverkope by 'n negatiewe uitvoerprys",
+          "manual_charge_current": "Laai nou: stroom (A)",
+          "manual_target_soc": "Laai nou: teiken-SOC (%)",
+          "manual_discharge_current": "Ontlaai nou: stroom (A)",
+          "manual_min_soc": "Ontlaai nou: minimum SOC (%)",
+          "manual_discharge_power": "Ontlaai nou: uitvoerkrag (W)"
         },
         "data_description": {
           "password": "Laat leeg om die gestoorde wagwoord te behou. Voer 'n nuwe wagwoord in nadat jy dit in die Sunsynk- of Deye-portaal verander het.",
@@ -121,7 +126,12 @@
           "price_stale_check": "By verstek af. Wanneer aan, stop die Tariefbestuurder enige aktiewe laai of ontlaai as die invoerprys-sensor langer as Maksimum ouderdom van prysdata nie gerapporteer het nie. Laat dit af as jou prys vir lang tydperke dieselfde bly of deur 'n helper gestel word.",
           "tariff_test_mode": "Wanneer aan, besluit die Tariefbestuurder soos gewoonlik en wys dit in Tariff Mode, sy kennisgewings en die log, maar stuur niks na die omsetter nie, en die Virtual Slot Scheduler ignoreer dit. Gebruik dit om jou instellings veilig te toets.",
           "price_max_age": "As die pryssensor nie binne hierdie aantal minute opgedateer het nie, word die aktiewe modus as veiligheidsmaatreel gestop. Verstek 90.",
-          "negative_price_protection": "Verstek af. Wanneer aan, skakel Tariff Manager Solar Sell af terwyl die uitvoerprys onder nul is, sodat die omsetter nie betaal om uit te voer nie, en weer aan wanneer dit nie meer so is nie. Slegs waar Solar Sell aan was: jou eie instelling word nooit verander nie."
+          "negative_price_protection": "Verstek af. Wanneer aan, skakel Tariff Manager Solar Sell af terwyl die uitvoerprys onder nul is, sodat die omsetter nie betaal om uit te voer nie, en weer aan wanneer dit nie meer so is nie. Slegs waar Solar Sell aan was: jou eie instelling word nooit verander nie.",
+          "manual_charge_current": "Vir die Laai nou-aksie as dit nie een gee nie. Leeg: die laaistroom teen die goedkoop tarief.",
+          "manual_target_soc": "Laai nou stop hier. Leeg: die teiken-SOC van die goedkoop tarief.",
+          "manual_discharge_current": "Vir die Ontlaai nou-aksie as dit nie een gee nie. Leeg: die piek-ontlaaistroom.",
+          "manual_min_soc": "Ontlaai nou eindig hier. Leeg: die Tariff Manager se minimum SOC.",
+          "manual_discharge_power": "Die meeste wat Ontlaai nou uitvoer, bv. 3000 vir 3 kW. Leeg: die maksimum uitvoerkrag, anders die omsetter se gegradeerde krag."
         }
       },
       "deyecloud": {

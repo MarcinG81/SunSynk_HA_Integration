@@ -95,7 +95,12 @@
           "price_stale_check": "电价数据看起来过时时停止",
           "tariff_test_mode": "测试模式：只做决策，不修改逆变器",
           "price_max_age": "电价数据最大有效时长（分钟）",
-          "negative_price_protection": "出口电价为负时停止光伏售电"
+          "negative_price_protection": "出口电价为负时停止光伏售电",
+          "manual_charge_current": "立即充电：电流 (A)",
+          "manual_target_soc": "立即充电：目标 SOC (%)",
+          "manual_discharge_current": "立即放电：电流 (A)",
+          "manual_min_soc": "立即放电：最低 SOC (%)",
+          "manual_discharge_power": "立即放电：出口功率 (W)"
         },
         "data_description": {
           "password": "留空以保留已保存的密码。在 Sunsynk 或 Deye 门户中更改密码后，请在此输入新密码。",
@@ -121,7 +126,12 @@
           "price_stale_check": "默认关闭。开启后，如果购电电价传感器在超过“电价数据最大有效时长”的时间内没有上报，电价管理器将停止任何正在进行的充电或放电。如果您的电价长时间不变或由辅助实体设置，请保持关闭。",
           "tariff_test_mode": "开启后，电价管理器照常做出决策，并在 Tariff Mode、通知和日志中显示，但不会向逆变器发送任何内容，Virtual Slot Scheduler 也会忽略它。可用于安全地检查设置。",
           "price_max_age": "若电价传感器在此分钟数内未更新，将停止当前充/放电模式以确保安全，默认 90。",
-          "negative_price_protection": "默认关闭。开启后，当出口电价低于零时，Tariff Manager 会关闭 Solar Sell，避免逆变器为出口付费；电价恢复后再重新开启。仅针对原本已开启 Solar Sell 的逆变器：不会更改您自己的设置。"
+          "negative_price_protection": "默认关闭。开启后，当出口电价低于零时，Tariff Manager 会关闭 Solar Sell，避免逆变器为出口付费；电价恢复后再重新开启。仅针对原本已开启 Solar Sell 的逆变器：不会更改您自己的设置。",
+          "manual_charge_current": "当“立即充电”操作未指定时使用。留空：使用低价时段充电电流。",
+          "manual_target_soc": "“立即充电”充到此值为止。留空：使用低价时段目标 SOC。",
+          "manual_discharge_current": "当“立即放电”操作未指定时使用。留空：使用高峰放电电流。",
+          "manual_min_soc": "“立即放电”到此值结束。留空：使用 Tariff Manager 最低 SOC。",
+          "manual_discharge_power": "“立即放电”最多出口的功率，例如 3 kW 填 3000。留空：使用最大出口功率，否则使用逆变器额定功率。"
         }
       },
       "deyecloud": {

@@ -520,3 +520,53 @@ async def test_options_form_keeps_typed_values_after_an_error():
     assert result["errors"]["peak_discharge_current"] == "discharge_current_above_limit"
     assert suggested["peak_discharge_current"] == "200"
     assert suggested["password"] != "typed-secret"
+
+
+# ── Charge / discharge now defaults (2.1, #39) ─────────────────────────────
+
+
+def test_charge_and_discharge_now_defaults_are_parsed():
+    result = SunsynkOptionsFlow._parse_tariff_fields(
+        {
+            "manual_charge_current": " 40 ",
+            "manual_target_soc": "80",
+            "manual_discharge_current": "",
+            "manual_min_soc": "0",
+            "manual_discharge_power": "3000",
+        }
+    )
+
+    assert result["manual_charge_current"] == 40
+    assert result["manual_target_soc"] == 80
+    assert "manual_discharge_current" not in result  # blank: Tariff Manager's
+    assert result["manual_min_soc"] == 0
+    assert result["manual_discharge_power"] == 3000
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("manual_charge_current", "0"),
+        ("manual_target_soc", "101"),
+        ("manual_discharge_power", "-1"),
+        ("manual_min_soc", "abc"),
+    ],
+)
+def test_charge_and_discharge_now_defaults_out_of_range_are_refused(key, value):
+    with pytest.raises(ValueError):
+        SunsynkOptionsFlow._parse_tariff_fields({key: value})
+
+
+@pytest.mark.asyncio
+async def test_a_charge_now_current_above_the_hardware_limit_is_refused():
+    flow = _options_flow()
+    _running_coordinator(
+        flow,
+        {"INV1": {"settings": {"batteryMaxCurrentCharge": 120}, "battery": {}}},
+    )
+
+    result = await flow.async_step_init(
+        _tariff_input(manual_charge_current="150")
+    )
+
+    assert result["errors"]["manual_charge_current"] == "charge_current_above_limit"

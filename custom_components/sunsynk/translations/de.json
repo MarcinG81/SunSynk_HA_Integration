@@ -95,7 +95,12 @@
           "price_stale_check": "Anhalten, wenn die Preisdaten veraltet wirken",
           "tariff_test_mode": "Testmodus: entscheiden, aber den Wechselrichter nicht ändern",
           "price_max_age": "Maximales Alter der Preisdaten (Minuten)",
-          "negative_price_protection": "Solarverkauf bei negativem Exportpreis stoppen"
+          "negative_price_protection": "Solarverkauf bei negativem Exportpreis stoppen",
+          "manual_charge_current": "Jetzt laden: Strom (A)",
+          "manual_target_soc": "Jetzt laden: Ziel-SOC (%)",
+          "manual_discharge_current": "Jetzt entladen: Strom (A)",
+          "manual_min_soc": "Jetzt entladen: minimaler SOC (%)",
+          "manual_discharge_power": "Jetzt entladen: Exportleistung (W)"
         },
         "data_description": {
           "password": "Leer lassen, um das gespeicherte Passwort zu behalten. Ein neues Passwort eingeben, nachdem es im Sunsynk- oder Deye-Portal geändert wurde.",
@@ -121,7 +126,12 @@
           "price_stale_check": "Standardmäßig aus. Wenn aktiviert, stoppt der Tarif-Manager jedes aktive Laden oder Entladen, wenn der Bezugspreissensor länger als Maximales Alter der Preisdaten nichts gemeldet hat. Ausgeschaltet lassen, wenn Ihr Preis lange gleich bleibt oder von einem Helfer gesetzt wird.",
           "tariff_test_mode": "Wenn aktiviert, entscheidet der Tarif-Manager wie gewohnt und zeigt dies in Tariff Mode, seinen Benachrichtigungen und im Log, sendet aber nichts an den Wechselrichter, und der Virtual Slot Scheduler ignoriert ihn. So lassen sich die Einstellungen gefahrlos prüfen.",
           "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90.",
-          "negative_price_protection": "Standardmäßig aus. Wenn aktiviert, schaltet der Tariff Manager Solar Sell aus, solange der Exportpreis unter null liegt, damit der Wechselrichter nicht für den Export bezahlt, und wieder ein, sobald er es nicht mehr ist. Nur wo Solar Sell eingeschaltet war: Ihre eigene Einstellung wird nie geändert."
+          "negative_price_protection": "Standardmäßig aus. Wenn aktiviert, schaltet der Tariff Manager Solar Sell aus, solange der Exportpreis unter null liegt, damit der Wechselrichter nicht für den Export bezahlt, und wieder ein, sobald er es nicht mehr ist. Nur wo Solar Sell eingeschaltet war: Ihre eigene Einstellung wird nie geändert.",
+          "manual_charge_current": "Für die Aktion Jetzt laden, wenn sie keinen angibt. Leer: der Ladestrom im günstigen Tarif.",
+          "manual_target_soc": "Jetzt laden lädt bis hierhin. Leer: der Ziel-SOC des günstigen Tarifs.",
+          "manual_discharge_current": "Für die Aktion Jetzt entladen, wenn sie keinen angibt. Leer: der Spitzen-Entladestrom.",
+          "manual_min_soc": "Jetzt entladen endet hier. Leer: der minimale SOC des Tariff Managers.",
+          "manual_discharge_power": "Höchstens so viel exportiert Jetzt entladen, z. B. 3000 für 3 kW. Leer: die maximale Exportleistung, sonst die Nennleistung des Wechselrichters."
         }
       },
       "deyecloud": {

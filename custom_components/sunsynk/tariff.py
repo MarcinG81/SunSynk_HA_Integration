@@ -40,11 +40,19 @@ MANUAL_DISCHARGE = "discharge"
 
 
 @dataclass(frozen=True)
-class _Manual:
-    """A charge or discharge started by hand (#39), until stopped or `until`."""
+class ManualSession:
+    """A charge or discharge started by hand (#39), until stopped or `until`.
+
+    `current`, `soc` (charge: target, discharge: minimum) and `power` (the
+    export cap while discharging) override the Tariff Manager's own values;
+    None means its value.
+    """
 
     mode: str
     until: datetime | None = None
+    current: int | None = None
+    soc: int | None = None
+    power: int | None = None
 
 
 class TariffChargingManager:
@@ -106,6 +114,12 @@ class TariffChargingManager:
         # turn Solar Sell off while the export price is below zero
         negative_price_protection: bool = False,
         entry_id: str = "",
+        # defaults for charge / discharge now; None = the values above
+        manual_charge_current: int | None = None,
+        manual_target_soc: int | None = None,
+        manual_discharge_current: int | None = None,
+        manual_min_soc: int | None = None,
+        manual_discharge_power: int | None = None,
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
@@ -151,7 +165,15 @@ class TariffChargingManager:
         # Charge / discharge started by hand per write target (#39). It wins
         # over the price, works with Tariff Manager off, and isn't kept over
         # a restart: everything goes back to normal then.
-        self._manual: dict[str, _Manual] = {}
+        self._manual: dict[str, ManualSession] = {}
+        self._manual_defaults = {
+            MANUAL_CHARGE: (manual_charge_current, manual_target_soc, None),
+            MANUAL_DISCHARGE: (
+                manual_discharge_current,
+                manual_min_soc,
+                manual_discharge_power,
+            ),
+        }
         self._manual_timers: dict[str, Callable[[], None]] = {}
         # Write targets whose Solar Sell this manager turned off for a
         # negative export price, saved so a restart still turns it back on.
@@ -404,29 +426,43 @@ class TariffChargingManager:
         )
         self._notify_listeners()
 
-    async def _start_charging(self, serial: str, why: str) -> None:
-        amps = self._safe(serial, "charge", self._cheap_current)
+    async def _start_charging(
+        self,
+        serial: str,
+        why: str,
+        current: int | None = None,
+        target_soc: int | None = None,
+    ) -> None:
+        configured = current or self._cheap_current
+        amps = self._safe(serial, "charge", configured)
         _LOGGER.info("Tariff [%s]: charging at %s A", serial, amps)
         await self._write_setting(serial, "chargeCurrent", amps)
         self._charging_active_serials.add(serial)
-        self._applied_charge_current[serial] = self._cheap_current
+        self._applied_charge_current[serial] = configured
         self._send_notification(
             "Tariff: Charging started",
             f"Inverter {serial}: {why}. "
-            f"Charging at {amps} A until {self._target_soc}% SOC.",
+            f"Charging at {amps} A until {target_soc or self._target_soc}% SOC.",
         )
         self._notify_listeners()
 
-    async def _start_discharging(self, serial: str, why: str) -> None:
-        amps = self._safe(serial, "discharge", self._peak_discharge_current)
+    async def _start_discharging(
+        self,
+        serial: str,
+        why: str,
+        current: int | None = None,
+        min_soc: int | None = None,
+    ) -> None:
+        configured = current or self._peak_discharge_current
+        amps = self._safe(serial, "discharge", configured)
         _LOGGER.info("Tariff [%s]: discharging at %s A", serial, amps)
         await self._write_setting(serial, "dischargeCurrent", amps)
         self._discharging_active_serials.add(serial)
-        self._applied_discharge_current[serial] = self._peak_discharge_current
+        self._applied_discharge_current[serial] = configured
+        floor = self._discharge_min_soc if min_soc is None else min_soc
         self._send_notification(
             "Tariff: Discharging started",
-            f"Inverter {serial}: {why}. "
-            f"Discharging at {amps} A (min SOC {self._discharge_min_soc}%).",
+            f"Inverter {serial}: {why}. Discharging at {amps} A (min SOC {floor}%).",
         )
         self._notify_listeners()
 
@@ -934,7 +970,7 @@ class TariffChargingManager:
 
     # ── Charge / discharge by hand (#39) ───────────────────────────────────
 
-    def manual_for(self, serial: str) -> _Manual | None:
+    def manual_for(self, serial: str) -> ManualSession | None:
         return self._manual.get(serial)
 
     @property
@@ -951,24 +987,46 @@ class TariffChargingManager:
         }
 
     async def async_start_manual(
-        self, serial: str, mode: str, minutes: int | None = None
+        self,
+        serial: str,
+        mode: str,
+        minutes: int | None = None,
+        *,
+        current: int | None = None,
+        soc: int | None = None,
+        power: int | None = None,
     ) -> None:
-        """Charge or discharge now, with the configured currents and SOC
-        limits, until stopped, until `minutes` have passed or, discharging,
-        until the minimum SOC. Wins over the price, and works with Tariff
-        Manager off."""
-        if mode == MANUAL_CHARGE and self._cheap_current is None:
+        """Charge or discharge now until stopped, until `minutes` have passed
+        or, discharging, until the minimum SOC. Wins over the price, and
+        works with Tariff Manager off.
+
+        `current`, `soc` and `power` come from the action, else from the
+        charge / discharge now options, else Tariff Manager's own values.
+        """
+        default_current, default_soc, default_power = self._manual_defaults[mode]
+        current = current or default_current
+        soc = default_soc if soc is None else soc
+        power = power or default_power
+        if mode == MANUAL_CHARGE and not (current or self._cheap_current):
             raise ServiceValidationError(
-                "Set a cheap-rate charge current in the Tariff Manager options first"
+                "Set a charge current: in the action, the charge now options or "
+                "the Tariff Manager options"
             )
-        if mode == MANUAL_DISCHARGE and self._peak_discharge_current is None:
+        if mode == MANUAL_DISCHARGE and not (current or self._peak_discharge_current):
             raise ServiceValidationError(
-                "Set a peak discharge current in the Tariff Manager options first"
+                "Set a discharge current: in the action, the discharge now options "
+                "or the Tariff Manager options"
             )
         until = dt_util.utcnow() + timedelta(minutes=minutes) if minutes else None
         async with self._evaluate_lock:
             self._end_manual_timer(serial)
-            self._manual[serial] = _Manual(mode, until)
+            self._manual[serial] = ManualSession(
+                mode,
+                until,
+                current,
+                soc,
+                power if mode == MANUAL_DISCHARGE else None,
+            )
             if until is not None:
                 self._manual_timers[serial] = async_track_point_in_utc_time(
                     self._hass, self._on_manual_end, until
@@ -1029,18 +1087,22 @@ class TariffChargingManager:
             # Like a cheap period: held at the target SOC by the slot itself.
             await self._stop_discharging(serial, "manual charge")
             if serial not in self._charging_active_serials:
-                await self._start_charging(serial, f"charging by hand{ends}")
+                await self._start_charging(
+                    serial, f"charging by hand{ends}", manual.current, manual.soc
+                )
         else:
-            if soc <= self._discharge_min_soc:
+            floor = self._discharge_min_soc if manual.soc is None else manual.soc
+            if soc <= floor:
                 await self._end_manual(
                     serial,
-                    f"ended: battery {soc:.0f}% reached the minimum "
-                    f"{self._discharge_min_soc}%",
+                    f"ended: battery {soc:.0f}% reached the minimum {floor}%",
                 )
                 return
             await self._stop_charging(serial, "manual discharge")
             if serial not in self._discharging_active_serials:
-                await self._start_discharging(serial, f"discharging by hand{ends}")
+                await self._start_discharging(
+                    serial, f"discharging by hand{ends}", manual.current, manual.soc
+                )
         self._record_decision(
             serial,
             {

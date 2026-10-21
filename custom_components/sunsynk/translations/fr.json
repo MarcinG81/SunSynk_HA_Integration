@@ -95,7 +95,12 @@
           "price_stale_check": "Arrêter lorsque les données de prix semblent obsolètes",
           "tariff_test_mode": "Mode test : décider sans modifier l'onduleur",
           "price_max_age": "Âge maximal des données de prix (minutes)",
-          "negative_price_protection": "Arrêter la vente solaire à prix d'export négatif"
+          "negative_price_protection": "Arrêter la vente solaire à prix d'export négatif",
+          "manual_charge_current": "Charger maintenant : courant (A)",
+          "manual_target_soc": "Charger maintenant : SOC cible (%)",
+          "manual_discharge_current": "Décharger maintenant : courant (A)",
+          "manual_min_soc": "Décharger maintenant : SOC minimum (%)",
+          "manual_discharge_power": "Décharger maintenant : puissance d'export (W)"
         },
         "data_description": {
           "password": "Laissez vide pour conserver le mot de passe enregistré. Saisissez un nouveau mot de passe après l'avoir modifié sur le portail Sunsynk ou Deye.",
@@ -121,7 +126,12 @@
           "price_stale_check": "Désactivé par défaut. Lorsqu'il est activé, le Gestionnaire de tarifs arrête toute charge ou décharge en cours si le capteur de prix d'achat n'a rien signalé depuis plus longtemps que Âge maximal des données de prix. Laissez-le désactivé si votre prix reste identique pendant de longues périodes ou est défini par une entrée d'aide.",
           "tariff_test_mode": "Activé, le Gestionnaire de tarifs décide comme d'habitude et l'affiche dans Tariff Mode, ses notifications et le journal, mais n'envoie rien à l'onduleur, et le Virtual Slot Scheduler l'ignore. Permet de vérifier vos réglages sans risque.",
           "price_max_age": "Si le capteur de prix ne s'est pas mis à jour dans ce délai (minutes), le mode actif est arrêté par mesure de sécurité. Défaut 90.",
-          "negative_price_protection": "Désactivé par défaut. Si activé, Tariff Manager coupe Solar Sell tant que le prix d'export est inférieur à zéro, pour que l'onduleur ne paie pas pour exporter, puis le réactive ensuite. Uniquement là où Solar Sell était activé : votre propre réglage n'est jamais modifié."
+          "negative_price_protection": "Désactivé par défaut. Si activé, Tariff Manager coupe Solar Sell tant que le prix d'export est inférieur à zéro, pour que l'onduleur ne paie pas pour exporter, puis le réactive ensuite. Uniquement là où Solar Sell était activé : votre propre réglage n'est jamais modifié.",
+          "manual_charge_current": "Pour l'action Charger maintenant si elle n'en donne pas. Vide : le courant de charge en tarif bas.",
+          "manual_target_soc": "Charger maintenant s'arrête ici. Vide : le SOC cible du tarif bas.",
+          "manual_discharge_current": "Pour l'action Décharger maintenant si elle n'en donne pas. Vide : le courant de décharge en pointe.",
+          "manual_min_soc": "Décharger maintenant s'arrête ici. Vide : le SOC minimum de Tariff Manager.",
+          "manual_discharge_power": "Le maximum exporté par Décharger maintenant, p. ex. 3000 pour 3 kW. Vide : la puissance d'export maximale, sinon la puissance nominale de l'onduleur."
         }
       },
       "deyecloud": {

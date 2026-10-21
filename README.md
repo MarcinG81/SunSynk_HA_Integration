@@ -434,9 +434,9 @@ Five services are available for use in automations and scripts (**Developer Tool
 |---|---|
 | `sunsynk.backup_settings` | Save everything the inverter reports in its settings to `/config/sunsynk_backups/<serial>_<date>.json`. Returns the file name. |
 | `sunsynk.restore_settings` | Put a backup's settings back: only the settings this integration can write and check, and only where they differ. Dry run by default (lists the changes); set `dry_run: false` to write. Refused while Tariff Manager or the Virtual Slot Scheduler are driving the inverter. |
-| `sunsynk.charge_now_start` | Charge now (from the grid if needed) at the Tariff Manager's cheap-rate current up to its target SOC, whatever the price, with Tariff Manager on or off. Optional `duration` in minutes. Needs the Virtual Slot Scheduler on to charge from the grid. |
+| `sunsynk.charge_now_start` | Charge now (from the grid if needed) at the Tariff Manager's cheap-rate current up to its target SOC, whatever the price, with Tariff Manager on or off. Optional `duration` (min), `current` (A) and `target_soc` (%); without them, the Charge now options, else Tariff Manager's. Needs the Virtual Slot Scheduler on to charge from the grid. |
 | `sunsynk.charge_now_stop` | Stop it; Tariff Manager decides by price again. |
-| `sunsynk.discharge_now_start` | Discharge now (exporting) at the Tariff Manager's peak discharge current down to its minimum SOC, whatever the price, with Tariff Manager on or off. Optional `duration` in minutes. Needs the Virtual Slot Scheduler on to export. |
+| `sunsynk.discharge_now_start` | Discharge now (exporting) at the Tariff Manager's peak discharge current down to its minimum SOC, whatever the price, with Tariff Manager on or off. Optional `duration` (min), `current` (A), `min_soc` (%) and `power` (W, e.g. 3000 to export 3 kW); without them, the Discharge now options, else Tariff Manager's. Needs the Virtual Slot Scheduler on to export. |
 | `sunsynk.discharge_now_stop` | Stop it; Tariff Manager decides by price again. |
 | `sunsynk.force_charge` | Set battery charge current from 0–300 A. Call again with your normal value to restore. Only changes the current — whether the battery charges from the grid still depends on the active timer slot. |
 | `sunsynk.force_discharge` | Set battery discharge current from 0–300 A. Only changes the current — exporting still needs a selling timer slot. |
@@ -507,6 +507,11 @@ The Tariff Manager automatically charges the battery when electricity is cheap a
 | **Price max age (minutes)** | Used only when the option above is ticked (default 90) |
 | **Test mode** *(2.0)* | Off by default. Tariff Manager decides as usual and shows it in Tariff Mode, its notifications and the log, but sends nothing to the inverter |
 | **Stop selling solar at a negative export price** *(2.1)* | Off by default. When ticked, Tariff Manager turns Solar Sell off while the export price is below zero, and back on afterwards; only where Solar Sell was on |
+| **Charge now: current (A)** *(2.1)* | Default current for the Charge Now action. Blank: the cheap-rate charge current |
+| **Charge now: target SOC (%)** *(2.1)* | Charge Now charges up to here. Blank: the cheap-rate target SOC |
+| **Discharge now: current (A)** *(2.1)* | Default current for the Discharge Now action. Blank: the peak discharge current |
+| **Discharge now: minimum SOC (%)** *(2.1)* | Discharge Now ends here. Blank: the Tariff Manager minimum SOC |
+| **Discharge now: export power (W)** *(2.1)* | The most Discharge Now exports, e.g. 3000 for 3 kW. Blank: the maximum export power, else rated power |
 
 3. After setup, go to your inverter device and **turn on the Tariff Manager switch** — it starts **off** by default.
 

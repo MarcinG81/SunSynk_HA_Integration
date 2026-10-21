@@ -64,6 +64,26 @@ charge_now_start:
           max: 1440
           unit_of_measurement: min
           mode: box
+    current:
+      name: Current
+      description: Charge current in A. Without it, the Charge now option, else the cheap-rate current.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 300
+          unit_of_measurement: A
+          mode: box
+    target_soc:
+      name: Target SOC
+      description: Charge up to this SOC. Without it, the Charge now option, else the cheap-rate target.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          mode: box
 
 charge_now_stop:
   name: Charge Now Stop
@@ -100,6 +120,36 @@ discharge_now_start:
           min: 1
           max: 1440
           unit_of_measurement: min
+          mode: box
+    current:
+      name: Current
+      description: Discharge current in A. Without it, the Discharge now option, else the peak discharge current.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 300
+          unit_of_measurement: A
+          mode: box
+    min_soc:
+      name: Minimum SOC
+      description: Stop at this SOC. Without it, the Discharge now option, else the Tariff Manager minimum.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+          mode: box
+    power:
+      name: Export Power
+      description: The most to export, e.g. 3000 for 3 kW. Without it, the Discharge now option, else the maximum export power or the rated power.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 100000
+          unit_of_measurement: W
           mode: box
 
 discharge_now_stop:

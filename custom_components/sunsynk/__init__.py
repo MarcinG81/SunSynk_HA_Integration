@@ -52,6 +52,11 @@ from .const import (
     CONF_EXPORT_PRICE_ENTITY,
     CONF_LATITUDE,
     CONF_LONGITUDE,
+    CONF_MANUAL_CHARGE_CURRENT,
+    CONF_MANUAL_DISCHARGE_CURRENT,
+    CONF_MANUAL_DISCHARGE_POWER,
+    CONF_MANUAL_MIN_SOC,
+    CONF_MANUAL_TARGET_SOC,
     CONF_MAX_EXPORT_POWER,
     CONF_NEGATIVE_PRICE_PROTECTION,
     CONF_NORMAL_CHARGE_CURRENT,
@@ -141,11 +146,28 @@ _SERVICE_SERIAL_CURRENT_SCHEMA = vol.Schema(
         ),
     }
 )
-_SERVICE_NOW_START_SCHEMA = vol.Schema(
+_NOW_START_FIELDS = {
+    vol.Required("serial"): str,
+    # Minutes; without it, until stopped (or, discharging, the minimum SOC).
+    vol.Optional("duration"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+    # Without these, the charge / discharge now options, else Tariff Manager's.
+    vol.Optional("current"): vol.All(
+        vol.Coerce(int), vol.Range(min=1, max=MAX_CURRENT_A)
+    ),
+}
+_SERVICE_CHARGE_NOW_SCHEMA = vol.Schema(
     {
-        vol.Required("serial"): str,
-        # Minutes; without it, until stopped (or, discharging, the minimum SOC).
-        vol.Optional("duration"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+        **_NOW_START_FIELDS,
+        vol.Optional("target_soc"): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
+    }
+)
+_SERVICE_DISCHARGE_NOW_SCHEMA = vol.Schema(
+    {
+        **_NOW_START_FIELDS,
+        vol.Optional("min_soc"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+        vol.Optional("power"): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=MAX_POWER_W)
+        ),
     }
 )
 _SERVICE_NOW_STOP_SCHEMA = vol.Schema({vol.Required("serial"): str})
@@ -595,12 +617,34 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             serial: str = call.data["serial"]
             await _async_ensure_control_allowed(hass, call, serial)
             manager, target = _manual_target(serial)
-            if start:
-                await manager.async_start_manual(
-                    target, mode, call.data.get("duration")
-                )
-            else:
+            if not start:
                 await manager.async_stop_manual(target, mode)
+                return
+            current = call.data.get("current")
+            if current is not None:
+                _ensure_current_within_limit(
+                    _find_coordinator(hass, serial),
+                    target,
+                    "charge" if mode == MANUAL_CHARGE else "discharge",
+                    current,
+                )
+            power = call.data.get("power")
+            scheduler = _find_virtual_slot_scheduler(hass, serial)
+            if power is not None and scheduler is not None:
+                max_sell, why = scheduler.sell_power_limit()
+                if max_sell is not None and power > max_sell:
+                    raise ServiceValidationError(
+                        f"Power {power} W is too high: inverter {target} may sell "
+                        f"at most {max_sell} W ({why})"
+                    )
+            await manager.async_start_manual(
+                target,
+                mode,
+                call.data.get("duration"),
+                current=current,
+                soc=call.data.get("target_soc", call.data.get("min_soc")),
+                power=power,
+            )
 
         return _handle
 
@@ -656,13 +700,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     )
 
     for service, mode, start, schema in (
-        (SERVICE_CHARGE_NOW_START, MANUAL_CHARGE, True, _SERVICE_NOW_START_SCHEMA),
+        (SERVICE_CHARGE_NOW_START, MANUAL_CHARGE, True, _SERVICE_CHARGE_NOW_SCHEMA),
         (SERVICE_CHARGE_NOW_STOP, MANUAL_CHARGE, False, _SERVICE_NOW_STOP_SCHEMA),
         (
             SERVICE_DISCHARGE_NOW_START,
             MANUAL_DISCHARGE,
             True,
-            _SERVICE_NOW_START_SCHEMA,
+            _SERVICE_DISCHARGE_NOW_SCHEMA,
         ),
         (SERVICE_DISCHARGE_NOW_STOP, MANUAL_DISCHARGE, False, _SERVICE_NOW_STOP_SCHEMA),
     ):
@@ -854,6 +898,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             test_mode=bool(_opt(CONF_TARIFF_TEST_MODE, False)),
             negative_price_protection=bool(_opt(CONF_NEGATIVE_PRICE_PROTECTION, False)),
             entry_id=entry.entry_id,
+            manual_charge_current=_opt(CONF_MANUAL_CHARGE_CURRENT),
+            manual_target_soc=_opt(CONF_MANUAL_TARGET_SOC),
+            manual_discharge_current=_opt(CONF_MANUAL_DISCHARGE_CURRENT),
+            manual_min_soc=_opt(CONF_MANUAL_MIN_SOC),
+            manual_discharge_power=_opt(CONF_MANUAL_DISCHARGE_POWER),
         )
         await tariff_manager.async_load()
         hass.data[DOMAIN][f"{entry.entry_id}_tariff"] = tariff_manager

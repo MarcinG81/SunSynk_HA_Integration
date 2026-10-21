@@ -95,7 +95,12 @@
           "price_stale_check": "Zatrzymaj, gdy dane cenowe wyglądają na nieaktualne",
           "tariff_test_mode": "Tryb testowy: decyduj, ale nie zmieniaj falownika",
           "price_max_age": "Maksymalny wiek danych cenowych (minuty)",
-          "negative_price_protection": "Wstrzymaj sprzedaż PV przy ujemnej cenie eksportu"
+          "negative_price_protection": "Wstrzymaj sprzedaż PV przy ujemnej cenie eksportu",
+          "manual_charge_current": "Ładuj teraz: prąd (A)",
+          "manual_target_soc": "Ładuj teraz: docelowy SOC (%)",
+          "manual_discharge_current": "Rozładuj teraz: prąd (A)",
+          "manual_min_soc": "Rozładuj teraz: minimalny SOC (%)",
+          "manual_discharge_power": "Rozładuj teraz: moc eksportu (W)"
         },
         "data_description": {
           "password": "Zostaw puste, aby zachować zapisane hasło. Wpisz nowe hasło po zmianie w portalu Sunsynk lub Deye.",
@@ -121,7 +126,12 @@
           "price_stale_check": "Domyślnie wyłączone. Po włączeniu Menedżer taryf zatrzymuje aktywne ładowanie lub rozładowanie, jeśli czujnik ceny zakupu nie zgłaszał danych dłużej niż Maksymalny wiek danych cenowych. Zostaw wyłączone, jeśli cena długo się nie zmienia albo ustawia ją pomocnik.",
           "tariff_test_mode": "Po włączeniu Menedżer taryf decyduje jak zwykle i pokazuje to w Tariff Mode, powiadomieniach i logu, ale niczego nie wysyła do falownika, a Virtual Slot Scheduler go pomija. Pozwala bezpiecznie sprawdzić ustawienia.",
           "price_max_age": "Jeśli czujnik ceny nie zaktualizował się w ciągu podanej liczby minut, aktywny tryb ładowania/rozładowania zostanie zatrzymany. Domyślnie 90.",
-          "negative_price_protection": "Domyślnie wyłączone. Gdy włączone, Tariff Manager wyłącza Solar Sell, gdy cena eksportu jest poniżej zera, aby falownik nie płacił za eksport, i włącza go z powrotem, gdy cena przestaje być ujemna. Tylko tam, gdzie Solar Sell był włączony: Twoje własne ustawienie nigdy nie jest zmieniane."
+          "negative_price_protection": "Domyślnie wyłączone. Gdy włączone, Tariff Manager wyłącza Solar Sell, gdy cena eksportu jest poniżej zera, aby falownik nie płacił za eksport, i włącza go z powrotem, gdy cena przestaje być ujemna. Tylko tam, gdzie Solar Sell był włączony: Twoje własne ustawienie nigdy nie jest zmieniane.",
+          "manual_charge_current": "Dla akcji Ładuj teraz, gdy jej nie podaje. Puste: prąd ładowania w taniej taryfie.",
+          "manual_target_soc": "Ładuj teraz kończy ładowanie na tym poziomie. Puste: docelowy SOC taniej taryfy.",
+          "manual_discharge_current": "Dla akcji Rozładuj teraz, gdy jej nie podaje. Puste: prąd rozładowania w szczycie.",
+          "manual_min_soc": "Rozładuj teraz kończy się na tym poziomie. Puste: minimalny SOC z Tariff Managera.",
+          "manual_discharge_power": "Najwięcej, ile Rozładuj teraz oddaje do sieci, np. 3000 dla 3 kW. Puste: maksymalna moc eksportu, a bez niej moc znamionowa falownika."
         }
       },
       "deyecloud": {

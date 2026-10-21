@@ -58,6 +58,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .current_limits import battery_safe_current, group_sizes
+from .tariff import ManualSession
 
 if TYPE_CHECKING:
     from .tariff import TariffChargingManager
@@ -889,11 +890,18 @@ class VirtualSlotScheduler:
         # In test mode Tariff Manager only shows what it would do.
         if tm is None or getattr(tm, "test_mode", False) is True:
             return None
+        # A charge / discharge started by hand may set its own SOC and
+        # export cap (#39).
+        manual = tm.manual_for(self._serial) if hasattr(tm, "manual_for") else None
+        if not isinstance(manual, ManualSession):
+            manual = None
         if tm.is_charging_active_for(self._serial):
             return Resolution(
                 mode=MODE_CHARGE,
                 current=None,  # tariff manager owns chargeCurrent
-                target_soc=tm.target_soc,
+                target_soc=(
+                    manual.soc if manual and manual.soc is not None else tm.target_soc
+                ),
                 sell_power=0,
                 source="price_override",
             )
@@ -901,8 +909,16 @@ class VirtualSlotScheduler:
             return Resolution(
                 mode=MODE_DISCHARGE,
                 current=None,  # tariff manager owns dischargeCurrent
-                target_soc=tm.discharge_min_soc,
-                sell_power=self._export_share() or self._uncapped_sell_power(),
+                target_soc=(
+                    manual.soc
+                    if manual and manual.soc is not None
+                    else tm.discharge_min_soc
+                ),
+                sell_power=(
+                    (manual.power if manual else None)
+                    or self._export_share()
+                    or self._uncapped_sell_power()
+                ),
                 source="price_override",
             )
         return None
