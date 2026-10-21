@@ -81,6 +81,8 @@ async def test_setup_static_path_failure_still_registers_services():
         integration.SERVICE_CHARGE_NOW_STOP,
         integration.SERVICE_DISCHARGE_NOW_START,
         integration.SERVICE_DISCHARGE_NOW_STOP,
+        integration.SERVICE_BACKUP_SETTINGS,
+        integration.SERVICE_RESTORE_SETTINGS,
     }
 
 
@@ -90,7 +92,7 @@ async def test_setup_static_path_legacy_api_success():
     hass.http.async_register_static_paths = AsyncMock(side_effect=AttributeError)
     assert await integration.async_setup(hass, {}) is True
     hass.http.register_static_path.assert_called_once()
-    assert hass.services.async_register.call_count == 9
+    assert hass.services.async_register.call_count == 11
 
 
 @pytest.mark.asyncio
@@ -100,7 +102,7 @@ async def test_service_handlers_reject_missing_scheduler():
     hass.data = {DOMAIN: {}}
     hass.http.async_register_static_paths = AsyncMock()
     hass.services.async_register.side_effect = (
-        lambda domain, service, handler, schema: handlers.__setitem__(service, handler)
+        lambda domain, service, handler, schema, **kwargs: handlers.__setitem__(service, handler)
     )
     await integration.async_setup(hass, {})
     coordinator = MagicMock(spec=integration.SunsynkCoordinator)

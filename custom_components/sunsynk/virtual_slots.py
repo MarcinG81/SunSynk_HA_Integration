@@ -396,6 +396,11 @@ class VirtualSlotScheduler:
         )
 
     @property
+    def owns_timer(self) -> bool:
+        """Whether the scheduler is driving the inverter's timer slots now."""
+        return self._enabled and self._owns_timer
+
+    @property
     def _owns_timer(self) -> bool:
         """Whether the inverter may hold this scheduler's slots, not the
         user's timer: taken over, or put back but not yet seen there."""

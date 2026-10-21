@@ -1,3 +1,44 @@
+backup_settings:
+  name: Back Up Settings
+  description: >
+    Save everything the inverter reports in its settings to
+    /config/sunsynk_backups/<serial>_<date>.json. Returns the file name.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: The inverter to back up.
+      required: true
+      selector:
+        text:
+
+restore_settings:
+  name: Restore Settings
+  description: >
+    Put back the settings from a backup: only those this integration can write
+    and check, and only where they differ from the inverter now. By default
+    only lists what would change (dry run); set Dry Run off to write. Refused
+    while Tariff Manager or the Virtual Slot Scheduler are driving the inverter.
+  fields:
+    serial:
+      name: Inverter Serial
+      description: Exactly one target inverter. A parallel slave is routed to its master.
+      required: true
+      selector:
+        text:
+    file:
+      name: Backup File
+      description: The file name in /config/sunsynk_backups, e.g. 2301316667_20261021-180000.json.
+      required: true
+      selector:
+        text:
+    dry_run:
+      name: Dry Run
+      description: Only list what would change. Turn off to write the settings.
+      required: false
+      default: true
+      selector:
+        boolean:
+
 charge_now_start:
   name: Charge Now
   description: >

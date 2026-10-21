@@ -213,7 +213,7 @@ async def _set_virtual_slot(
     hass = MagicMock()
     hass.data = {DOMAIN: {"entry": coordinator, "entry_vslots": {MASTER: scheduler}}}
     hass.http.async_register_static_paths = AsyncMock()
-    hass.services.async_register.side_effect = lambda domain, service, handler, schema: (
+    hass.services.async_register.side_effect = lambda domain, service, handler, schema, **kwargs: (
         handlers.setdefault(service, handler)
     )
     await async_setup(hass, {})
@@ -335,7 +335,7 @@ async def test_sell_power_of_non_selling_windows_is_not_checked(mode):
     hass = MagicMock()
     hass.data = {DOMAIN: {"entry": coordinator, "entry_vslots": {MASTER: scheduler}}}
     hass.http.async_register_static_paths = AsyncMock()
-    hass.services.async_register.side_effect = lambda domain, service, handler, schema: (
+    hass.services.async_register.side_effect = lambda domain, service, handler, schema, **kwargs: (
         handlers.setdefault(service, handler)
     )
     await async_setup(hass, {})

@@ -14,7 +14,13 @@ import voluptuous as vol
 from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
 from homeassistant.exceptions import (
     ConfigEntryError,
     ServiceValidationError,
@@ -26,6 +32,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.storage import Store
 
 from .api.auth import SunsynkAuth
+from .backup import async_backup, async_restore
 from .calibration import PerformanceRatioCalibrator
 from .const import (
     CONF_ADMIN_ONLY_CONTROL,
@@ -113,6 +120,8 @@ def _platforms(entry: ConfigEntry) -> list[Platform]:
     return READ_ONLY_PLATFORMS if is_deyecloud(entry.data) else PLATFORMS
 
 
+SERVICE_BACKUP_SETTINGS = "backup_settings"
+SERVICE_RESTORE_SETTINGS = "restore_settings"
 SERVICE_CHARGE_NOW_START = "charge_now_start"
 SERVICE_CHARGE_NOW_STOP = "charge_now_stop"
 SERVICE_DISCHARGE_NOW_START = "discharge_now_start"
@@ -139,6 +148,15 @@ _SERVICE_NOW_START_SCHEMA = vol.Schema(
     }
 )
 _SERVICE_NOW_STOP_SCHEMA = vol.Schema({vol.Required("serial"): str})
+_SERVICE_BACKUP_SCHEMA = vol.Schema({vol.Required("serial"): str})
+_SERVICE_RESTORE_SCHEMA = vol.Schema(
+    {
+        vol.Required("serial"): str,
+        vol.Required("file"): str,
+        # Only list what would change unless told otherwise.
+        vol.Optional("dry_run", default=True): bool,
+    }
+)
 _SERVICE_SET_WORK_MODE_SCHEMA = vol.Schema(
     {
         vol.Required("serial"): str,
@@ -584,6 +602,57 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 await manager.async_stop_manual(target, mode)
 
         return _handle
+
+    def _busy(entry_id: str | None, target: str) -> str | None:
+        manager = hass.data[DOMAIN].get(f"{entry_id}_tariff")
+        if manager is not None and (
+            manager.is_charging_active_for(target)
+            or manager.is_discharging_active_for(target)
+        ):
+            return "Tariff Manager is charging or discharging this inverter"
+        scheduler = hass.data[DOMAIN].get(f"{entry_id}_vslots", {}).get(target)
+        if scheduler is not None and scheduler.owns_timer:
+            return "the Virtual Slot Scheduler is driving its timer slots"
+        return None
+
+    async def _handle_backup(call: ServiceCall) -> ServiceResponse:
+        serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
+        coordinator = _find_coordinator(hass, serial)
+        if coordinator is None:
+            raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
+        return await async_backup(hass, coordinator, serial)
+
+    async def _handle_restore(call: ServiceCall) -> ServiceResponse:
+        serial: str = call.data["serial"]
+        await _async_ensure_control_allowed(hass, call, serial)
+        coordinator = _find_coordinator(hass, serial)
+        if coordinator is None:
+            raise ValueError(f"No Sunsynk inverter found with serial {serial!r}")
+        target = coordinator.resolve_write_target(serial)
+        return await async_restore(
+            hass,
+            coordinator,
+            target,
+            call.data["file"],
+            dry_run=call.data["dry_run"],
+            busy=_busy(_find_entry_id_for_serial(hass, serial), target),
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_BACKUP_SETTINGS,
+        _handle_backup,
+        _SERVICE_BACKUP_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESTORE_SETTINGS,
+        _handle_restore,
+        _SERVICE_RESTORE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
 
     for service, mode, start, schema in (
         (SERVICE_CHARGE_NOW_START, MANUAL_CHARGE, True, _SERVICE_NOW_START_SCHEMA),

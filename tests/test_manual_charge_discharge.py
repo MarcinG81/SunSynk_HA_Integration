@@ -268,7 +268,9 @@ async def actions():
     hass = MagicMock()
     hass.http.async_register_static_paths = AsyncMock()
     hass.services.async_register.side_effect = (
-        lambda domain, name, handler, schema: handlers.__setitem__(name, handler)
+        lambda domain, name, handler, schema, **kwargs: handlers.__setitem__(
+            name, handler
+        )
     )
     await integration.async_setup(hass, {})
     return hass, handlers

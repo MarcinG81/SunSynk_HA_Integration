@@ -71,7 +71,7 @@ async def test_registered_services_route_and_execute_on_minimal_ha():
     }
     hass.http.async_register_static_paths = AsyncMock()
     hass.services.async_register.side_effect = (
-        lambda domain, service, handler, schema: handlers.setdefault(service, handler)
+        lambda domain, service, handler, schema, **kwargs: handlers.setdefault(service, handler)
     )
 
     await async_setup(hass, {})
@@ -274,7 +274,7 @@ async def test_services_refuse_currents_above_the_hardware_limit():
     hass.data = {DOMAIN: {"entry": coordinator, "entry_vslots": {"MASTER1": scheduler}}}
     hass.http.async_register_static_paths = AsyncMock()
     hass.services.async_register.side_effect = (
-        lambda domain, service, handler, schema: handlers.setdefault(service, handler)
+        lambda domain, service, handler, schema, **kwargs: handlers.setdefault(service, handler)
     )
     await async_setup(hass, {})
 
