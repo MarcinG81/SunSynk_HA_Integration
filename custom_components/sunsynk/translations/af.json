@@ -94,7 +94,8 @@
           "tariff_end_hour": "Aktiewe skedule — einduur (0–23)",
           "price_stale_check": "Stop wanneer prysdata verouderd lyk",
           "tariff_test_mode": "Toetsmodus: besluit, maar verander nie die omsetter nie",
-          "price_max_age": "Maksimum ouderdom van prysdata (minute)"
+          "price_max_age": "Maksimum ouderdom van prysdata (minute)",
+          "negative_price_protection": "Stop sonverkope by 'n negatiewe uitvoerprys"
         },
         "data_description": {
           "password": "Laat leeg om die gestoorde wagwoord te behou. Voer 'n nuwe wagwoord in nadat jy dit in die Sunsynk- of Deye-portaal verander het.",
@@ -119,7 +120,8 @@
           "tariff_end_hour": "Uur van dag (0–23) wanneer tariefbestuur deaktiveer. Kan middernag oorskry (bv. begin 22, einde 6).",
           "price_stale_check": "By verstek af. Wanneer aan, stop die Tariefbestuurder enige aktiewe laai of ontlaai as die invoerprys-sensor langer as Maksimum ouderdom van prysdata nie gerapporteer het nie. Laat dit af as jou prys vir lang tydperke dieselfde bly of deur 'n helper gestel word.",
           "tariff_test_mode": "Wanneer aan, besluit die Tariefbestuurder soos gewoonlik en wys dit in Tariff Mode, sy kennisgewings en die log, maar stuur niks na die omsetter nie, en die Virtual Slot Scheduler ignoreer dit. Gebruik dit om jou instellings veilig te toets.",
-          "price_max_age": "As die pryssensor nie binne hierdie aantal minute opgedateer het nie, word die aktiewe modus as veiligheidsmaatreel gestop. Verstek 90."
+          "price_max_age": "As die pryssensor nie binne hierdie aantal minute opgedateer het nie, word die aktiewe modus as veiligheidsmaatreel gestop. Verstek 90.",
+          "negative_price_protection": "Verstek af. Wanneer aan, skakel Tariff Manager Solar Sell af terwyl die uitvoerprys onder nul is, sodat die omsetter nie betaal om uit te voer nie, en weer aan wanneer dit nie meer so is nie. Slegs waar Solar Sell aan was: jou eie instelling word nooit verander nie."
         }
       },
       "deyecloud": {

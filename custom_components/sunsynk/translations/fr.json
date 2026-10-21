@@ -94,7 +94,8 @@
           "tariff_end_hour": "Plage horaire — heure de fin (0–23)",
           "price_stale_check": "Arrêter lorsque les données de prix semblent obsolètes",
           "tariff_test_mode": "Mode test : décider sans modifier l'onduleur",
-          "price_max_age": "Âge maximal des données de prix (minutes)"
+          "price_max_age": "Âge maximal des données de prix (minutes)",
+          "negative_price_protection": "Arrêter la vente solaire à prix d'export négatif"
         },
         "data_description": {
           "password": "Laissez vide pour conserver le mot de passe enregistré. Saisissez un nouveau mot de passe après l'avoir modifié sur le portail Sunsynk ou Deye.",
@@ -119,7 +120,8 @@
           "tariff_end_hour": "Heure de la journée (0–23) à laquelle la gestion tarifaire se désactive. Peut chevaucher minuit (ex. début 22, fin 6).",
           "price_stale_check": "Désactivé par défaut. Lorsqu'il est activé, le Gestionnaire de tarifs arrête toute charge ou décharge en cours si le capteur de prix d'achat n'a rien signalé depuis plus longtemps que Âge maximal des données de prix. Laissez-le désactivé si votre prix reste identique pendant de longues périodes ou est défini par une entrée d'aide.",
           "tariff_test_mode": "Activé, le Gestionnaire de tarifs décide comme d'habitude et l'affiche dans Tariff Mode, ses notifications et le journal, mais n'envoie rien à l'onduleur, et le Virtual Slot Scheduler l'ignore. Permet de vérifier vos réglages sans risque.",
-          "price_max_age": "Si le capteur de prix ne s'est pas mis à jour dans ce délai (minutes), le mode actif est arrêté par mesure de sécurité. Défaut 90."
+          "price_max_age": "Si le capteur de prix ne s'est pas mis à jour dans ce délai (minutes), le mode actif est arrêté par mesure de sécurité. Défaut 90.",
+          "negative_price_protection": "Désactivé par défaut. Si activé, Tariff Manager coupe Solar Sell tant que le prix d'export est inférieur à zéro, pour que l'onduleur ne paie pas pour exporter, puis le réactive ensuite. Uniquement là où Solar Sell était activé : votre propre réglage n'est jamais modifié."
         }
       },
       "deyecloud": {

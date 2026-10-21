@@ -53,6 +53,7 @@ from .const import (
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_MAX_EXPORT_POWER,
+    CONF_NEGATIVE_PRICE_PROTECTION,
     CONF_NORMAL_CHARGE_CURRENT,
     CONF_NORMAL_DISCHARGE_CURRENT,
     CONF_PANEL_KWP,
@@ -851,7 +852,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 else None
             ),
             test_mode=bool(_opt(CONF_TARIFF_TEST_MODE, False)),
+            negative_price_protection=bool(_opt(CONF_NEGATIVE_PRICE_PROTECTION, False)),
+            entry_id=entry.entry_id,
         )
+        await tariff_manager.async_load()
         hass.data[DOMAIN][f"{entry.entry_id}_tariff"] = tariff_manager
 
     # One scheduler per physical write target gives the service ``serial``

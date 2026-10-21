@@ -225,6 +225,7 @@ class TestParseTariffFields:
             "price_max_age": 90,
             "price_stale_check": False,
             "tariff_test_mode": False,
+            "negative_price_protection": False,
         }
 
     def test_test_mode_can_be_turned_on(self):

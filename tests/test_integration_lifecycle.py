@@ -83,7 +83,9 @@ async def test_setup_and_unload_two_independent_inverters_minimal_ha():
     forecast = MagicMock(
         async_config_entry_first_refresh=AsyncMock(), async_close=AsyncMock()
     )
-    tariff = MagicMock(async_shutdown=AsyncMock(return_value=True))
+    tariff = MagicMock(
+        async_shutdown=AsyncMock(return_value=True), async_load=AsyncMock()
+    )
     schedulers = [
         MagicMock(
             async_load=AsyncMock(),
@@ -175,7 +177,10 @@ async def test_setup_survives_initial_forecast_failure_and_starts_opt_in_dashboa
             return_value=MagicMock(async_load=AsyncMock()),
         ),
         patch("custom_components.sunsynk.SolarForecastCoordinator", return_value=forecast) as forecast_cls,
-        patch("custom_components.sunsynk.TariffChargingManager", return_value=MagicMock()),
+        patch(
+            "custom_components.sunsynk.TariffChargingManager",
+            return_value=MagicMock(async_load=AsyncMock()),
+        ),
         patch("custom_components.sunsynk.VirtualSlotScheduler", return_value=scheduler),
         patch("custom_components.sunsynk.Store", return_value=MagicMock(async_load=AsyncMock(return_value=None))),
         patch("custom_components.sunsynk._migrate_virtual_slot_entity_unique_ids"),
@@ -212,7 +217,7 @@ async def test_setup_restores_remembered_tariff_and_scheduler_switches():
         data={"INV1": {}},
         async_config_entry_first_refresh=AsyncMock(),
     )
-    tariff = MagicMock()
+    tariff = MagicMock(async_load=AsyncMock())
 
     with (
         patch("custom_components.sunsynk.SunsynkCoordinator", return_value=coordinator),
@@ -266,7 +271,10 @@ async def test_reloads_once_when_a_parallel_group_is_recognised_after_setup():
             "custom_components.sunsynk.SolarForecastCoordinator",
             return_value=MagicMock(async_config_entry_first_refresh=AsyncMock()),
         ),
-        patch("custom_components.sunsynk.TariffChargingManager", return_value=MagicMock()),
+        patch(
+            "custom_components.sunsynk.TariffChargingManager",
+            return_value=MagicMock(async_load=AsyncMock()),
+        ),
         patch(
             "custom_components.sunsynk.VirtualSlotScheduler",
             side_effect=lambda **_: MagicMock(async_load=AsyncMock(), wanted_enabled=False),
@@ -333,7 +341,7 @@ async def test_price_age_check_applies_only_when_turned_on():
             "custom_components.sunsynk.SolarForecastCoordinator",
             return_value=MagicMock(async_config_entry_first_refresh=AsyncMock()),
         ),
-        patch("custom_components.sunsynk.TariffChargingManager") as tariff_cls,
+        patch("custom_components.sunsynk.TariffChargingManager", return_value=MagicMock(async_load=AsyncMock())) as tariff_cls,
         patch(
             "custom_components.sunsynk.VirtualSlotScheduler",
             return_value=MagicMock(async_load=AsyncMock(), wanted_enabled=False),
@@ -387,7 +395,7 @@ async def test_a_deyecloud_entry_gets_sensors_and_nothing_that_writes():
             "custom_components.sunsynk.DeyeCloudCoordinator", return_value=coordinator
         ) as made,
         patch("custom_components.sunsynk.SunsynkCoordinator") as sunsynk,
-        patch("custom_components.sunsynk.TariffChargingManager") as tariff_cls,
+        patch("custom_components.sunsynk.TariffChargingManager", return_value=MagicMock(async_load=AsyncMock())) as tariff_cls,
         patch("custom_components.sunsynk.VirtualSlotScheduler") as scheduler_cls,
         patch("custom_components.sunsynk.Store", return_value=store),
         patch("custom_components.sunsynk._async_enable_dashboard_frontend") as frontend,

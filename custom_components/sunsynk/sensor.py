@@ -656,6 +656,8 @@ class TariffStateSensor(SensorEntity):
         attrs["decisions"] = self._manager.decisions
         if self._manager.manual_sessions:
             attrs["manual"] = self._manager.manual_sessions
+        if self._manager.solar_sell_off:
+            attrs["solar_sell_off"] = self._manager.solar_sell_off
         return attrs
 
 

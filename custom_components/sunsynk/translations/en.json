@@ -94,7 +94,8 @@
           "tariff_end_hour": "Active schedule — end hour (0–23)",
           "price_stale_check": "Stop when price data looks out of date",
           "tariff_test_mode": "Test mode: decide but don't change the inverter",
-          "price_max_age": "Price data max age (minutes)"
+          "price_max_age": "Price data max age (minutes)",
+          "negative_price_protection": "Stop selling solar at a negative export price"
         },
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
@@ -119,7 +120,8 @@
           "tariff_end_hour": "Hour of day (0–23) when tariff management deactivates. Can wrap midnight (e.g. start 22, end 6). The same start and end hour (e.g. 0 and 0) means all day.",
           "price_stale_check": "Off by default. When on, Tariff Manager stops any active charge or discharge if the import price sensor hasn't reported for longer than Price data max age. Leave it off if your price stays the same for long periods or is set by a helper.",
           "tariff_test_mode": "When on, Tariff Manager decides as usual and shows it in Tariff Mode, its notifications and the log, but sends nothing to the inverter, and the Virtual Slot Scheduler ignores it. Use it to check your settings safely.",
-          "price_max_age": "Only used when “Stop when price data looks out of date” is on. If the import price sensor hasn't reported within this many minutes, any active charge/discharge mode is stopped. A separate export price sensor is never age-checked. Default 90."
+          "price_max_age": "Only used when “Stop when price data looks out of date” is on. If the import price sensor hasn't reported within this many minutes, any active charge/discharge mode is stopped. A separate export price sensor is never age-checked. Default 90.",
+          "negative_price_protection": "Off by default. When on, Tariff Manager turns Solar Sell off while the export price is below zero, so the inverter doesn't pay to export, and back on when it isn't any more. Only where Solar Sell was on: your own setting is never changed."
         }
       },
       "deyecloud": {

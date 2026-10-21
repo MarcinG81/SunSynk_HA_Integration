@@ -94,7 +94,8 @@
           "tariff_end_hour": "Aktivní plán — hodina konce (0–23)",
           "price_stale_check": "Zastavit, když se data o ceně zdají zastaralá",
           "tariff_test_mode": "Testovací režim: rozhodovat, ale neměnit střídač",
-          "price_max_age": "Maximální stáří dat o ceně (minuty)"
+          "price_max_age": "Maximální stáří dat o ceně (minuty)",
+          "negative_price_protection": "Zastavit prodej ze soláru při záporné výkupní ceně"
         },
         "data_description": {
           "password": "Ponechte prázdné, chcete-li zachovat uložené heslo. Nové heslo zadejte po jeho změně na portálu Sunsynk nebo Deye.",
@@ -119,7 +120,8 @@
           "tariff_end_hour": "Hodina dne (0–23), kdy se správa tarifů deaktivuje. Může přesahovat půlnoc (např. začátek 22, konec 6).",
           "price_stale_check": "Ve výchozím stavu vypnuto. Je-li zapnuto, Správce tarifů zastaví aktivní nabíjení nebo vybíjení, pokud senzor nákupní ceny nehlásil déle než Maximální stáří dat o ceně. Nechte vypnuté, pokud vaše cena zůstává dlouho stejná nebo ji nastavuje pomocník.",
           "tariff_test_mode": "Je-li zapnuto, Správce tarifů rozhoduje jako obvykle a ukazuje to v Tariff Mode, oznámeních a logu, ale nic neposílá do střídače a Virtual Slot Scheduler jej ignoruje. Slouží k bezpečnému ověření nastavení.",
-          "price_max_age": "Pokud se senzor ceny neaktualizoval v průběhu tohoto počtu minut, aktivní režim se jako bezpečnostní opatření zastaví. Výchozí 90."
+          "price_max_age": "Pokud se senzor ceny neaktualizoval v průběhu tohoto počtu minut, aktivní režim se jako bezpečnostní opatření zastaví. Výchozí 90.",
+          "negative_price_protection": "Ve výchozím stavu vypnuto. Pokud je zapnuto, Tariff Manager vypne Solar Sell, dokud je výkupní cena pod nulou, aby střídač neplatil za export, a poté jej znovu zapne. Jen tam, kde byl Solar Sell zapnutý: vaše vlastní nastavení se nikdy nemění."
         }
       },
       "deyecloud": {

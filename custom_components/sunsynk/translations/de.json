@@ -94,7 +94,8 @@
           "tariff_end_hour": "Zeitplan — Endstunde (0–23)",
           "price_stale_check": "Anhalten, wenn die Preisdaten veraltet wirken",
           "tariff_test_mode": "Testmodus: entscheiden, aber den Wechselrichter nicht ändern",
-          "price_max_age": "Maximales Alter der Preisdaten (Minuten)"
+          "price_max_age": "Maximales Alter der Preisdaten (Minuten)",
+          "negative_price_protection": "Solarverkauf bei negativem Exportpreis stoppen"
         },
         "data_description": {
           "password": "Leer lassen, um das gespeicherte Passwort zu behalten. Ein neues Passwort eingeben, nachdem es im Sunsynk- oder Deye-Portal geändert wurde.",
@@ -119,7 +120,8 @@
           "tariff_end_hour": "Tagesstunde (0–23), zu der die Tarifverwaltung deaktiviert wird. Kann Mitternacht überschreiten (z. B. Start 22, Ende 6).",
           "price_stale_check": "Standardmäßig aus. Wenn aktiviert, stoppt der Tarif-Manager jedes aktive Laden oder Entladen, wenn der Bezugspreissensor länger als Maximales Alter der Preisdaten nichts gemeldet hat. Ausgeschaltet lassen, wenn Ihr Preis lange gleich bleibt oder von einem Helfer gesetzt wird.",
           "tariff_test_mode": "Wenn aktiviert, entscheidet der Tarif-Manager wie gewohnt und zeigt dies in Tariff Mode, seinen Benachrichtigungen und im Log, sendet aber nichts an den Wechselrichter, und der Virtual Slot Scheduler ignoriert ihn. So lassen sich die Einstellungen gefahrlos prüfen.",
-          "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90."
+          "price_max_age": "Wenn der Preissensor sich nicht innerhalb dieser Minuten aktualisiert hat, wird der aktive Lade-/Entlademodus als Sicherheitsmaßnahme gestoppt. Standard 90.",
+          "negative_price_protection": "Standardmäßig aus. Wenn aktiviert, schaltet der Tariff Manager Solar Sell aus, solange der Exportpreis unter null liegt, damit der Wechselrichter nicht für den Export bezahlt, und wieder ein, sobald er es nicht mehr ist. Nur wo Solar Sell eingeschaltet war: Ihre eigene Einstellung wird nie geändert."
         }
       },
       "deyecloud": {

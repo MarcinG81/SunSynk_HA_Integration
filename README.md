@@ -497,6 +497,7 @@ The Tariff Manager automatically charges the battery when electricity is cheap a
 | **Stop when price data looks out of date** *(2.0)* | Off by default. When ticked, an active charge or discharge stops if the import price sensor hasn't reported for longer than *Price max age* |
 | **Price max age (minutes)** | Used only when the option above is ticked (default 90) |
 | **Test mode** *(2.0)* | Off by default. Tariff Manager decides as usual and shows it in Tariff Mode, its notifications and the log, but sends nothing to the inverter |
+| **Stop selling solar at a negative export price** *(2.1)* | Off by default. When ticked, Tariff Manager turns Solar Sell off while the export price is below zero, and back on afterwards; only where Solar Sell was on |
 
 3. After setup, go to your inverter device and **turn on the Tariff Manager switch** — it starts **off** by default.
 

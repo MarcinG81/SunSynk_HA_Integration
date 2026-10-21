@@ -99,6 +99,8 @@ CONF_PRICE_STALE_CHECK: Final = "price_stale_check"
 # Tariff Manager decides as usual but writes nothing to the inverters, so a
 # configuration can be tried out safely. Suggested by pay4property (#21).
 CONF_TARIFF_TEST_MODE: Final = "tariff_test_mode"
+# Solar Sell off while the export price is below zero (2.1).
+CONF_NEGATIVE_PRICE_PROTECTION: Final = "negative_price_protection"
 # Remembers the Tariff Manager switch across restarts (#30).
 CONF_TARIFF_ENABLED: Final = "tariff_enabled"
 DEFAULT_PRICE_MAX_AGE: Final = 90  # minutes

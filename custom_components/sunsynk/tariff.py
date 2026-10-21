@@ -16,8 +16,10 @@ from homeassistant.helpers.event import (
     async_track_point_in_utc_time,
     async_track_state_change_event,
 )
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
+from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .current_limits import battery_safe_current
 
@@ -101,6 +103,9 @@ class TariffChargingManager:
         export_price_entity: str | None = None,
         # decide as usual, but write nothing to the inverters
         test_mode: bool = False,
+        # turn Solar Sell off while the export price is below zero
+        negative_price_protection: bool = False,
+        entry_id: str = "",
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
@@ -148,6 +153,13 @@ class TariffChargingManager:
         # a restart: everything goes back to normal then.
         self._manual: dict[str, _Manual] = {}
         self._manual_timers: dict[str, Callable[[], None]] = {}
+        # Write targets whose Solar Sell this manager turned off for a
+        # negative export price, saved so a restart still turns it back on.
+        self._negative_price_protection = negative_price_protection
+        self._sell_off_serials: set[str] = set()
+        self._sell_off_store: Store | None = (
+            Store(hass, 1, f"{DOMAIN}_negative_price_{entry_id}") if entry_id else None
+        )
         self._listeners: list[Callable[[], None]] = []
         self._evaluate_lock = Lock()
         self._unsub_price: Any = None
@@ -527,6 +539,7 @@ class TariffChargingManager:
             self._notify_listeners()
 
         targets = list(self._coordinator.write_target_serials)
+        await self._protect_from_negative_export_price(targets, export_quality)
         for serial in [s for s in targets if s in self._manual]:
             try:
                 await self._evaluate_manual(serial)
@@ -834,6 +847,90 @@ class TariffChargingManager:
             else:
                 reason = f"price {price:.4f} < threshold {self._expensive_threshold}"
             await self._stop_discharging(serial, reason)
+
+    # ── Negative export price ──────────────────────────────────────────────
+
+    async def async_load(self) -> None:
+        """Read which inverters' Solar Sell this manager had turned off."""
+        if self._sell_off_store is None:
+            return
+        data = await self._sell_off_store.async_load() or {}
+        self._sell_off_serials = set(data.get("sell_off") or ())
+
+    async def _async_save_sell_off(self) -> None:
+        if self._sell_off_store is not None:
+            await self._sell_off_store.async_save(
+                {"sell_off": sorted(self._sell_off_serials)}
+            )
+
+    @property
+    def solar_sell_off(self) -> list[str]:
+        """Write targets with Solar Sell off for a negative export price."""
+        return sorted(self._sell_off_serials)
+
+    async def _protect_from_negative_export_price(
+        self, targets: list[str], export_quality: str
+    ) -> None:
+        """Solar Sell off while exporting would cost money; back on after.
+
+        Only where it was on, and only turned back on where this manager
+        turned it off, so a user's own choice is never changed.
+        """
+        price = (
+            self._read_price(self._export_price_entity)
+            if export_quality == QUALITY_OK
+            else None
+        )
+        negative = (
+            self._enabled
+            and self._negative_price_protection
+            and price is not None
+            and price < 0
+        )
+        changed = False
+        if negative:
+            for serial in targets:
+                if serial in self._sell_off_serials:
+                    continue
+                settings = (
+                    (self._coordinator.data or {}).get(serial, {}).get("settings", {})
+                )
+                if not SunsynkCoordinator._values_match(1, settings.get("solarSell")):
+                    continue  # off already, by the user's choice
+                try:
+                    await self._write_setting(serial, "solarSell", 0)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.error(
+                        "Tariff [%s]: could not turn Solar Sell off: %s", serial, err
+                    )
+                    continue
+                self._sell_off_serials.add(serial)
+                changed = True
+                self._send_notification(
+                    "Tariff: Solar sell off",
+                    f"Inverter {serial}: export price {price:.4f} is below zero.",
+                )
+        else:
+            for serial in sorted(self._sell_off_serials):
+                try:
+                    await self._write_setting(serial, "solarSell", 1)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.error(
+                        "Tariff [%s]: could not turn Solar Sell back on, "
+                        "will retry: %s",
+                        serial,
+                        err,
+                    )
+                    continue
+                self._sell_off_serials.discard(serial)
+                changed = True
+                self._send_notification(
+                    "Tariff: Solar sell back on",
+                    f"Inverter {serial}: export price no longer below zero.",
+                )
+        if changed:
+            await self._async_save_sell_off()
+            self._notify_listeners()
 
     # ── Charge / discharge by hand (#39) ───────────────────────────────────
 

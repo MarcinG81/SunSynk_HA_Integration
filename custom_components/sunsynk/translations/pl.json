@@ -94,7 +94,8 @@
           "tariff_end_hour": "Harmonogram — godzina zakończenia (0–23)",
           "price_stale_check": "Zatrzymaj, gdy dane cenowe wyglądają na nieaktualne",
           "tariff_test_mode": "Tryb testowy: decyduj, ale nie zmieniaj falownika",
-          "price_max_age": "Maksymalny wiek danych cenowych (minuty)"
+          "price_max_age": "Maksymalny wiek danych cenowych (minuty)",
+          "negative_price_protection": "Wstrzymaj sprzedaż PV przy ujemnej cenie eksportu"
         },
         "data_description": {
           "password": "Zostaw puste, aby zachować zapisane hasło. Wpisz nowe hasło po zmianie w portalu Sunsynk lub Deye.",
@@ -119,7 +120,8 @@
           "tariff_end_hour": "Godzina dnia (0–23), o której zarządzanie taryfą się dezaktywuje. Może przekraczać północ (np. start 22, koniec 6).",
           "price_stale_check": "Domyślnie wyłączone. Po włączeniu Menedżer taryf zatrzymuje aktywne ładowanie lub rozładowanie, jeśli czujnik ceny zakupu nie zgłaszał danych dłużej niż Maksymalny wiek danych cenowych. Zostaw wyłączone, jeśli cena długo się nie zmienia albo ustawia ją pomocnik.",
           "tariff_test_mode": "Po włączeniu Menedżer taryf decyduje jak zwykle i pokazuje to w Tariff Mode, powiadomieniach i logu, ale niczego nie wysyła do falownika, a Virtual Slot Scheduler go pomija. Pozwala bezpiecznie sprawdzić ustawienia.",
-          "price_max_age": "Jeśli czujnik ceny nie zaktualizował się w ciągu podanej liczby minut, aktywny tryb ładowania/rozładowania zostanie zatrzymany. Domyślnie 90."
+          "price_max_age": "Jeśli czujnik ceny nie zaktualizował się w ciągu podanej liczby minut, aktywny tryb ładowania/rozładowania zostanie zatrzymany. Domyślnie 90.",
+          "negative_price_protection": "Domyślnie wyłączone. Gdy włączone, Tariff Manager wyłącza Solar Sell, gdy cena eksportu jest poniżej zera, aby falownik nie płacił za eksport, i włącza go z powrotem, gdy cena przestaje być ujemna. Tylko tam, gdzie Solar Sell był włączony: Twoje własne ustawienie nigdy nie jest zmieniane."
         }
       },
       "deyecloud": {
