@@ -441,12 +441,9 @@ class TariffChargingManager:
         entity's state-change event doesn't carry the *other* entity's
         current value.
         """
-        if not self._enabled:
-            if self._charging_active_serials or self._discharging_active_serials:
-                await self._restore_active_currents_locked()
-                self._notify_listeners()
-            return
-
+        # Kept up to date while switched off too: a price helper loaded after
+        # Home Assistant started otherwise showed "not_found" until Tariff
+        # Manager was turned on.
         import_quality, import_detail = self._compute_price_quality(self._price_entity)
         if import_quality != self._price_quality:
             _LOGGER.info(
@@ -470,6 +467,12 @@ class TariffChargingManager:
             )
             self._export_price_quality = export_quality
             self._notify_listeners()
+
+        if not self._enabled:
+            if self._charging_active_serials or self._discharging_active_serials:
+                await self._restore_active_currents_locked()
+                self._notify_listeners()
+            return
 
         in_schedule = self._is_in_schedule()
 

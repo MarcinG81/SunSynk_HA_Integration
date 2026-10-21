@@ -39,13 +39,24 @@ def _no_verify_write_delay():
         yield
 
 
+# The fake coordinator of the running test: a mock inverter's fresh read
+# before a write returns what that coordinator has cached, unless a test
+# says otherwise. A write is never built from the cache itself (audit A3).
+_CURRENT: list[SimpleNamespace] = []
+
+
+def _cached_settings(serial: str, coordinator=None) -> dict:
+    coordinator = coordinator or _CURRENT[-1]
+    return dict(coordinator.data.get(serial, {}).get("settings", {}))
+
+
 @pytest.fixture
 def fake_coordinator():
     auth = MagicMock()
     auth._api_server = "api.sunsynk.net"
     auth.async_get_token = AsyncMock(return_value="token")
 
-    return SimpleNamespace(
+    coordinator = SimpleNamespace(
         hass=MagicMock(),
         _auth=auth,
         serials=["TEST123"],
@@ -64,9 +75,12 @@ def fake_coordinator():
             }
         },
     )
+    _CURRENT.append(coordinator)
+    yield coordinator
+    _CURRENT.remove(coordinator)
 
 
-def _echoing_client(sent_payloads: list[dict]) -> MagicMock:
+def _echoing_client(sent_payloads: list[dict], coordinator=None) -> MagicMock:
     """A mock SunsynkClient whose async_get_settings echoes back the last
     write — write verification sees exactly what was just sent, so it
     always matches and the tests above stay focused on cache staleness
@@ -79,7 +93,11 @@ def _echoing_client(sent_payloads: list[dict]) -> MagicMock:
 
     mock_client.async_write_settings = AsyncMock(side_effect=_capture_write)
     mock_client.async_get_settings = AsyncMock(
-        side_effect=lambda session, serial: dict(sent_payloads[-1])
+        side_effect=lambda session, serial: (
+            dict(sent_payloads[-1])
+            if sent_payloads
+            else _cached_settings(serial, coordinator)
+        )
     )
     return mock_client
 
@@ -391,6 +409,9 @@ async def test_failed_group_does_not_block_other_group_in_same_batch(
 @pytest.mark.asyncio
 async def test_write_401_reaches_caller_and_invalidates_token(fake_coordinator):
     mock_client = MagicMock()
+    mock_client.async_get_settings = AsyncMock(
+        side_effect=lambda session, serial: _cached_settings(serial)
+    )
     mock_client.async_write_settings = AsyncMock(
         side_effect=SunsynkAuthenticationError("HTTP 401")
     )
@@ -921,17 +942,26 @@ def _gated_sleep():
 def _client(read_backs, baseline=None) -> MagicMock:
     """read_backs are the confirmation reads, after the fresh pre-write read.
 
-    The pre-write read returns ``baseline`` (empty means "use the cache"); a
-    single exception in read_backs is raised by every read.
+    The pre-write read returns ``baseline``, by default what the coordinator
+    has cached; a single exception in read_backs is raised by every read.
     """
     mock_client = MagicMock()
     mock_client.async_write_settings = AsyncMock()
-    if isinstance(read_backs, BaseException):
-        mock_client.async_get_settings = AsyncMock(side_effect=read_backs)
-    else:
-        mock_client.async_get_settings = AsyncMock(
-            side_effect=[baseline or {}, *read_backs]
-        )
+    reads = iter(()) if isinstance(read_backs, BaseException) else iter(read_backs)
+    first = [True]
+
+    def _read(session, serial):
+        if first[0]:
+            first[0] = False
+            return dict(baseline) if baseline is not None else _cached_settings(serial)
+        if isinstance(read_backs, BaseException):
+            raise read_backs
+        value = next(reads)
+        if isinstance(value, BaseException):
+            raise value
+        return value
+
+    mock_client.async_get_settings = AsyncMock(side_effect=_read)
     return mock_client
 
 
@@ -1015,6 +1045,9 @@ async def test_unconfirmed_value_survives_a_stale_poll_and_is_resent(
     when a poll had read the inverter before the new start time arrived."""
     sent_payloads: list[dict] = []
     mock_client = MagicMock()
+    mock_client.async_get_settings = AsyncMock(
+        side_effect=lambda session, serial: _cached_settings(serial)
+    )
     mock_client.async_write_settings = AsyncMock(
         side_effect=lambda session, serial, payload: sent_payloads.append(dict(payload))
     )
@@ -1238,7 +1271,7 @@ class TestResolveParallelWriteTarget:
 async def test_write_setting_redirects_battery_key_to_parallel_master():
     coordinator = _parallel_coordinator()
     sent_payloads: list[dict] = []
-    mock_client = _echoing_client(sent_payloads)
+    mock_client = _echoing_client(sent_payloads, coordinator)
 
     with patch(
         "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
@@ -1259,7 +1292,7 @@ async def test_write_setting_redirects_time_slot_key_to_parallel_master():
     (see TestResolveParallelWriteTarget's docstring for the story)."""
     coordinator = _parallel_coordinator()
     sent_payloads: list[dict] = []
-    mock_client = _echoing_client(sent_payloads)
+    mock_client = _echoing_client(sent_payloads, coordinator)
 
     with patch(
         "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
@@ -1373,6 +1406,9 @@ async def test_full_page_never_resends_another_slots_stale_start_time(
     fake_coordinator.data["TEST123"]["settings"] = _full_system_mode_settings()
     sent_payloads: list[dict] = []
     mock_client = MagicMock()
+    mock_client.async_get_settings = AsyncMock(
+        side_effect=lambda session, serial: _cached_settings(serial)
+    )
     mock_client.async_write_settings = AsyncMock(
         side_effect=lambda session, serial, payload: sent_payloads.append(dict(payload))
     )
@@ -1486,18 +1522,53 @@ async def test_unconfirmed_write_wins_over_a_fresh_read_that_predates_it(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("baseline", [SunsynkApiError("boom"), {}])
-async def test_failed_or_empty_fresh_read_falls_back_to_the_cache(
+async def test_a_settings_page_is_never_rebuilt_from_the_cache(
     fake_coordinator, baseline
 ):
-    fake_coordinator.data["TEST123"]["settings"] = _full_system_mode_settings()
+    """2.0 audit A3: with the fresh read failed, the cache's older values for
+    the rest of the page would undo a change made in the app since (a 40 A
+    limit back to 120 A). The write fails instead, to be retried."""
+    fake_coordinator.data["TEST123"]["settings"] = {
+        "batteryMaxCurrentCharge": "120",
+        "dischargeCurrent": "50",
+    }
     mock_client = _baseline_client(baseline)
 
-    with patch(
-        "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        pytest.raises(UpdateFailed, match="weren't written"),
     ):
-        await SunsynkCoordinator.async_write_setting(fake_coordinator, "TEST123", "time1on", 1)
+        await SunsynkCoordinator.async_write_setting(
+            fake_coordinator, "TEST123", "dischargeCurrent", 20
+        )
 
-    assert mock_client.sent[0]["sellTime2"] == "06:00"
+    assert mock_client.sent == []
+
+
+@pytest.mark.asyncio
+async def test_a_setting_written_on_its_own_still_goes_out_without_a_fresh_read(
+    fake_coordinator,
+):
+    """Nothing else is sent with it, so there is nothing old to resend."""
+    fake_coordinator.data["TEST123"]["settings"] = {"someOwnSetting": "1"}
+    mock_client = _baseline_client(SunsynkApiError("boom"))
+
+    with (
+        patch(
+            "custom_components.sunsynk.coordinator.SunsynkClient", return_value=mock_client
+        ),
+        patch(
+            "custom_components.sunsynk.coordinator.validate_setting_batch",
+            side_effect=lambda batch: batch,
+        ),
+    ):
+        await SunsynkCoordinator.async_write_settings(
+            fake_coordinator, "TEST123", {"someOwnSetting": 2}
+        )
+
+    assert mock_client.sent == [{"someOwnSetting": 2, "sn": "TEST123"}]
 
 
 @pytest.mark.asyncio

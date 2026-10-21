@@ -595,7 +595,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry_id=entry.entry_id,
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except BaseException:
+        # Home Assistant retries setup with a new coordinator: close this
+        # one's HTTP session rather than leave it open (2.0 audit A7).
+        await coordinator.async_close()
+        raise
 
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
