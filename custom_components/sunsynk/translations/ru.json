@@ -165,6 +165,13 @@
           "zero_export_limit_to_load": "Нулевой экспорт + только нагрузка",
           "limited_to_home": "Ограничение домом"
         }
+      },
+      "energy_mode": {
+        "name": "Энергетический режим",
+        "state": {
+          "battery_first": "Сначала батарея",
+          "load_first": "Сначала нагрузка"
+        }
       }
     }
   }

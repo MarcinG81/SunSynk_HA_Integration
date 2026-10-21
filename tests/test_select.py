@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.sunsynk.select import (
+    ENERGY_MODES,
     SELECTS,
     SYSTEM_WORK_MODES,
     SunsynkSelectEntity,
@@ -71,7 +72,7 @@ async def test_choosing_a_mode_writes_its_value(option, value):
 
 
 @pytest.mark.asyncio
-async def test_one_select_per_inverter():
+async def test_each_inverter_gets_every_select():
     coordinator = MagicMock(serials=["A", "B"], data={})
     hass = MagicMock(data={"sunsynk": {"entry": coordinator}})
     added = []
@@ -80,5 +81,31 @@ async def test_one_select_per_inverter():
 
     assert [e.unique_id for e in added] == [
         "A_setting_sys_work_mode_select",
+        "A_setting_energy_mode_select",
         "B_setting_sys_work_mode_select",
+        "B_setting_energy_mode_select",
     ]
+
+
+ENERGY_MODE = SELECTS[1]
+
+
+def test_energy_mode_names_its_two_values():
+    assert ENERGY_MODE.setting_key == "energyMode"
+    assert ENERGY_MODE.options == ["battery_first", "load_first"]
+    assert ENERGY_MODES == {"battery_first": 0, "load_first": 1}
+    assert ENERGY_MODE.translation_key == "energy_mode"
+
+
+@pytest.mark.asyncio
+async def test_choosing_an_energy_mode_writes_its_value():
+    coordinator = MagicMock()
+    coordinator.last_update_success = True
+    coordinator.data = {"INV1": {"settings": {"energyMode": "0"}}}
+    coordinator.async_write_setting = AsyncMock()
+    entity = SunsynkSelectEntity(coordinator, "INV1", ENERGY_MODE, MagicMock())
+    assert entity.current_option == "battery_first"
+
+    await entity.async_select_option("load_first")
+
+    coordinator.async_write_setting.assert_awaited_once_with("INV1", "energyMode", 1)

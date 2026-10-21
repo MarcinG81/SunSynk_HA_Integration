@@ -373,8 +373,11 @@ WRITABLE_NUMBERS: tuple[SunsynkNumberEntityDescription, ...] = (
     ),
     SunsynkNumberEntityDescription(
         key="setting_energy_mode",
-        name="Energy Mode",
+        name="Energy Mode (number)",
         setting_key="energyMode",
+        # Replaced by the Energy Mode select; kept so automations that use it
+        # keep working, but off on new installs.
+        entity_registry_enabled_default=False,
         native_min_value=0,
         native_max_value=1,
         native_step=1,

@@ -346,16 +346,16 @@ These appear under **Settings** entities on the device page.
 | Sell Time 1–6 Power | W | Max sell power per time slot |
 | Time Slot 1–6 Capacity | % | Target SOC per time slot |
 | Generator Start/On/Off Capacity | % | Generator automation thresholds |
-| Battery Mode | 0–2 | 0=Lithium, 1=Lead-acid, 2=Other |
-| Energy Mode | 0–1 | Energy priority mode |
+| Battery Mode | 0–2 | The battery mode set on the inverter's battery page; some inverters with a lithium BMS report -1 |
 
 #### Selects
 
 | Entity | Options |
 |---|---|
 | System Work Mode | Selling First · Zero Export + Limit to Load Only · Limited to Home |
+| Energy Mode | Battery First · Load First (what solar power goes to first) |
 
-The older *System Work Mode (number)* entity (0–2) is still there for existing automations, but is disabled on new installs.
+The older *System Work Mode (number)* (0–2) and *Energy Mode (number)* (0 = Battery First, 1 = Load First) entities are still there for existing automations, but are disabled on new installs.
 
 #### Switches (on/off)
 | Entity | Description |

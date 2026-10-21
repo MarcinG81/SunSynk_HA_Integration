@@ -165,6 +165,13 @@
           "zero_export_limit_to_load": "Nul-uitvoer + slegs las",
           "limited_to_home": "Beperk tot huis"
         }
+      },
+      "energy_mode": {
+        "name": "Energiemodus",
+        "state": {
+          "battery_first": "Battery eerste",
+          "load_first": "Las eerste"
+        }
       }
     }
   }

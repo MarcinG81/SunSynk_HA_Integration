@@ -165,6 +165,13 @@
           "zero_export_limit_to_load": "零上网 + 仅供负载",
           "limited_to_home": "仅限家庭"
         }
+      },
+      "energy_mode": {
+        "name": "能量模式",
+        "state": {
+          "battery_first": "电池优先",
+          "load_first": "负载优先"
+        }
       }
     }
   }

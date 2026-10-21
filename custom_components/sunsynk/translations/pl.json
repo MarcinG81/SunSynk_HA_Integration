@@ -165,6 +165,13 @@
           "zero_export_limit_to_load": "Zero eksportu + tylko do obciążenia",
           "limited_to_home": "Ograniczenie do domu"
         }
+      },
+      "energy_mode": {
+        "name": "Tryb energii",
+        "state": {
+          "battery_first": "Najpierw bateria",
+          "load_first": "Najpierw obciążenie"
+        }
       }
     }
   }

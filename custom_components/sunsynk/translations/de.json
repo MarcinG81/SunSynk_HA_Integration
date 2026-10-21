@@ -165,6 +165,13 @@
           "zero_export_limit_to_load": "Nulleinspeisung + nur Last",
           "limited_to_home": "Begrenzt auf Haus"
         }
+      },
+      "energy_mode": {
+        "name": "Energiemodus",
+        "state": {
+          "battery_first": "Batterie zuerst",
+          "load_first": "Last zuerst"
+        }
       }
     }
   }

@@ -165,6 +165,13 @@
           "zero_export_limit_to_load": "Nulový export + pouze zátěž",
           "limited_to_home": "Omezeno na dům"
         }
+      },
+      "energy_mode": {
+        "name": "Energetický režim",
+        "state": {
+          "battery_first": "Nejprve baterie",
+          "load_first": "Nejprve zátěž"
+        }
       }
     }
   }

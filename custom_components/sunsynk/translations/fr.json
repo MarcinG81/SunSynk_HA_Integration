@@ -165,6 +165,13 @@
           "zero_export_limit_to_load": "Injection zéro + charge uniquement",
           "limited_to_home": "Limité à la maison"
         }
+      },
+      "energy_mode": {
+        "name": "Mode énergie",
+        "state": {
+          "battery_first": "Batterie d'abord",
+          "load_first": "Charge d'abord"
+        }
       }
     }
   }

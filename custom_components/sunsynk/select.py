@@ -33,6 +33,13 @@ SYSTEM_WORK_MODES = {
     "limited_to_home": 2,
 }
 
+# Energy pattern: what PV power goes to first. The same values Deye's own
+# API uses for BATTERY_FIRST and LOAD_FIRST.
+ENERGY_MODES = {
+    "battery_first": 0,
+    "load_first": 1,
+}
+
 SELECTS: tuple[SunsynkSelectEntityDescription, ...] = (
     SunsynkSelectEntityDescription(
         key="setting_sys_work_mode_select",
@@ -41,6 +48,15 @@ SELECTS: tuple[SunsynkSelectEntityDescription, ...] = (
         values=SYSTEM_WORK_MODES,
         options=list(SYSTEM_WORK_MODES),
         icon="mdi:solar-power-variant",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    SunsynkSelectEntityDescription(
+        key="setting_energy_mode_select",
+        translation_key="energy_mode",
+        setting_key="energyMode",
+        values=ENERGY_MODES,
+        options=list(ENERGY_MODES),
+        icon="mdi:home-battery",
         entity_category=EntityCategory.CONFIG,
     ),
 )
