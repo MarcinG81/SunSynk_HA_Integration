@@ -16,6 +16,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - **Serial numbers and firmware versions made only of digits showed as numbers**, e.g. a Deye serial as "2301316667.0" or a BMS version "0000" as "0.0". They are now shown exactly as reported. (#37)
 
+## [2.0.0-rc.1] - 2026-10-21
+
+### Fixed
+- **A parallel group could be forgotten for one refresh.** If reading one inverter's settings failed, its parallel role was lost with them: the slave became a write target of its own and the battery's BMS limit was no longer shared between the inverters (e.g. 120 A each instead of 96 A). The last confirmed role is now kept until the inverter reports a different one.
+- **A setting change could undo a change made in the app.** When the fresh read before a write failed, the rest of that settings page was sent from the last poll, so e.g. a battery limit lowered to 40 A in the app went back to 120 A. Such a write now fails and is retried instead; a setting written on its own still goes out.
+- **The live BMS limit was ignored when a rated one was reported.** Tariff Manager and the Virtual Slot Scheduler lowered a current to the rated BMS limit only; the lower of the rated and the current limit (e.g. near full charge) now applies. Configure still checks fixed limits only.
+- **A charge current could stay raised after a Tariff Manager discharge.** With a charge window's current set and a price discharge starting, the scheduler forgot that the charge current was still its to put back. The current each direction has to go back to is now tracked separately, also across a restart.
+- **A restart could overwrite a timer changed in the app.** If Home Assistant stopped while the scheduler was standing by, the next start wrote back the timer captured earlier, undoing any change made in the app meanwhile. The scheduler now saves whether it had actually taken the slots over, and from standing by takes the timer the inverter has.
+- **Price Quality showed "not_found" after a restart** while Tariff Manager was off, until it was switched on: the price helper loads after the integration. Quality now follows the price helper whether Tariff Manager is on or not.
+- **A failed first connection left an HTTP session open**; each retry of the setup opened another. It is now closed.
+
 ## [2.0.0-beta.18] - 2026-10-19
 
 ### Fixed

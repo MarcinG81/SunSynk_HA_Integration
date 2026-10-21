@@ -93,7 +93,7 @@ def current_limit(
 
     `group_sizes` gives the number of inverters in each serial's parallel
     group (1 when independent); the BMS limit is shared between them. With
-    `live`, the BMS's current limit is used when it reports no rated one;
+    `live`, the lower of the BMS's rated and current limits is used;
     otherwise only fixed limits count, so a check doesn't depend on the SOC
     at the moment it runs.
 
@@ -110,8 +110,13 @@ def current_limit(
         )
         battery_data = serial_data.get("battery", {})
         total = _plausible_amps(battery_data.get(rated_key), _MAX_BMS_A)
-        if total is None and live:
-            total = _plausible_amps(battery_data.get(live_key), _MAX_BMS_A)
+        if live:
+            # What the BMS allows right now can be lower than its rating
+            # (e.g. near full charge): the lower of the two applies, not the
+            # rated one just because it is reported (2.0 audit A5).
+            total = _lowest(
+                [total, _plausible_amps(battery_data.get(live_key), _MAX_BMS_A)]
+            )
         if total is None:
             continue
         shared_by = max(1, int((group_sizes or {}).get(serial, 1)))

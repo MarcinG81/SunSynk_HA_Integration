@@ -185,6 +185,7 @@ async def test_virtual_slot_current_respects_the_battery(
 ):
     coordinator = _coordinator(inverters, {battery_key: bms})
     scheduler = VirtualSlotScheduler(MagicMock(), coordinator, "entry", MASTER)
+    scheduler._store = MagicMock(async_save=AsyncMock())
 
     await scheduler._apply_current_if_changed(
         Resolution(mode, configured, 90, 0, "virtual_slot:1")

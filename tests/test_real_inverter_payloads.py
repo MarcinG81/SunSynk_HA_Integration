@@ -49,7 +49,9 @@ async def _write(settings: dict, key: str, value) -> dict:
     client.async_write_settings = AsyncMock(
         side_effect=lambda session, serial, payload: sent.append(dict(payload))
     )
-    client.async_get_settings = AsyncMock(side_effect=lambda session, serial: sent[-1])
+    client.async_get_settings = AsyncMock(
+        side_effect=lambda session, serial: dict(sent[-1] if sent else settings)
+    )
     with (
         patch("custom_components.sunsynk.coordinator.SunsynkClient", return_value=client),
         patch("custom_components.sunsynk.coordinator.asyncio.sleep", AsyncMock()),
