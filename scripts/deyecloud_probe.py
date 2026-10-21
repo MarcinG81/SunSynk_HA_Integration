@@ -99,7 +99,10 @@ def _app_id_hint(region: str, app_id: str) -> str:
             result = post(f"{base}/account/token?appId={app_id}", {"appSecret": ""})
         except Exception:  # noqa: BLE001 - only a hint
             continue
-        if "appid" not in str(result.get("msg", "")).lower():
+        # Only a complaint about the (empty) secret means the App ID was
+        # accepted there; any other answer proves nothing (#37).
+        message = str(result.get("msg", "")).lower()
+        if "secret" in message and "appid" not in message:
             known.append(other)
     shown = f"{app_id[:3]}...{app_id[-3:]} ({len(app_id)} characters)"
     if known:

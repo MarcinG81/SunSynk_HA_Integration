@@ -107,3 +107,21 @@ def test_an_app_id_no_data_centre_knows_is_reported():
             probe("eu", "202310190001", "secret", "me@example.com", "pw")
 
     assert "not known in any data centre" in str(err.value)
+
+
+def test_another_answer_doesnt_count_as_knowing_the_app_id():
+    """#37: eu said "appId not found", the hint said try us, and us said
+    "invalid appId". Only an answer about the secret means it's known."""
+
+    def fake_post(url, body, token=None):
+        if url.startswith("https://us1"):
+            return {"code": "2101021", "msg": "auth invalid appId"}
+        if url.startswith("https://india"):
+            return {"code": "1", "msg": "param error"}
+        return {"code": "2101022", "msg": "auth appId not found"}
+
+    with patch("scripts.deyecloud_probe.post", side_effect=fake_post):
+        with pytest.raises(SystemExit) as err:
+            probe("eu", "202310190001", "secret", "me@example.com", "pw")
+
+    assert "not known in any data centre" in str(err.value)
