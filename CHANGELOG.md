@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.0.0-rc.1] - 2026-10-21
 
 ### Fixed
 - **A parallel group could be forgotten for one refresh.** If reading one inverter's settings failed, its parallel role was lost with them: the slave became a write target of its own and the battery's BMS limit was no longer shared between the inverters (e.g. 120 A each instead of 96 A). The last confirmed role is now kept until the inverter reports a different one.
