@@ -242,6 +242,15 @@ Each inverter appears as a **device** in Home Assistant with the following entit
 | Battery Discharge Total | kWh | Lifetime discharged |
 | Battery 1/2 SOC, Voltage, Power, Temp | various | Per-battery data (parallel batteries) |
 
+
+Worked out by the integration from the readings above (2.1):
+
+| Sensor | Unit | Notes |
+|---|---|---|
+| Battery Energy | kWh | Capacity (Ah) × voltage × SOC |
+| Battery Max Charge Power / Max Discharge Power | W | The current limit in force (the lower of the inverter's and the BMS's, shared in a parallel group) × voltage |
+| Battery Time to Full | h | At the charging power now; unknown when not charging |
+| Battery Time to Reserve | h | Down to Battery Low Capacity at the discharging power now; unknown when not discharging |
 #### Grid
 | Entity | Unit | Description |
 |---|---|---|

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +21,7 @@ from homeassistant.const import (
     UnitOfIrradiance,
     UnitOfPower,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -28,6 +30,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .battery_helpers import energy_kwh, hours_to_full, hours_to_reserve, max_power_w
 from .const import (
     ALL_STATIC_SENSORS,
     DOMAIN,
@@ -143,6 +146,13 @@ async def async_setup_entry(
                 SunsynkSensor(coordinator, serial, description, device_info)
             )
         entities.append(InverterInternalPowerSensor(coordinator, serial, device_info))
+        for helper in BATTERY_HELPERS:
+            sensor = BatteryHelperSensor(coordinator, serial, helper, device_info)
+            # A Deye Cloud model may not report what a figure needs (e.g. no
+            # current limits on single-phase): no sensor that stays unknown.
+            if deyecloud and not helper.when_active and sensor.native_value is None:
+                continue
+            entities.append(sensor)
         if not deyecloud:
             # Deye Cloud has no plant energy price.
             entities.append(PlantEnergyPriceSensor(coordinator, serial, device_info))
@@ -457,6 +467,83 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
             if self.entity_description.state_class is not None:
                 return None
             return str(value) if value != "" else None
+
+
+@dataclass(frozen=True, kw_only=True)
+class BatteryHelperDescription(SensorEntityDescription):
+    value_fn: Callable[[SunsynkCoordinator, str], float | int | None]
+    # Only while charging / discharging: added on Deye Cloud without a value.
+    when_active: bool = False
+
+
+BATTERY_HELPERS: tuple[BatteryHelperDescription, ...] = (
+    BatteryHelperDescription(
+        key="battery_energy",
+        name="Battery Energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY_STORAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=energy_kwh,
+    ),
+    BatteryHelperDescription(
+        key="battery_max_charge_power",
+        name="Battery Max Charge Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda coordinator, serial: max_power_w(coordinator, serial, "charge"),
+    ),
+    BatteryHelperDescription(
+        key="battery_max_discharge_power",
+        name="Battery Max Discharge Power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda coordinator, serial: max_power_w(
+            coordinator, serial, "discharge"
+        ),
+    ),
+    BatteryHelperDescription(
+        key="battery_time_to_full",
+        name="Battery Time to Full",
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        device_class=SensorDeviceClass.DURATION,
+        value_fn=hours_to_full,
+        when_active=True,
+    ),
+    BatteryHelperDescription(
+        key="battery_time_to_reserve",
+        name="Battery Time to Reserve",
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        device_class=SensorDeviceClass.DURATION,
+        value_fn=hours_to_reserve,
+        when_active=True,
+    ),
+)
+
+
+class BatteryHelperSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
+    """A battery figure worked out from the inverter's own readings."""
+
+    entity_description: BatteryHelperDescription
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: SunsynkCoordinator,
+        serial: str,
+        description: BatteryHelperDescription,
+        device_info: DeviceInfo,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._serial = serial
+        self._attr_unique_id = f"{serial}_{description.key}"
+        self._attr_device_info = device_info
+
+    @property
+    def native_value(self) -> float | int | None:
+        return self.entity_description.value_fn(self.coordinator, self._serial)
 
 
 class InverterInternalPowerSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
