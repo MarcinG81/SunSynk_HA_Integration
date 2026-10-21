@@ -89,6 +89,8 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._unconfirmed_writes: dict[str, dict[str, tuple[int, Any]]] = {}
         self._write_seq = 0
         self._verify_tasks: set[asyncio.Task[None]] = set()
+        # serial -> last parallel role read from valid data (2.0 audit A2).
+        self._known_roles: dict[str, str | None] = {}
 
     async def _async_get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -131,6 +133,14 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         still checked as a fallback.
         """
         data = (self.data or {}).get(serial, {})
+        # The last role read from valid data. A refresh where the settings
+        # read failed has no role at all, and taking that as "independent"
+        # dropped a known parallel group: the slave became a write target of
+        # its own and the bank's BMS limit was no longer shared (2.0 audit
+        # A2). The role only changes on data that says what it is.
+        known = getattr(self, "_known_roles", None)
+        if known is None:
+            known = self._known_roles = {}
         for section in ("settings", "inverter"):
             info = data.get(section) or {}
             if "equipMode" not in info:
@@ -140,10 +150,10 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 equip_mode = int(info["equipMode"])
             except (TypeError, ValueError):
                 continue
-            if not parallel:
-                return None
-            return {1: "master", 0: "slave"}.get(equip_mode)
-        return None
+            role = {1: "master", 0: "slave"}.get(equip_mode) if parallel else None
+            known[serial] = role
+            return role
+        return known.get(serial)
 
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         """Fetch data from all inverter endpoints."""
@@ -464,7 +474,14 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         # do: building on a cache up to one poll old would send back, and so
         # undo, anything changed in the Sunsynk app since that poll. Values we
         # wrote that the inverter hasn't confirmed yet are kept over the read.
+        #
+        # Without a fresh read, a setting written on its own still goes out,
+        # but a settings page isn't rebuilt from the cache: its other values
+        # could be older than a change made in the app since, and would undo
+        # it (2.0 audit A3: a 40 A limit set in the app went back to 120 A).
+        # Those writes fail instead and are retried by their callers.
         cached_settings = dict((self.data or {}).get(serial, {}).get("settings", {}))
+        read_error: Exception | None = None
         try:
             current_settings = dict(await client.async_get_settings(session, serial))
         except SunsynkAuthenticationError as err:
@@ -472,14 +489,7 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             error = UpdateFailed(f"Authentication failed: {err}")
             return {key: error for key in updates}
         except Exception as err:  # noqa: BLE001
-            if not cached_settings:
-                error = UpdateFailed(f"Cannot read settings for {serial}: {err}")
-                return {key: error for key in updates}
-            _LOGGER.debug(
-                "Fresh settings read for %s failed, using cached settings: %s",
-                serial,
-                err,
-            )
+            read_error = err
             current_settings = cached_settings
         else:
             if current_settings:
@@ -487,6 +497,7 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                     self, serial, {"settings": current_settings}
                 )
             else:
+                read_error = UpdateFailed("the inverter returned no settings")
                 current_settings = cached_settings
 
         grouped_updates: dict[frozenset[str], dict[str, Any]] = {}
@@ -499,6 +510,23 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         before: dict[str, Any] = {}
         requested: dict[str, Any] = {}
         for allowed_keys, group_updates in grouped_updates.items():
+            if read_error is not None and (
+                len(allowed_keys) > 1 or not cached_settings
+            ):
+                _LOGGER.warning(
+                    "Cannot read settings for %s, not writing %s: %s",
+                    serial,
+                    ", ".join(group_updates),
+                    read_error,
+                )
+                error = UpdateFailed(
+                    f"Cannot read settings for {serial}, so "
+                    f"{', '.join(group_updates)} weren't written (the rest of "
+                    f"that settings page would have been sent from an older "
+                    f"reading): {read_error}"
+                )
+                failures.update({key: error for key in group_updates})
+                continue
             payload: dict[str, Any] = {
                 key: value
                 for key, value in current_settings.items()

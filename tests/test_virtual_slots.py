@@ -1017,7 +1017,10 @@ async def test_switch_state_and_original_timer_survive_a_restart(
     assert saved["enabled"] is True
     assert saved["original_settings"]["sellTime1"] == "06:30"
 
-    # Restart: the inverter now shows the scheduler's own values.
+    assert saved["owns_timer"] is False  # standing by: nothing taken over
+    # As saved after taking the slots over (e.g. a price override), then a
+    # restart: the inverter still shows the scheduler's own values.
+    saved = {**saved, "owns_timer": True}
     mock_coordinator.data["TEST123"]["settings"].update(
         {"time1on": 0, "cap1": 20, "sellTime1": "00:00"}
     )

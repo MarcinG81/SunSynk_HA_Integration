@@ -304,7 +304,12 @@ class VirtualSlotScheduler:
         # seen reporting it yet, and how often it was written again.
         self._restore_pending = False
         self._restore_rewrites = 0
+        self._owned_at_load = True
         self._last_current_key: tuple[str, int] | _CurrentState | None = None
+        # Currents a window set that still have to go back to normal, kept
+        # apart from the last-write cache above: a Tariff Manager override
+        # in one direction takes over only that current (2.0 audit A4).
+        self._currents_to_restore: set[str] = set()
         self._original_settings: dict[str, Any] | None = None
         # Normal currents a shutdown could not write back yet; retried until
         # the inverter accepts them, also across restarts.
@@ -370,6 +375,10 @@ class VirtualSlotScheduler:
         # What this scheduler had written, so that after a restart its own
         # layout still isn't taken for the user's timer (#36).
         self._written_layout = dict(data.get("written_layout") or {})
+        self._currents_to_restore = set(data.get("currents_to_restore") or ())
+        # Whether the timer was this scheduler's when it last saved; stores
+        # from before 2.0.0-rc.1 don't say, and are taken as owned, as then.
+        self._owned_at_load = bool(data.get("owns_timer", True))
         if migrated:
             await self._async_persist()
 
@@ -381,7 +390,17 @@ class VirtualSlotScheduler:
                 "original_settings": self._original_settings,
                 "pending_current_restore": self._pending_current_restore,
                 "written_layout": self._written_layout,
+                "currents_to_restore": sorted(self._currents_to_restore),
+                "owns_timer": self._owns_timer,
             }
+        )
+
+    @property
+    def _owns_timer(self) -> bool:
+        """Whether the inverter may hold this scheduler's slots, not the
+        user's timer: taken over, or put back but not yet seen there."""
+        return bool(self._original_settings) and (
+            not self._standing_by or self._restore_pending
         )
 
     @property
@@ -455,6 +474,14 @@ class VirtualSlotScheduler:
                 # Nothing has been written yet: the user's timer is in place.
                 # If it can't be captured yet (no settings polled), the tick
                 # keeps trying and drives nothing until it can.
+                self._standing_by = True
+                await self._async_capture_user_timer()
+            elif not self._owned_at_load:
+                # Saved while standing by: the inverter has the user's own
+                # timer, maybe changed in the app while Home Assistant was
+                # down. Take that, never the older snapshot (2.0 audit A6).
+                self._owned_at_load = True
+                self._original_settings = None
                 self._standing_by = True
                 await self._async_capture_user_timer()
             else:
@@ -532,9 +559,10 @@ class VirtualSlotScheduler:
                 await self._coordinator.async_write_settings(
                     self._serial, self._original_settings
                 )
-            if isinstance(self._last_current_key, tuple):
+            if self._currents_to_restore:
                 # A window's own current is still on the inverter (the window
                 # was removed or disabled): put the normal currents back too.
+                self._last_current_key = None
                 await self._apply_current_if_changed(_IDLE)
         except Exception as err:  # noqa: BLE001
             _LOGGER.error(
@@ -549,6 +577,7 @@ class VirtualSlotScheduler:
         self._last_current_key = None
         self._restore_pending = bool(self._original_settings)
         self._restore_rewrites = 0
+        await self._async_persist()
         _LOGGER.info(
             "Virtual slots [%s]: nothing to do, your own timer is back in place",
             self._serial,
@@ -666,6 +695,9 @@ class VirtualSlotScheduler:
         self._last_current_key = None
         self._restore_pending = False
         self._written_layout = {}
+        # Saved before the first write, so a crash from here on puts the
+        # user's timer back on the next start.
+        await self._async_persist()
 
     async def _async_shutdown(self, force_disable: bool = True) -> bool:
         """Restore the exact settings captured before taking ownership."""
@@ -1291,9 +1323,15 @@ class VirtualSlotScheduler:
         TariffChargingManager already owns those registers in that case.
         """
         if resolution.source == "price_override":
-            # The Tariff Manager now owns the currents and leaves its own
-            # values behind, so whatever this scheduler last wrote is gone.
+            # The Tariff Manager now owns the current for its direction and
+            # puts its normal value back itself. A window's current in the
+            # other direction is still this scheduler's to put back.
             self._last_current_key = None
+            self._currents_to_restore.discard(
+                "chargeCurrent"
+                if resolution.mode == MODE_CHARGE
+                else "dischargeCurrent"
+            )
             return False
 
         if resolution.mode == MODE_CHARGE and resolution.current is not None:
@@ -1320,6 +1358,9 @@ class VirtualSlotScheduler:
                 )
                 wrote = True
             self._last_current_key = _CurrentState.IDLE
+            if self._currents_to_restore:
+                self._currents_to_restore.clear()
+                await self._async_persist()
             return wrote
         else:
             return False
@@ -1331,6 +1372,9 @@ class VirtualSlotScheduler:
             self._serial, key, self._safe(key, value)
         )
         self._last_current_key = current_key
+        if key not in self._currents_to_restore:
+            self._currents_to_restore.add(key)
+            await self._async_persist()
         return True
 
     def _safe(self, key: str, amps: int) -> int:
