@@ -22,6 +22,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .current_limits import battery_safe_current
+from .price_plan import Rate, by_day, in_slot, merge_rates, parse_rates, plan_day
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -120,6 +121,11 @@ class TariffChargingManager:
         manual_discharge_current: int | None = None,
         manual_min_soc: int | None = None,
         manual_discharge_power: int | None = None,
+        # plan by the prices ahead (#40): price entities and kWh a day
+        plan_import_entities: list[str] | None = None,
+        plan_export_entities: list[str] | None = None,
+        plan_buy_kwh: float | None = None,
+        plan_sell_kwh: float | None = None,
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
@@ -166,6 +172,18 @@ class TariffChargingManager:
         # over the price, works with Tariff Manager off, and isn't kept over
         # a restart: everything goes back to normal then.
         self._manual: dict[str, ManualSession] = {}
+        # Planned slots per direction and day, with the prices they were
+        # planned from: a day is planned once, when its prices appear, so
+        # slots that have passed aren't replaced by others (which would buy
+        # or sell more than the day's amount). New prices for a day replan it.
+        self._plan_setup = {
+            "charge": (tuple(plan_import_entities or ()), plan_buy_kwh),
+            "discharge": (tuple(plan_export_entities or ()), plan_sell_kwh),
+        }
+        self._plans: dict[str, dict[Any, tuple[tuple, list[Rate]]]] = {
+            "charge": {},
+            "discharge": {},
+        }
         self._manual_defaults = {
             MANUAL_CHARGE: (manual_charge_current, manual_target_soc, None),
             MANUAL_DISCHARGE: (
@@ -575,6 +593,7 @@ class TariffChargingManager:
             self._notify_listeners()
 
         targets = list(self._coordinator.write_target_serials)
+        self._refresh_plans(targets)
         await self._protect_from_negative_export_price(targets, export_quality)
         for serial in [s for s in targets if s in self._manual]:
             try:
@@ -705,7 +724,9 @@ class TariffChargingManager:
             return "no import price"
         if not in_schedule:
             return "outside the active hours"
-        if price > self._cheap_threshold:
+        if self._plans_on("charge") and self._planned_now("charge") is None:
+            return self._plan_reason("charge")
+        if not self._plans_on("charge") and price > self._cheap_threshold:
             return (
                 f"import price {price:g} is above the cheap threshold "
                 f"{self._cheap_threshold:g}"
@@ -726,7 +747,9 @@ class TariffChargingManager:
             return "no export price"
         if not in_schedule:
             return "outside the active hours"
-        if price < self._expensive_threshold:
+        if self._plans_on("discharge") and self._planned_now("discharge") is None:
+            return self._plan_reason("discharge")
+        if not self._plans_on("discharge") and price < self._expensive_threshold:
             return (
                 f"export price {price:g} is below the expensive threshold "
                 f"{self._expensive_threshold:g}"
@@ -770,7 +793,11 @@ class TariffChargingManager:
         # with the house on the grid. Stopping here instead handed the battery
         # back to the house, and at 1% below target charging started again,
         # over and over until the cheap period ended (#36).
-        cheap_now = in_schedule and price <= self._cheap_threshold
+        cheap_now = in_schedule and (
+            self._planned_now("charge") is not None
+            if self._plans_on("charge")
+            else price <= self._cheap_threshold
+        )
         if serial in self._charging_active_serials:
             should_charge = cheap_now
         else:
@@ -827,7 +854,11 @@ class TariffChargingManager:
         # timer, which normally has a lower SOC, so the house runs from the
         # battery as planned. It isn't started again in the same expensive
         # period, so a little solar can't make it bounce at the minimum (#36).
-        expensive_now = in_schedule and price >= self._expensive_threshold
+        expensive_now = in_schedule and (
+            self._planned_now("discharge") is not None
+            if self._plans_on("discharge")
+            else price >= self._expensive_threshold
+        )
         if not expensive_now:
             self._discharged_to_min_serials.discard(serial)
         should_discharge = (
@@ -883,6 +914,121 @@ class TariffChargingManager:
             else:
                 reason = f"price {price:.4f} < threshold {self._expensive_threshold}"
             await self._stop_discharging(serial, reason)
+
+    # ── Plan by the prices ahead (#40) ─────────────────────────────────────
+
+    def _plans_on(self, direction: str) -> bool:
+        entities, kwh = self._plan_setup[direction]
+        return bool(entities) and bool(kwh)
+
+    def _refresh_plans(self, targets: list[str]) -> None:
+        """Plan each day whose prices are new or have changed."""
+        now = dt_util.utcnow()
+        today = dt_util.as_local(now).date()
+        for direction in ("charge", "discharge"):
+            if not self._plans_on(direction):
+                continue
+            entities, kwh = self._plan_setup[direction]
+            groups = []
+            for entity_id in entities:
+                state = self._hass.states.get(entity_id)
+                if state is not None:
+                    groups.append(parse_rates(state.attributes))
+            plans = self._plans[direction]
+            for day in [day for day in plans if day < today]:
+                del plans[day]
+            power_kw = self._plan_power_kw(direction, targets)
+            for day, rates in by_day(merge_rates(*groups)).items():
+                if day < today:
+                    continue
+                prices = tuple((rate.start, rate.price) for rate in rates)
+                if day in plans and plans[day][0] == prices:
+                    continue
+                chosen = plan_day(
+                    rates,
+                    now,
+                    float(kwh),
+                    power_kw,
+                    dearest=direction == "discharge",
+                    limit=(
+                        self._expensive_threshold
+                        if direction == "discharge"
+                        else self._cheap_threshold
+                    ),
+                )
+                plans[day] = (prices, chosen)
+                _LOGGER.info(
+                    "Tariff: planned %s for %s at %.1f kW: %s",
+                    direction,
+                    day,
+                    power_kw,
+                    ", ".join(
+                        f"{dt_util.as_local(rate.start):%H:%M} ({rate.price:g})"
+                        for rate in chosen
+                    )
+                    or "no slot within the price limit",
+                )
+
+    def _plan_power_kw(self, direction: str, targets: list[str]) -> float:
+        """Each inverter's charge or discharge power: the Tariff Manager
+        current at the battery voltage (51.2 V until one is reported)."""
+        amps = (
+            self._peak_discharge_current
+            if direction == "discharge"
+            else self._cheap_current
+        ) or 0
+        volts = 51.2
+        for serial in targets:
+            battery = (self._coordinator.data or {}).get(serial, {}).get("battery", {})
+            try:
+                reported = float(battery.get("voltage"))
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(reported) and reported > 0:
+                volts = reported
+                break
+        return amps * volts / 1000
+
+    def _planned(self, direction: str) -> list[Rate]:
+        return sorted(
+            (
+                rate
+                for _prices, chosen in self._plans[direction].values()
+                for rate in chosen
+            ),
+            key=lambda rate: rate.start,
+        )
+
+    def _planned_now(self, direction: str) -> Rate | None:
+        return in_slot(self._planned(direction), dt_util.utcnow())
+
+    def _plan_reason(self, direction: str) -> str:
+        now = dt_util.utcnow()
+        upcoming = [rate for rate in self._planned(direction) if rate.start > now]
+        if not upcoming:
+            return "no planned slot ahead (prices not in yet?)"
+        return (
+            "not a planned slot; next at "
+            f"{dt_util.as_local(upcoming[0].start):%H:%M} ({upcoming[0].price:g})"
+        )
+
+    @property
+    def plans(self) -> dict[str, list[dict[str, Any]]]:
+        """Planned slots ahead, for the Tariff Mode sensor."""
+        now = dt_util.utcnow()
+        return {
+            direction: [
+                {
+                    "start": dt_util.as_local(rate.start).isoformat(),
+                    "end": dt_util.as_local(rate.end).isoformat(),
+                    "price": rate.price,
+                }
+                for rate in self._planned(direction)
+                if rate.end > now
+            ]
+            for direction in ("charge", "discharge")
+            if self._plans_on(direction)
+        }
 
     # ── Negative export price ──────────────────────────────────────────────
 

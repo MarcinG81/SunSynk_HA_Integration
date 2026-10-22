@@ -100,7 +100,11 @@
           "manual_target_soc": "Laai nou: teiken-SOC (%)",
           "manual_discharge_current": "Ontlaai nou: stroom (A)",
           "manual_min_soc": "Ontlaai nou: minimum SOC (%)",
-          "manual_discharge_power": "Ontlaai nou: uitvoerkrag (W)"
+          "manual_discharge_power": "Ontlaai nou: uitvoerkrag (W)",
+          "plan_import_entities": "Plan: invoerpryse vorentoe",
+          "plan_buy_kwh": "Plan: kWh om per dag te koop",
+          "plan_export_entities": "Plan: uitvoerpryse vorentoe",
+          "plan_sell_kwh": "Plan: kWh om per dag te verkoop"
         },
         "data_description": {
           "password": "Laat leeg om die gestoorde wagwoord te behou. Voer 'n nuwe wagwoord in nadat jy dit in die Sunsynk- of Deye-portaal verander het.",
@@ -131,7 +135,11 @@
           "manual_target_soc": "Laai nou stop hier. Leeg: die teiken-SOC van die goedkoop tarief.",
           "manual_discharge_current": "Vir die Ontlaai nou-aksie as dit nie een gee nie. Leeg: die piek-ontlaaistroom.",
           "manual_min_soc": "Ontlaai nou eindig hier. Leeg: die Tariff Manager se minimum SOC.",
-          "manual_discharge_power": "Die meeste wat Ontlaai nou uitvoer, bv. 3000 vir 3 kW. Leeg: die maksimum uitvoerkrag, anders die omsetter se gegradeerde krag."
+          "manual_discharge_power": "Die meeste wat Ontlaai nou uitvoer, bv. 3000 vir 3 kW. Leeg: die maksimum uitvoerkrag, anders die omsetter se gegradeerde krag.",
+          "plan_import_entities": "Entiteite met die komende invoerpryse per gleuf, bv. Octopus Energy se current en next day rates of 'n Nord Pool-sensor. Met kWh om te koop, laai Tariff Manager in die goedkoopste gleuwe van elke dag in plaas van altyd wanneer die prys onder die goedkoop drempel is; die drempel beperk dan net die prys.",
+          "plan_buy_kwh": "Hoeveel om elke dag per omsetter in die goedkoopste gleuwe van die netwerk te laai. Leeg: plan af.",
+          "plan_export_entities": "Entiteite met die komende uitvoerpryse per gleuf, bv. Octopus Energy se export current en next day rates. Met kWh om te verkoop, ontlaai Tariff Manager in die duurste gleuwe van elke dag; die duur drempel is dan die laagste prys waarteen dit verkoop.",
+          "plan_sell_kwh": "Hoeveel om elke dag per omsetter in die duurste gleuwe uit die battery uit te voer. Leeg: plan af."
         }
       },
       "deyecloud": {

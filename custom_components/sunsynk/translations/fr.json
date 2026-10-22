@@ -100,7 +100,11 @@
           "manual_target_soc": "Charger maintenant : SOC cible (%)",
           "manual_discharge_current": "Décharger maintenant : courant (A)",
           "manual_min_soc": "Décharger maintenant : SOC minimum (%)",
-          "manual_discharge_power": "Décharger maintenant : puissance d'export (W)"
+          "manual_discharge_power": "Décharger maintenant : puissance d'export (W)",
+          "plan_import_entities": "Plan : prix d'achat à venir",
+          "plan_buy_kwh": "Plan : kWh à acheter par jour",
+          "plan_export_entities": "Plan : prix de revente à venir",
+          "plan_sell_kwh": "Plan : kWh à vendre par jour"
         },
         "data_description": {
           "password": "Laissez vide pour conserver le mot de passe enregistré. Saisissez un nouveau mot de passe après l'avoir modifié sur le portail Sunsynk ou Deye.",
@@ -131,7 +135,11 @@
           "manual_target_soc": "Charger maintenant s'arrête ici. Vide : le SOC cible du tarif bas.",
           "manual_discharge_current": "Pour l'action Décharger maintenant si elle n'en donne pas. Vide : le courant de décharge en pointe.",
           "manual_min_soc": "Décharger maintenant s'arrête ici. Vide : le SOC minimum de Tariff Manager.",
-          "manual_discharge_power": "Le maximum exporté par Décharger maintenant, p. ex. 3000 pour 3 kW. Vide : la puissance d'export maximale, sinon la puissance nominale de l'onduleur."
+          "manual_discharge_power": "Le maximum exporté par Décharger maintenant, p. ex. 3000 pour 3 kW. Vide : la puissance d'export maximale, sinon la puissance nominale de l'onduleur.",
+          "plan_import_entities": "Entités avec les prochains prix d'achat par créneau, p. ex. current et next day rates d'Octopus Energy ou un capteur Nord Pool. Avec des kWh à acheter, Tariff Manager charge dans les créneaux les moins chers de chaque jour au lieu de chaque fois que le prix passe sous le seuil bas, qui ne fait alors que plafonner le prix.",
+          "plan_buy_kwh": "Combien charger depuis le réseau chaque jour, par onduleur, dans les créneaux les moins chers. Vide : plan désactivé.",
+          "plan_export_entities": "Entités avec les prochains prix de revente par créneau, p. ex. export current et next day rates d'Octopus Energy. Avec des kWh à vendre, Tariff Manager décharge dans les créneaux les plus chers de chaque jour ; le seuil haut est alors le prix minimum de vente.",
+          "plan_sell_kwh": "Combien exporter depuis la batterie chaque jour, par onduleur, dans les créneaux les plus chers. Vide : plan désactivé."
         }
       },
       "deyecloud": {

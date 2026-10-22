@@ -100,7 +100,11 @@
           "manual_target_soc": "Jetzt laden: Ziel-SOC (%)",
           "manual_discharge_current": "Jetzt entladen: Strom (A)",
           "manual_min_soc": "Jetzt entladen: minimaler SOC (%)",
-          "manual_discharge_power": "Jetzt entladen: Exportleistung (W)"
+          "manual_discharge_power": "Jetzt entladen: Exportleistung (W)",
+          "plan_import_entities": "Plan: Importpreise voraus",
+          "plan_buy_kwh": "Plan: kWh pro Tag kaufen",
+          "plan_export_entities": "Plan: Exportpreise voraus",
+          "plan_sell_kwh": "Plan: kWh pro Tag verkaufen"
         },
         "data_description": {
           "password": "Leer lassen, um das gespeicherte Passwort zu behalten. Ein neues Passwort eingeben, nachdem es im Sunsynk- oder Deye-Portal geändert wurde.",
@@ -131,7 +135,11 @@
           "manual_target_soc": "Jetzt laden lädt bis hierhin. Leer: der Ziel-SOC des günstigen Tarifs.",
           "manual_discharge_current": "Für die Aktion Jetzt entladen, wenn sie keinen angibt. Leer: der Spitzen-Entladestrom.",
           "manual_min_soc": "Jetzt entladen endet hier. Leer: der minimale SOC des Tariff Managers.",
-          "manual_discharge_power": "Höchstens so viel exportiert Jetzt entladen, z. B. 3000 für 3 kW. Leer: die maximale Exportleistung, sonst die Nennleistung des Wechselrichters."
+          "manual_discharge_power": "Höchstens so viel exportiert Jetzt entladen, z. B. 3000 für 3 kW. Leer: die maximale Exportleistung, sonst die Nennleistung des Wechselrichters.",
+          "plan_import_entities": "Entitäten mit den kommenden Importpreisen pro Zeitfenster, z. B. die Current- und Next-Day-Rates von Octopus Energy oder ein Nord-Pool-Sensor. Mit kWh zum Kaufen lädt der Tariff Manager in den günstigsten Zeitfenstern jedes Tages statt immer dann, wenn der Preis unter der günstigen Schwelle liegt; die Schwelle begrenzt dann nur den Preis.",
+          "plan_buy_kwh": "Wie viel pro Tag und Wechselrichter in den günstigsten Zeitfenstern aus dem Netz geladen wird. Leer: Plan aus.",
+          "plan_export_entities": "Entitäten mit den kommenden Exportpreisen pro Zeitfenster, z. B. die Export-Current- und Next-Day-Rates von Octopus Energy. Mit kWh zum Verkaufen entlädt der Tariff Manager in den teuersten Zeitfenstern jedes Tages; die teure Schwelle ist dann der niedrigste Verkaufspreis.",
+          "plan_sell_kwh": "Wie viel pro Tag und Wechselrichter in den teuersten Zeitfenstern aus der Batterie exportiert wird. Leer: Plan aus."
         }
       },
       "deyecloud": {

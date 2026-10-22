@@ -100,7 +100,11 @@
           "manual_target_soc": "Cargar ahora: SOC objetivo (%)",
           "manual_discharge_current": "Descargar ahora: corriente (A)",
           "manual_min_soc": "Descargar ahora: SOC mínimo (%)",
-          "manual_discharge_power": "Descargar ahora: potencia de exportación (W)"
+          "manual_discharge_power": "Descargar ahora: potencia de exportación (W)",
+          "plan_import_entities": "Plan: precios de importación futuros",
+          "plan_buy_kwh": "Plan: kWh a comprar al día",
+          "plan_export_entities": "Plan: precios de exportación futuros",
+          "plan_sell_kwh": "Plan: kWh a vender al día"
         },
         "data_description": {
           "password": "Déjelo en blanco para conservar la contraseña guardada. Introduzca una nueva contraseña después de cambiarla en el portal de Sunsynk o Deye.",
@@ -131,7 +135,11 @@
           "manual_target_soc": "Cargar ahora deja de cargar aquí. Vacío: el SOC objetivo de tarifa barata.",
           "manual_discharge_current": "Para la acción Descargar ahora cuando no la indica. Vacío: la corriente de descarga en punta.",
           "manual_min_soc": "Descargar ahora termina aquí. Vacío: el SOC mínimo de Tariff Manager.",
-          "manual_discharge_power": "Lo máximo que exporta Descargar ahora, p. ej. 3000 para 3 kW. Vacío: la potencia máxima de exportación, o la potencia nominal del inversor."
+          "manual_discharge_power": "Lo máximo que exporta Descargar ahora, p. ej. 3000 para 3 kW. Vacío: la potencia máxima de exportación, o la potencia nominal del inversor.",
+          "plan_import_entities": "Entidades con los próximos precios de importación por franja, p. ej. current y next day rates de Octopus Energy o un sensor de Nord Pool. Con kWh a comprar, Tariff Manager carga en las franjas más baratas de cada día en lugar de siempre que el precio esté por debajo del umbral barato, que entonces solo limita el precio.",
+          "plan_buy_kwh": "Cuánto cargar de la red al día, por inversor, en las franjas más baratas. Vacío: plan desactivado.",
+          "plan_export_entities": "Entidades con los próximos precios de exportación por franja, p. ej. export current y next day rates de Octopus Energy. Con kWh a vender, Tariff Manager descarga en las franjas más caras de cada día; el umbral caro es entonces el precio mínimo al que vende.",
+          "plan_sell_kwh": "Cuánto exportar de la batería al día, por inversor, en las franjas más caras. Vacío: plan desactivado."
         }
       },
       "deyecloud": {

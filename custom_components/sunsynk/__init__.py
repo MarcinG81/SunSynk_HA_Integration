@@ -64,6 +64,10 @@ from .const import (
     CONF_PANEL_KWP,
     CONF_PEAK_DISCHARGE_CURRENT,
     CONF_PERFORMANCE_RATIO,
+    CONF_PLAN_BUY_KWH,
+    CONF_PLAN_EXPORT_ENTITIES,
+    CONF_PLAN_IMPORT_ENTITIES,
+    CONF_PLAN_SELL_KWH,
     CONF_PRICE_ENTITY,
     CONF_PRICE_MAX_AGE,
     CONF_PRICE_STALE_CHECK,
@@ -903,6 +907,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             manual_discharge_current=_opt(CONF_MANUAL_DISCHARGE_CURRENT),
             manual_min_soc=_opt(CONF_MANUAL_MIN_SOC),
             manual_discharge_power=_opt(CONF_MANUAL_DISCHARGE_POWER),
+            plan_import_entities=_opt(CONF_PLAN_IMPORT_ENTITIES),
+            plan_export_entities=_opt(CONF_PLAN_EXPORT_ENTITIES),
+            plan_buy_kwh=_opt(CONF_PLAN_BUY_KWH),
+            plan_sell_kwh=_opt(CONF_PLAN_SELL_KWH),
         )
         await tariff_manager.async_load()
         hass.data[DOMAIN][f"{entry.entry_id}_tariff"] = tariff_manager

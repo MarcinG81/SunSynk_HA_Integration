@@ -570,3 +570,26 @@ async def test_a_charge_now_current_above_the_hardware_limit_is_refused():
     )
 
     assert result["errors"]["manual_charge_current"] == "charge_current_above_limit"
+
+
+
+def test_the_price_plan_is_parsed():
+    result = SunsynkOptionsFlow._parse_tariff_fields(
+        {
+            "plan_export_entities": ["event.today", "", "event.tomorrow"],
+            "plan_sell_kwh": "50",
+            "plan_import_entities": [],
+            "plan_buy_kwh": "",
+        }
+    )
+
+    assert result["plan_export_entities"] == ["event.today", "event.tomorrow"]
+    assert result["plan_sell_kwh"] == 50
+    assert "plan_import_entities" not in result
+    assert "plan_buy_kwh" not in result
+
+
+@pytest.mark.parametrize("kwh", ["0", "1001", "-5"])
+def test_a_daily_amount_out_of_range_is_refused(kwh):
+    with pytest.raises(ValueError):
+        SunsynkOptionsFlow._parse_tariff_fields({"plan_sell_kwh": kwh})

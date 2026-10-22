@@ -49,6 +49,10 @@ from .const import (
     CONF_PANEL_KWP,
     CONF_PEAK_DISCHARGE_CURRENT,
     CONF_PERFORMANCE_RATIO,
+    CONF_PLAN_BUY_KWH,
+    CONF_PLAN_EXPORT_ENTITIES,
+    CONF_PLAN_IMPORT_ENTITIES,
+    CONF_PLAN_SELL_KWH,
     CONF_PRICE_ENTITY,
     CONF_PRICE_MAX_AGE,
     CONF_PRICE_STALE_CHECK,
@@ -650,6 +654,31 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     CONF_NEGATIVE_PRICE_PROTECTION,
                     default=bool(_opt(CONF_NEGATIVE_PRICE_PROTECTION, False)),
                 ): bool,
+                # Plan by the prices ahead (#40)
+                vol.Optional(
+                    CONF_PLAN_IMPORT_ENTITIES,
+                    description={
+                        "suggested_value": _opt(CONF_PLAN_IMPORT_ENTITIES) or None
+                    },
+                ): EntitySelector(
+                    EntitySelectorConfig(domain=["sensor", "event"], multiple=True)
+                ),
+                vol.Optional(
+                    CONF_PLAN_BUY_KWH,
+                    description={"suggested_value": _opt_str(CONF_PLAN_BUY_KWH)},
+                ): str,
+                vol.Optional(
+                    CONF_PLAN_EXPORT_ENTITIES,
+                    description={
+                        "suggested_value": _opt(CONF_PLAN_EXPORT_ENTITIES) or None
+                    },
+                ): EntitySelector(
+                    EntitySelectorConfig(domain=["sensor", "event"], multiple=True)
+                ),
+                vol.Optional(
+                    CONF_PLAN_SELL_KWH,
+                    description={"suggested_value": _opt_str(CONF_PLAN_SELL_KWH)},
+                ): str,
                 # Charge / discharge now (blank = the Tariff Manager values)
                 **{
                     vol.Optional(
@@ -859,6 +888,18 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
         result[CONF_NEGATIVE_PRICE_PROTECTION] = bool(
             user_input.get(CONF_NEGATIVE_PRICE_PROTECTION, False)
         )
+        for entities_key, kwh_key in (
+            (CONF_PLAN_IMPORT_ENTITIES, CONF_PLAN_BUY_KWH),
+            (CONF_PLAN_EXPORT_ENTITIES, CONF_PLAN_SELL_KWH),
+        ):
+            entities = [e for e in user_input.get(entities_key) or [] if e]
+            kwh = _parse_float(kwh_key)
+            if kwh is not None and not 0 < kwh <= 1000:
+                raise ValueError(f"{kwh_key} must be above 0 and at most 1000 kWh")
+            if entities:
+                result[entities_key] = entities
+            if kwh is not None:
+                result[kwh_key] = kwh
         for key, (low, high) in _MANUAL_FIELDS.items():
             value = _parse_int(key)
             if value is None:

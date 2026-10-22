@@ -100,7 +100,11 @@
           "manual_target_soc": "Charge now: target SOC (%)",
           "manual_discharge_current": "Discharge now: current (A)",
           "manual_min_soc": "Discharge now: minimum SOC (%)",
-          "manual_discharge_power": "Discharge now: export power (W)"
+          "manual_discharge_power": "Discharge now: export power (W)",
+          "plan_import_entities": "Plan: import prices ahead",
+          "plan_buy_kwh": "Plan: kWh to buy a day",
+          "plan_export_entities": "Plan: export prices ahead",
+          "plan_sell_kwh": "Plan: kWh to sell a day"
         },
         "data_description": {
           "password": "Leave blank to keep the saved password. Enter a new password after changing it in the Sunsynk or Deye portal.",
@@ -131,7 +135,11 @@
           "manual_target_soc": "Charge Now stops charging here. Blank: the cheap-rate target SOC.",
           "manual_discharge_current": "For the Discharge Now action when it doesn't give one. Blank: the peak discharge current.",
           "manual_min_soc": "Discharge Now ends here. Blank: the Tariff Manager minimum SOC.",
-          "manual_discharge_power": "The most Discharge Now exports, e.g. 3000 for 3 kW. Blank: the maximum export power, else the inverter's rated power."
+          "manual_discharge_power": "The most Discharge Now exports, e.g. 3000 for 3 kW. Blank: the maximum export power, else the inverter's rated power.",
+          "plan_import_entities": "Entities with the coming import prices per slot, e.g. Octopus Energy's current and next day rates, or a Nord Pool sensor. With kWh to buy, Tariff Manager charges in the cheapest slots of each day instead of whenever the price is below the cheap threshold, which then only caps the price.",
+          "plan_buy_kwh": "How much to charge from the grid each day, per inverter, in the cheapest slots. Blank: plan off.",
+          "plan_export_entities": "Entities with the coming export prices per slot, e.g. Octopus Energy's export current and next day rates. With kWh to sell, Tariff Manager discharges in the dearest slots of each day; the expensive threshold is then the lowest price it sells at.",
+          "plan_sell_kwh": "How much to export from the battery each day, per inverter, in the dearest slots. Blank: plan off."
         }
       },
       "deyecloud": {

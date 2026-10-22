@@ -108,6 +108,12 @@ CONF_MANUAL_TARGET_SOC: Final = "manual_target_soc"
 CONF_MANUAL_DISCHARGE_CURRENT: Final = "manual_discharge_current"
 CONF_MANUAL_MIN_SOC: Final = "manual_min_soc"
 CONF_MANUAL_DISCHARGE_POWER: Final = "manual_discharge_power"
+# Plan by the prices ahead (2.1, #40): the price integration's entities with
+# the coming slots, and how much to buy / sell a day.
+CONF_PLAN_IMPORT_ENTITIES: Final = "plan_import_entities"
+CONF_PLAN_BUY_KWH: Final = "plan_buy_kwh"
+CONF_PLAN_EXPORT_ENTITIES: Final = "plan_export_entities"
+CONF_PLAN_SELL_KWH: Final = "plan_sell_kwh"
 # Remembers the Tariff Manager switch across restarts (#30).
 CONF_TARIFF_ENABLED: Final = "tariff_enabled"
 DEFAULT_PRICE_MAX_AGE: Final = 90  # minutes

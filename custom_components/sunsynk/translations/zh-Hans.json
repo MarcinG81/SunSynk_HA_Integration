@@ -100,7 +100,11 @@
           "manual_target_soc": "立即充电：目标 SOC (%)",
           "manual_discharge_current": "立即放电：电流 (A)",
           "manual_min_soc": "立即放电：最低 SOC (%)",
-          "manual_discharge_power": "立即放电：出口功率 (W)"
+          "manual_discharge_power": "立即放电：出口功率 (W)",
+          "plan_import_entities": "计划：未来购电价格",
+          "plan_buy_kwh": "计划：每天购电 kWh",
+          "plan_export_entities": "计划：未来售电价格",
+          "plan_sell_kwh": "计划：每天售电 kWh"
         },
         "data_description": {
           "password": "留空以保留已保存的密码。在 Sunsynk 或 Deye 门户中更改密码后，请在此输入新密码。",
@@ -131,7 +135,11 @@
           "manual_target_soc": "“立即充电”充到此值为止。留空：使用低价时段目标 SOC。",
           "manual_discharge_current": "当“立即放电”操作未指定时使用。留空：使用高峰放电电流。",
           "manual_min_soc": "“立即放电”到此值结束。留空：使用 Tariff Manager 最低 SOC。",
-          "manual_discharge_power": "“立即放电”最多出口的功率，例如 3 kW 填 3000。留空：使用最大出口功率，否则使用逆变器额定功率。"
+          "manual_discharge_power": "“立即放电”最多出口的功率，例如 3 kW 填 3000。留空：使用最大出口功率，否则使用逆变器额定功率。",
+          "plan_import_entities": "包含各时段未来购电价格的实体，例如 Octopus Energy 的当天和次日费率，或 Nord Pool 传感器。设置购电量后，Tariff Manager 会在每天最便宜的时段充电，而不是只要价格低于低价阈值就充电；阈值此时仅作为价格上限。",
+          "plan_buy_kwh": "每台逆变器每天在最便宜时段从电网充电的电量。留空：关闭计划。",
+          "plan_export_entities": "包含各时段未来售电价格的实体，例如 Octopus Energy 的出口当天和次日费率。设置售电量后，Tariff Manager 会在每天最贵的时段放电；高价阈值此时为最低售电价格。",
+          "plan_sell_kwh": "每台逆变器每天在最贵时段从电池出口的电量。留空：关闭计划。"
         }
       },
       "deyecloud": {
