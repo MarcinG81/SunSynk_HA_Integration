@@ -184,7 +184,7 @@ async def test_an_api_error_fails_the_update(coordinator, client, issues):
     ],
 )
 async def test_writes_are_refused_for_now(coordinator, method, args):
-    with pytest.raises(HomeAssistantError, match="isn't supported yet"):
+    with pytest.raises(HomeAssistantError, match="experimental controls"):
         await getattr(coordinator, method)(*args)
 
 
@@ -254,3 +254,91 @@ async def test_recent_points_are_used(coordinator, client, issues):
     assert data["SN1"]["battery"]["soc"] == 100
     create, _ = issues
     create.assert_not_called()
+
+
+
+# ── Experimental controls ──────────────────────────────────────────────────
+
+
+@pytest.fixture
+def controlled(coordinator, client):
+    coordinator._controls = True
+    coordinator.data = {"SN3": {"settings": {"sysWorkMode": 1}}}
+    coordinator.async_update_listeners = MagicMock()
+    for name in (
+        "async_set_work_mode",
+        "async_set_energy_pattern",
+        "async_set_battery_current",
+        "async_set_max_sell_power",
+    ):
+        setattr(client, name, AsyncMock(return_value={"status": 666}))
+    coordinator._config_read_at["SN3"] = 1000.0
+    return coordinator
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("key", "value", "method", "args"),
+    [
+        ("sysWorkMode", 0, "async_set_work_mode", ("SN3", 0)),
+        ("energyMode", 1, "async_set_energy_pattern", ("SN3", 1)),
+        ("batteryMaxCurrentCharge", 80, "async_set_battery_current", ("SN3", "charge", 80)),
+        ("batteryMaxCurrentDischarge", 90, "async_set_battery_current", ("SN3", "discharge", 90)),
+        ("solarMaxSellPower", 6000, "async_set_max_sell_power", ("SN3", 6000)),
+    ],
+)
+async def test_each_setting_goes_out_as_its_order(
+    controlled, client, key, value, method, args
+):
+    await controlled.async_write_setting("SN3", key, value)
+
+    getattr(client, method).assert_awaited_once_with(*args)
+    assert controlled.data["SN3"]["settings"][key] == value
+    controlled.async_update_listeners.assert_called_once()
+    assert "SN3" not in controlled._config_read_at  # read again next refresh
+
+
+@pytest.mark.asyncio
+async def test_the_timer_table_isn_t_changed(controlled):
+    """Its read has no Sell flags: a write would untick Sell on every slot."""
+    with pytest.raises(HomeAssistantError, match="can't change cap1"):
+        await controlled.async_write_settings("SN3", {"cap1": 50})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("raised", "match"),
+    [
+        (module.DeyeCloudBusyError("busy"), "busy with another change"),
+        (DeyeCloudApiError("order failed"), "couldn't change sysWorkMode"),
+        (DeyeCloudAuthError("token"), "login failed"),
+    ],
+)
+async def test_a_refused_order_is_explained(controlled, client, issues, raised, match):
+    client.async_set_work_mode.side_effect = raised
+
+    with pytest.raises(HomeAssistantError, match=match):
+        await controlled.async_write_setting("SN3", "sysWorkMode", 0)
+
+    assert controlled.data["SN3"]["settings"]["sysWorkMode"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_value_out_of_range_is_refused_before_any_order(controlled, client):
+    from custom_components.sunsynk.write_validation import (
+        SunsynkSettingValidationError,
+    )
+
+    with pytest.raises(SunsynkSettingValidationError):
+        await controlled.async_write_setting("SN3", "sysWorkMode", 7)
+
+    client.async_set_work_mode.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_without_data_yet_the_order_still_goes(controlled, client):
+    controlled.data = None
+
+    await controlled.async_write_setting("SN3", "solarMaxSellPower", 5000)
+
+    client.async_set_max_sell_power.assert_awaited_once()

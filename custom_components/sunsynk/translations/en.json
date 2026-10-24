@@ -144,9 +144,13 @@
       },
       "deyecloud": {
         "title": "Deye Cloud options",
-        "description": "Deye Cloud inverters are read-only for now, so only the refresh interval can be changed.",
+        "description": "Deye Cloud inverters are read-only unless you turn on the experimental controls below.",
         "data": {
-          "refresh_interval": "Refresh Interval (seconds)"
+          "refresh_interval": "Refresh Interval (seconds)",
+          "deye_controls": "Experimental: change settings through Deye Cloud"
+        },
+        "data_description": {
+          "deye_controls": "Off by default. When on, the inverters that Deye Cloud lets you configure get controls for work mode, energy pattern, battery max charge / discharge current and max sell power. Each change is sent as a Deye Cloud order and waits until the inverter applies it. Still being tested on real inverters."
         }
       }
     },

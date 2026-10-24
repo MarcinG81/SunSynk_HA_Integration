@@ -29,6 +29,7 @@ from .const import (
     CONF_DEYE_APP_ID,
     CONF_DEYE_APP_SECRET,
     CONF_DEYE_COMPANY_ID,
+    CONF_DEYE_CONTROLS,
     CONF_DEYE_LOGIN,
     CONF_DEYE_PASSWORD_HASH,
     CONF_DEYE_REGION,
@@ -714,13 +715,14 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
     async def async_step_deyecloud(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Deye Cloud entries are read-only for now: only how often to poll."""
+        """Deye Cloud: how often to poll, and the experimental controls."""
         if user_input is not None:
             return self.async_create_entry(
                 title="",
                 data={
                     **self._config_entry.options,
                     CONF_REFRESH_INTERVAL: user_input[CONF_REFRESH_INTERVAL],
+                    CONF_DEYE_CONTROLS: bool(user_input.get(CONF_DEYE_CONTROLS)),
                 },
             )
         current = self._config_entry.options.get(
@@ -736,6 +738,12 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(
                         CONF_REFRESH_INTERVAL, default=current
                     ): _REFRESH_INTERVAL_FIELD,
+                    vol.Optional(
+                        CONF_DEYE_CONTROLS,
+                        default=bool(
+                            self._config_entry.options.get(CONF_DEYE_CONTROLS)
+                        ),
+                    ): bool,
                 }
             ),
         )

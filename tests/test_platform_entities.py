@@ -385,3 +385,41 @@ async def test_each_deyecloud_inverter_gets_only_what_it_reports(platform_contex
     assert {"grid_phase0_current", "load_phase0_power"} <= keys["INV1"]
     assert "load_phase0_current" not in keys["INV1"]
     assert {"grid_qac", "battery_soc"} <= keys["INV2"]
+
+
+@pytest.mark.asyncio
+async def test_deyecloud_controls_cover_only_what_deye_cloud_can_change(
+    platform_context,
+):
+    """Work mode, energy pattern, battery max currents and max sell power,
+    where the inverter reports them; not the timer table (its read has no
+    Sell flags) and no plant price."""
+    hass, entry, coordinator, *_ = platform_context
+    entry.data = {"backend": "deyecloud"}
+    coordinator.data["INV1"]["settings"] = {
+        "sysWorkMode": 1,
+        "batteryMaxCurrentCharge": 80,
+        "solarMaxSellPower": 6000,
+        "cap1": 50,
+        "sellTime1": "06:00",
+    }
+    coordinator.data["INV2"]["settings"] = {}  # e.g. "config point not supported"
+    added: list[object] = []
+
+    await setup_numbers(hass, entry, added.extend)
+    from custom_components.sunsynk.select import async_setup_entry as setup_selects
+
+    await setup_selects(hass, entry, added.extend)
+
+    keys = {
+        (e._serial, e.entity_description.setting_key)
+        for e in added
+        if hasattr(e, "entity_description")
+        and hasattr(e.entity_description, "setting_key")
+    }
+    assert keys == {
+        ("INV1", "sysWorkMode"),
+        ("INV1", "batteryMaxCurrentCharge"),
+        ("INV1", "solarMaxSellPower"),
+    }
+    assert not any(isinstance(e, PlantEnergyPriceNumberEntity) for e in added)

@@ -144,9 +144,13 @@
       },
       "deyecloud": {
         "title": "Opciones de Deye Cloud",
-        "description": "Por ahora los inversores de Deye Cloud son de solo lectura, así que solo se puede cambiar el intervalo de actualización.",
+        "description": "Los inversores de Deye Cloud son de solo lectura salvo que active abajo los controles experimentales.",
         "data": {
-          "refresh_interval": "Intervalo de actualización (segundos)"
+          "refresh_interval": "Intervalo de actualización (segundos)",
+          "deye_controls": "Experimental: cambiar ajustes mediante Deye Cloud"
+        },
+        "data_description": {
+          "deye_controls": "Desactivado por defecto. Si se activa, los inversores que Deye Cloud permite configurar tienen controles para el modo de trabajo, el patrón energético, la corriente máxima de carga / descarga de la batería y la potencia máxima de venta. Cada cambio se envía como una orden de Deye Cloud y espera a que el inversor lo aplique. Aún en pruebas con inversores reales."
         }
       }
     },

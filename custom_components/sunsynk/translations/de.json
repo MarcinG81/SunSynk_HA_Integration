@@ -144,9 +144,13 @@
       },
       "deyecloud": {
         "title": "Deye-Cloud-Optionen",
-        "description": "Deye-Cloud-Wechselrichter sind vorerst nur lesbar, daher lässt sich nur das Aktualisierungsintervall ändern.",
+        "description": "Deye-Cloud-Wechselrichter sind nur lesbar, außer Sie aktivieren unten die experimentelle Steuerung.",
         "data": {
-          "refresh_interval": "Aktualisierungsintervall (Sekunden)"
+          "refresh_interval": "Aktualisierungsintervall (Sekunden)",
+          "deye_controls": "Experimentell: Einstellungen über Deye Cloud ändern"
+        },
+        "data_description": {
+          "deye_controls": "Standardmäßig aus. Wenn aktiviert, erhalten die Wechselrichter, die Deye Cloud konfigurieren lässt, Steuerungen für Arbeitsmodus, Energiemuster, maximalen Lade-/Entladestrom der Batterie und maximale Verkaufsleistung. Jede Änderung wird als Deye-Cloud-Auftrag gesendet und wartet, bis der Wechselrichter sie übernimmt. Wird noch an echten Wechselrichtern getestet."
         }
       }
     },

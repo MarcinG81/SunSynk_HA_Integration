@@ -414,6 +414,7 @@ async def test_a_deyecloud_entry_gets_sensors_and_nothing_that_writes():
         "serials": ["2301"],
         "refresh_interval": 300,
         "entry_id": "entry-1",
+        "controls": False,
     }
     tariff_cls.assert_not_called()
     scheduler_cls.assert_not_called()
@@ -432,3 +433,30 @@ async def test_an_incomplete_deyecloud_entry_says_what_is_missing():
 
     with pytest.raises(ConfigEntryError, match="app_secret"):
         await async_setup_entry(_hass(), entry)
+
+
+
+@pytest.mark.asyncio
+async def test_deyecloud_controls_add_numbers_and_selects_and_unload_the_same():
+    hass = _hass()
+    entry = _deyecloud_entry()
+    entry.options = {"deye_controls": True}
+    coordinator = MagicMock(serials=["2301"], write_target_serials=["2301"])
+    coordinator.async_config_entry_first_refresh = AsyncMock()
+    coordinator.async_close = AsyncMock()
+    store = MagicMock(async_load=AsyncMock(return_value={}), async_remove=AsyncMock())
+
+    with (
+        patch(
+            "custom_components.sunsynk.DeyeCloudCoordinator", return_value=coordinator
+        ) as made,
+        patch("custom_components.sunsynk.Store", return_value=store),
+    ):
+        assert await async_setup_entry(hass, entry) is True
+        entry.options = {}  # turned off in Configure; the reload unloads first
+        assert await async_unload_entry(hass, entry) is True
+
+    assert made.call_args.kwargs["controls"] is True
+    loaded = hass.config_entries.async_forward_entry_setups.await_args.args[1]
+    assert [str(p) for p in loaded] == ["sensor", "number", "select"]
+    assert hass.config_entries.async_unload_platforms.await_args.args[1] == loaded

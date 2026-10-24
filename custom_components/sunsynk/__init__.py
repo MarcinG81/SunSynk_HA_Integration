@@ -44,6 +44,7 @@ from .const import (
     CONF_DEYE_APP_ID,
     CONF_DEYE_APP_SECRET,
     CONF_DEYE_COMPANY_ID,
+    CONF_DEYE_CONTROLS,
     CONF_DEYE_LOGIN,
     CONF_DEYE_PASSWORD_HASH,
     CONF_DEYE_REGION,
@@ -112,10 +113,11 @@ PLATFORMS = [
     Platform.TEXT,
 ]
 
-# Deye Cloud entries are read-only for now (writes not tested on a real
-# inverter yet), so they get sensors only: no controls, Tariff Manager or
-# Virtual Slot Scheduler.
+# Deye Cloud entries get sensors, and with the experimental controls on the
+# few settings Deye Cloud can change; no Tariff Manager or Virtual Slot
+# Scheduler yet.
 READ_ONLY_PLATFORMS = [Platform.SENSOR]
+DEYECLOUD_CONTROL_PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SELECT]
 
 _DEYECLOUD_KEYS = (
     CONF_DEYE_REGION,
@@ -127,7 +129,15 @@ _DEYECLOUD_KEYS = (
 
 
 def _platforms(entry: ConfigEntry) -> list[Platform]:
-    return READ_ONLY_PLATFORMS if is_deyecloud(entry.data) else PLATFORMS
+    if not is_deyecloud(entry.data):
+        return PLATFORMS
+    if entry.options.get(CONF_DEYE_CONTROLS):
+        return DEYECLOUD_CONTROL_PLATFORMS
+    return READ_ONLY_PLATFORMS
+
+
+def _platforms_key(entry_id: str) -> str:
+    return f"{entry_id}_platforms"
 
 
 SERVICE_BACKUP_SETTINGS = "backup_settings"
@@ -795,6 +805,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             login=entry.data[CONF_DEYE_LOGIN],
             password_hash=entry.data[CONF_DEYE_PASSWORD_HASH],
             company_id=entry.data.get(CONF_DEYE_COMPANY_ID),
+            controls=bool(entry.options.get(CONF_DEYE_CONTROLS)),
             serials=serials,
             refresh_interval=refresh_interval,
             entry_id=entry.entry_id,
@@ -972,6 +983,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(coordinator.async_add_listener(_async_check_write_targets))
 
+    # Unloaded the same way, even after Configure changes what it would be.
+    hass.data[DOMAIN][_platforms_key(entry.entry_id)] = _platforms(entry)
     await hass.config_entries.async_forward_entry_setups(entry, _platforms(entry))
 
     # Start tariff manager after platforms are set up (switch/sensor already registered)
@@ -1038,7 +1051,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         scheduler.stop()
 
     unload_ok = await hass.config_entries.async_unload_platforms(
-        entry, _platforms(entry)
+        entry, domain_data.get(_platforms_key(entry.entry_id), _platforms(entry))
     )
     if not unload_ok:
         if tariff_manager is not None:
@@ -1074,6 +1087,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data.pop(f"{entry.entry_id}_tariff", None)
     domain_data.pop(f"{entry.entry_id}_vslots", None)
     domain_data.pop(options_snapshot_key(entry.entry_id), None)
+    domain_data.pop(_platforms_key(entry.entry_id), None)
     return True
 
 

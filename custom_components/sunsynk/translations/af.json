@@ -144,9 +144,13 @@
       },
       "deyecloud": {
         "title": "Deye Cloud-opsies",
-        "description": "Deye Cloud-omsetters is vir eers slegs leesbaar, so net die herlaai-interval kan verander word.",
+        "description": "Deye Cloud-omsetters is slegs leesbaar tensy jy die eksperimentele beheer hieronder aanskakel.",
         "data": {
-          "refresh_interval": "Herlaai-interval (sekondes)"
+          "refresh_interval": "Herlaai-interval (sekondes)",
+          "deye_controls": "Eksperimenteel: verander instellings deur Deye Cloud"
+        },
+        "data_description": {
+          "deye_controls": "Verstek af. Wanneer aan, kry die omsetters wat Deye Cloud laat instel beheer vir werkmodus, energiepatroon, battery se maks laai- / ontlaaistroom en maks verkoopkrag. Elke verandering word as 'n Deye Cloud-opdrag gestuur en wag totdat die omsetter dit toepas. Word nog op regte omsetters getoets."
         }
       }
     },

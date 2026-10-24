@@ -50,6 +50,20 @@ CONF_DEYE_LOGIN: Final = "login"
 CONF_DEYE_PASSWORD_HASH: Final = "password_hash"
 CONF_DEYE_COMPANY_ID: Final = "company_id"
 DEYE_REGIONS: Final = ("eu", "us", "india")
+# Changing settings through Deye Cloud, while it is being tested (2.1).
+CONF_DEYE_CONTROLS: Final = "deye_controls"
+# The settings Deye Cloud can change safely. Not the time-of-use table: its
+# read has no Sell flags, and a write replaces the whole table, so changing
+# one slot would untick Sell on every slot.
+DEYE_WRITABLE_KEYS: Final = frozenset(
+    {
+        "sysWorkMode",
+        "energyMode",
+        "batteryMaxCurrentCharge",
+        "batteryMaxCurrentDischarge",
+        "solarMaxSellPower",
+    }
+)
 
 
 def is_deyecloud(data: Any) -> bool:

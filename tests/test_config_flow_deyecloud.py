@@ -164,18 +164,21 @@ def _options(options=None):
 
 
 @pytest.mark.asyncio
-async def test_options_offer_only_the_refresh_interval():
+async def test_options_offer_the_refresh_interval_and_the_controls():
     result = await _options().async_step_init()
 
     assert result["step_id"] == "deyecloud"
-    (field,) = result["data_schema"].schema
-    assert str(field) == "refresh_interval"
-    assert field.default() == 600
+    fields = {str(field): field for field in result["data_schema"].schema}
+    assert set(fields) == {"refresh_interval", "deye_controls"}
+    assert fields["refresh_interval"].default() == 600
+    assert fields["deye_controls"].default() is False
 
 
 @pytest.mark.asyncio
 async def test_options_save_the_refresh_interval():
-    result = await _options({"other": 1}).async_step_init({"refresh_interval": 900})
+    result = await _options({"other": 1}).async_step_init(
+        {"refresh_interval": 900, "deye_controls": True}
+    )
 
     assert result["type"] == "create_entry"
-    assert result["data"] == {"other": 1, "refresh_interval": 900}
+    assert result["data"] == {"other": 1, "refresh_interval": 900, "deye_controls": True}

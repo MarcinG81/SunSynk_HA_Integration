@@ -144,9 +144,13 @@
       },
       "deyecloud": {
         "title": "Opcje Deye Cloud",
-        "description": "Falowniki Deye Cloud są na razie tylko do odczytu, więc można zmienić tylko interwał odświeżania.",
+        "description": "Falowniki Deye Cloud są tylko do odczytu, chyba że włączysz poniżej eksperymentalne sterowanie.",
         "data": {
-          "refresh_interval": "Interwał odświeżania (sekundy)"
+          "refresh_interval": "Interwał odświeżania (sekundy)",
+          "deye_controls": "Eksperymentalnie: zmiana ustawień przez Deye Cloud"
+        },
+        "data_description": {
+          "deye_controls": "Domyślnie wyłączone. Po włączeniu falowniki, które Deye Cloud pozwala konfigurować, dostają sterowanie trybem pracy, energy pattern, maks. prądem ładowania / rozładowania baterii i maks. mocą sprzedaży. Każda zmiana idzie jako polecenie Deye Cloud i czeka, aż falownik ją zastosuje. Wciąż testowane na prawdziwych falownikach."
         }
       }
     },

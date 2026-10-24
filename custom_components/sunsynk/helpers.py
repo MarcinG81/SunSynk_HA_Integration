@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 
-from .const import DOMAIN
+from .const import DEYE_WRITABLE_KEYS, DOMAIN
 from .coordinator import SunsynkCoordinator
 
 
@@ -50,3 +50,9 @@ def persist_runtime_option(
     options = {**entry.options, key: value}
     hass.data[DOMAIN][options_snapshot_key(entry.entry_id)] = options
     hass.config_entries.async_update_entry(entry, options=options)
+
+
+def deyecloud_can_change(coordinator: Any, serial: str, setting_key: str) -> bool:
+    """Whether Deye Cloud can change this setting and the inverter reports it."""
+    settings = (coordinator.data or {}).get(serial, {}).get("settings", {}) or {}
+    return setting_key in DEYE_WRITABLE_KEYS and setting_key in settings

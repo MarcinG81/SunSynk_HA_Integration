@@ -144,9 +144,13 @@
       },
       "deyecloud": {
         "title": "Možnosti Deye Cloud",
-        "description": "Střídače Deye Cloud jsou zatím jen pro čtení, proto lze změnit pouze interval obnovení.",
+        "description": "Střídače Deye Cloud jsou jen pro čtení, pokud níže nezapnete experimentální ovládání.",
         "data": {
-          "refresh_interval": "Interval obnovení (sekundy)"
+          "refresh_interval": "Interval obnovení (sekundy)",
+          "deye_controls": "Experimentální: změna nastavení přes Deye Cloud"
+        },
+        "data_description": {
+          "deye_controls": "Ve výchozím stavu vypnuto. Po zapnutí dostanou střídače, které Deye Cloud umožňuje konfigurovat, ovládání pracovního režimu, energetického vzoru, max. nabíjecího / vybíjecího proudu baterie a max. prodejního výkonu. Každá změna se odešle jako příkaz Deye Cloud a čeká, až ji střídač použije. Stále se testuje na skutečných střídačích."
         }
       }
     },

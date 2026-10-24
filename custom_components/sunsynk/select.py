@@ -13,9 +13,9 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, is_deyecloud
 from .coordinator import SunsynkCoordinator
-from .helpers import build_device_info
+from .helpers import build_device_info, deyecloud_can_change
 
 
 @dataclass(frozen=True)
@@ -68,12 +68,15 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
+    deyecloud = is_deyecloud(entry.data)
     async_add_entities(
         SunsynkSelectEntity(
             coordinator, serial, description, build_device_info(coordinator, serial)
         )
         for serial in coordinator.serials
         for description in SELECTS
+        if not deyecloud
+        or deyecloud_can_change(coordinator, serial, description.setting_key)
     )
 
 

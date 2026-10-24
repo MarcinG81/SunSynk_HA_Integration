@@ -144,9 +144,13 @@
       },
       "deyecloud": {
         "title": "Options Deye Cloud",
-        "description": "Les onduleurs Deye Cloud sont pour l'instant en lecture seule : seul l'intervalle d'actualisation peut être modifié.",
+        "description": "Les onduleurs Deye Cloud sont en lecture seule, sauf si vous activez ci-dessous les commandes expérimentales.",
         "data": {
-          "refresh_interval": "Intervalle d'actualisation (secondes)"
+          "refresh_interval": "Intervalle d'actualisation (secondes)",
+          "deye_controls": "Expérimental : modifier les réglages via Deye Cloud"
+        },
+        "data_description": {
+          "deye_controls": "Désactivé par défaut. Si activé, les onduleurs que Deye Cloud permet de configurer reçoivent des commandes pour le mode de fonctionnement, le profil énergétique, le courant max de charge / décharge de la batterie et la puissance max de vente. Chaque changement est envoyé comme une commande Deye Cloud et attend que l'onduleur l'applique. Encore en test sur de vrais onduleurs."
         }
       }
     },

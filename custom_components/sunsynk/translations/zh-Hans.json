@@ -144,9 +144,13 @@
       },
       "deyecloud": {
         "title": "Deye Cloud 选项",
-        "description": "Deye Cloud 逆变器目前仅支持读取，因此只能修改刷新间隔。",
+        "description": "除非在下方开启实验性控制，否则 Deye Cloud 逆变器仅支持读取。",
         "data": {
-          "refresh_interval": "刷新间隔（秒）"
+          "refresh_interval": "刷新间隔（秒）",
+          "deye_controls": "实验性：通过 Deye Cloud 更改设置"
+        },
+        "data_description": {
+          "deye_controls": "默认关闭。开启后，Deye Cloud 允许配置的逆变器将获得工作模式、能量模式、电池最大充 / 放电电流和最大售电功率的控制。每次更改都会作为 Deye Cloud 指令发送，并等待逆变器应用。仍在真实逆变器上测试中。"
         }
       }
     },

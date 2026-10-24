@@ -1,10 +1,10 @@
 """Coordinator for inverters on Deye Cloud.
 
 Same data, entities and write targets as the Sunsynk coordinator, read from
-Deye Cloud instead (#37). It reads only, for now: Deye Cloud applies changes
-as orders, and whether a personal account may send them hasn't been tested
-on a real inverter yet, so every write is refused with a clear message
-rather than half working.
+Deye Cloud instead (#37). Changing settings is experimental and off unless
+switched on in Configure: Deye Cloud applies changes as orders, which are
+still being tested on real inverters, and only the settings in
+DEYE_WRITABLE_KEYS can be changed.
 
 Live data comes in one request for up to ten inverters. Settings take three
 requests per inverter and rarely change, so they are read every
@@ -24,14 +24,16 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from ..const import DOMAIN
+from ..const import DEYE_WRITABLE_KEYS, DOMAIN
 from ..coordinator import SunsynkCoordinator
+from ..write_validation import validate_setting_batch
 from . import mapping
 from .client import (
     DEVICE_OFFLINE,
     DEVICE_STATE,
     DeyeCloudApiError,
     DeyeCloudAuthError,
+    DeyeCloudBusyError,
     DeyeCloudClient,
     DeyeCloudUnsupportedError,
 )
@@ -45,9 +47,28 @@ _CONFIG_MAX_AGE = 1800
 # minutes, and two inverters in #37 showed the same values for hours.
 _STALE_AFTER = timedelta(minutes=30)
 
+# The order that changes each writable setting.
+_ORDERS = {
+    "sysWorkMode": lambda client, serial, value: client.async_set_work_mode(
+        serial, int(value)
+    ),
+    "energyMode": lambda client, serial, value: client.async_set_energy_pattern(
+        serial, int(value)
+    ),
+    "batteryMaxCurrentCharge": lambda client, serial, value: (
+        client.async_set_battery_current(serial, "charge", int(value))
+    ),
+    "batteryMaxCurrentDischarge": lambda client, serial, value: (
+        client.async_set_battery_current(serial, "discharge", int(value))
+    ),
+    "solarMaxSellPower": lambda client, serial, value: client.async_set_max_sell_power(
+        serial, int(value)
+    ),
+}
+
 READ_ONLY_MESSAGE = (
-    "Changing settings through Deye Cloud isn't supported yet; "
-    "this inverter is read-only for now."
+    "Changing settings through Deye Cloud is off: turn on the experimental "
+    "controls in Configure to try it."
 )
 
 
@@ -67,6 +88,7 @@ class DeyeCloudCoordinator(SunsynkCoordinator):
         refresh_interval: int,
         company_id: str | None = None,
         entry_id: str = "",
+        controls: bool = False,
     ) -> None:
         super().__init__(
             hass,
@@ -83,6 +105,7 @@ class DeyeCloudCoordinator(SunsynkCoordinator):
             "password_hash": password_hash,
             "company_id": company_id,
         }
+        self._controls = controls
         self._client: DeyeCloudClient | None = None
         self._config: dict[str, dict[str, dict[str, Any]]] = {}
         self._config_read_at: dict[str, float] = {}
@@ -223,15 +246,51 @@ class DeyeCloudCoordinator(SunsynkCoordinator):
         self._config_read_at[serial] = now
         return config
 
-    # ── Writes: not yet ──────────────────────────────────────────────────
+    # ── Writes ───────────────────────────────────────────────────────────
 
     async def async_write_setting(
         self, serial: str, setting_key: str, value: Any
     ) -> None:
-        raise HomeAssistantError(READ_ONLY_MESSAGE)
+        await self.async_write_settings(serial, {setting_key: value})
 
     async def async_write_settings(self, serial: str, settings: dict[str, Any]) -> None:
-        raise HomeAssistantError(READ_ONLY_MESSAGE)
+        """Change settings as Deye Cloud orders, one at a time.
+
+        Only with the experimental controls option on, and only the settings
+        in DEYE_WRITABLE_KEYS. Each order waits until the inverter has
+        applied it, so the value shown afterwards is the inverter's.
+        """
+        if not self._controls:
+            raise HomeAssistantError(READ_ONLY_MESSAGE)
+        unsupported = sorted(set(settings) - DEYE_WRITABLE_KEYS)
+        if unsupported:
+            raise HomeAssistantError(
+                f"Deye Cloud can't change {', '.join(unsupported)} yet"
+            )
+        settings = validate_setting_batch(settings)
+        client = await self._async_client()
+        async with self._write_lock_for(serial):
+            for key, value in settings.items():
+                try:
+                    await _ORDERS[key](client, serial, value)
+                except DeyeCloudBusyError as err:
+                    raise HomeAssistantError(
+                        f"Inverter {serial} is busy with another change; "
+                        "try again in a minute"
+                    ) from err
+                except DeyeCloudAuthError as err:
+                    self._auth_failed(err)
+                    raise HomeAssistantError(f"Deye Cloud login failed: {err}") from err
+                except DeyeCloudApiError as err:
+                    raise HomeAssistantError(
+                        f"Deye Cloud couldn't change {key} on {serial}: {err}"
+                    ) from err
+                _LOGGER.info("Deye Cloud: %s set to %s on %s", key, value, serial)
+                if self.data is not None and serial in self.data:
+                    self.data[serial].setdefault("settings", {})[key] = value
+                    self.async_update_listeners()
+        # Read the settings again on the next refresh rather than in 30 min.
+        self._config_read_at.pop(serial, None)
 
     async def async_write_plant_price(self, serial: str, price: float) -> None:
         raise HomeAssistantError(READ_ONLY_MESSAGE)

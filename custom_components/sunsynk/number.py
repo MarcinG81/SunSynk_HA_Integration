@@ -33,9 +33,10 @@ from .const import (
     CONF_NORMAL_DISCHARGE_CURRENT,
     CONF_PEAK_DISCHARGE_CURRENT,
     DOMAIN,
+    is_deyecloud,
 )
 from .coordinator import SunsynkCoordinator
-from .helpers import build_device_info, persist_runtime_option
+from .helpers import build_device_info, deyecloud_can_change, persist_runtime_option
 from .write_validation import MAX_CURRENT_A
 
 if TYPE_CHECKING:
@@ -514,13 +515,21 @@ async def async_setup_entry(
     coordinator: SunsynkCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities: list[NumberEntity] = []
 
+    deyecloud = is_deyecloud(entry.data)
     for serial in coordinator.serials:
         device_info = build_device_info(coordinator, serial)
         for description in WRITABLE_NUMBERS:
+            if deyecloud and not deyecloud_can_change(
+                coordinator, serial, description.setting_key
+            ):
+                continue
             entities.append(
                 SunsynkNumberEntity(coordinator, serial, description, device_info)
             )
-        entities.append(PlantEnergyPriceNumberEntity(coordinator, serial, device_info))
+        if not deyecloud:
+            entities.append(
+                PlantEnergyPriceNumberEntity(coordinator, serial, device_info)
+            )
 
     tariff_manager: TariffChargingManager | None = hass.data[DOMAIN].get(
         f"{entry.entry_id}_tariff"
