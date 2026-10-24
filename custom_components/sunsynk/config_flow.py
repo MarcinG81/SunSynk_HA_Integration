@@ -146,6 +146,8 @@ async def _async_list_deyecloud_inverters(data: dict[str, Any]) -> list[dict]:
 
 def _inverter_label(inverter: dict[str, Any]) -> str:
     parts = [str(inverter["deviceSn"])]
+    if inverter.get("deviceType") == "MICRO_INVERTER":
+        parts[0] += " (microinverter)"
     if inverter.get("stationName"):
         parts.append(str(inverter["stationName"]))
     return " — ".join(parts)

@@ -262,15 +262,32 @@ async def test_inverters_are_listed_across_pages_with_their_station():
         }
     )
     page2 = _ok({"total": 51, "stationList": [{"id": 2, "name": "Barn", "deviceListItems": [{"deviceSn": "B"}]}]})
-    session = fake_session(post=[FakeResponse(TOKEN_OK), page1, page2])
+    micro = _ok(
+        {
+            "total": 2,
+            "stationList": [
+                {"id": 3, "name": "Shed", "deviceListItems": [{"deviceSn": "M"}, {"deviceSn": "A"}]}
+            ],
+        }
+    )
+    session = fake_session(post=[FakeResponse(TOKEN_OK), page1, page2, micro])
 
     inverters = await _client(session).async_list_inverters()
 
-    assert [(i["deviceSn"], i["stationId"], i["stationName"]) for i in inverters] == [
-        ("A", 1, "Home"),
-        ("B", 2, "Barn"),
+    assert [
+        (i["deviceSn"], i["stationId"], i["stationName"], i["deviceType"])
+        for i in inverters
+    ] == [
+        ("A", 1, "Home", "INVERTER"),
+        ("B", 2, "Barn", "INVERTER"),
+        ("M", 3, "Shed", "MICRO_INVERTER"),  # #37: the 18th device
     ]
-    assert session.post.call_args.kwargs["json"] == {"page": 2, "size": 50, "deviceType": "INVERTER"}
+    calls = [c.kwargs["json"] for c in session.post.call_args_list[1:]]
+    assert calls == [
+        {"page": 1, "size": 50, "deviceType": "INVERTER"},
+        {"page": 2, "size": 50, "deviceType": "INVERTER"},
+        {"page": 1, "size": 50, "deviceType": "MICRO_INVERTER"},
+    ]
 
 
 @pytest.mark.asyncio

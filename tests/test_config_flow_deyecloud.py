@@ -22,6 +22,7 @@ _LIST = "custom_components.sunsynk.config_flow._async_list_deyecloud_inverters"
 INVERTERS = [
     {"deviceSn": "2301", "stationName": "Home"},
     {"deviceSn": "2302", "stationName": None},
+    {"deviceSn": "2303", "stationName": "Shed", "deviceType": "MICRO_INVERTER"},
 ]
 
 
@@ -104,7 +105,11 @@ async def test_inverters_are_picked_and_only_the_password_hash_is_kept():
     assert pick["step_id"] == "deyecloud_inverters"
     choices = pick["data_schema"].schema
     (field,) = choices
-    assert choices[field].options == {"2301": "2301 — Home", "2302": "2302"}
+    assert choices[field].options == {
+        "2301": "2301 — Home",
+        "2302": "2302",
+        "2303": "2303 (microinverter) — Shed",
+    }
 
     result = await flow.async_step_deyecloud_inverters({"serials": ["2302"]})
 

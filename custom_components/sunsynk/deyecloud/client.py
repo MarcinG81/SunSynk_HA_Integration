@@ -95,6 +95,8 @@ WORK_MODES: dict[int, str] = {
 }
 ENERGY_PATTERNS: dict[int, str] = {0: "BATTERY_FIRST", 1: "LOAD_FIRST"}
 TOU_SLOTS = 6
+# Device types listed as inverters: hybrid / string, and microinverters.
+INVERTER_TYPES = ("INVERTER", "MICRO_INVERTER")
 WEEKDAYS = (
     "SUNDAY",
     "MONDAY",
@@ -319,30 +321,40 @@ class DeyeCloudClient:
     # ── Reading ──────────────────────────────────────────────────────────
 
     async def async_list_inverters(self) -> list[dict[str, Any]]:
-        """Every inverter on the account, with the station it belongs to."""
+        """Every inverter on the account, with the station it belongs to.
+
+        Microinverters are a device type of their own in Deye Cloud, so
+        asking for inverters alone left them out (#37: 17 of 18 devices).
+        """
         inverters: list[dict[str, Any]] = []
-        page = 1
-        while True:
-            result = await self._request(
-                "/station/listWithDevice",
-                {"page": page, "size": 50, "deviceType": "INVERTER"},
-            )
-            stations = result.get("stationList") or []
-            for station in stations:
-                for device in station.get("deviceListItems") or []:
-                    if not device.get("deviceSn"):
-                        continue
-                    inverters.append(
-                        {
-                            **device,
-                            "stationId": station.get("id"),
-                            "stationName": station.get("name"),
-                        }
-                    )
-            total = result.get("total")
-            if not stations or not isinstance(total, int) or page * 50 >= total:
-                return inverters
-            page += 1
+        seen: set[str] = set()
+        for device_type in INVERTER_TYPES:
+            page = 1
+            while True:
+                result = await self._request(
+                    "/station/listWithDevice",
+                    {"page": page, "size": 50, "deviceType": device_type},
+                )
+                stations = result.get("stationList") or []
+                for station in stations:
+                    for device in station.get("deviceListItems") or []:
+                        serial = device.get("deviceSn")
+                        if not serial or serial in seen:
+                            continue
+                        seen.add(serial)
+                        inverters.append(
+                            {
+                                "deviceType": device_type,
+                                **device,
+                                "stationId": station.get("id"),
+                                "stationName": station.get("name"),
+                            }
+                        )
+                total = result.get("total")
+                if not stations or not isinstance(total, int) or page * 50 >= total:
+                    break
+                page += 1
+        return inverters
 
     async def async_get_latest(self, serials: list[str]) -> dict[str, dict[str, Any]]:
         """Latest measure points per inverter: {serial: {key: value}}."""
