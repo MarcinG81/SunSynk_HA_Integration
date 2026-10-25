@@ -342,3 +342,25 @@ async def test_without_data_yet_the_order_still_goes(controlled, client):
     await controlled.async_write_setting("SN3", "solarMaxSellPower", 5000)
 
     client.async_set_max_sell_power.assert_awaited_once()
+
+
+
+@pytest.mark.asyncio
+async def test_going_offline_and_back_is_logged_once_each(
+    coordinator, client, issues, caplog
+):
+    client.async_get_latest.return_value = {
+        "SN1": {**SINGLE, "_deviceState": 3},
+        "SN3": {**THREE, "_collectionTime": 1_000_000_000},
+    }
+    for _ in range(3):
+        await coordinator._async_update_data()
+
+    assert caplog.text.count("Deye Cloud reports inverter SN1 offline") == 1
+    assert caplog.text.count("Inverter SN3 hasn't reported to Deye Cloud since") == 1
+
+    client.async_get_latest.return_value = {"SN1": SINGLE, "SN3": THREE}
+    await coordinator._async_update_data()
+    await coordinator._async_update_data()
+
+    assert caplog.text.count("Inverter SN1 is reporting to Deye Cloud again") == 1

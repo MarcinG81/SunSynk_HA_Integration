@@ -112,6 +112,8 @@ class DeyeCloudCoordinator(SunsynkCoordinator):
         # Config groups Deye Cloud doesn't offer for an inverter: not asked
         # for again until Home Assistant restarts.
         self._unsupported: dict[str, set[str]] = {}
+        # Inverters last seen offline, to log the change rather than every poll.
+        self._offline_serials: set[str] = set()
 
     async def _async_client(self) -> DeyeCloudClient:
         session = await self._async_get_session()
@@ -186,18 +188,29 @@ class DeyeCloudCoordinator(SunsynkCoordinator):
         return result
 
     def _is_stale(self, serial: str, points: dict[str, Any]) -> bool:
-        if points.get(DEVICE_STATE) == DEVICE_OFFLINE:
-            _LOGGER.warning("Deye Cloud reports inverter %s offline", serial)
-            return True
+        """Whether these points are an offline logger's last ones.
+
+        Logged when an inverter goes offline and when it is back, not on
+        every refresh: it stays shown under Repairs meanwhile (#37 had 92
+        warnings in 50 minutes for two inverters).
+        """
         when = mapping.collected_at(points)
-        if when is not None and dt_util.utcnow() - when > _STALE_AFTER:
-            _LOGGER.warning(
-                "Inverter %s last reported to Deye Cloud at %s",
-                serial,
-                dt_util.as_local(when).isoformat(),
+        if points.get(DEVICE_STATE) == DEVICE_OFFLINE:
+            why = f"Deye Cloud reports inverter {serial} offline"
+        elif when is not None and dt_util.utcnow() - when > _STALE_AFTER:
+            why = (
+                f"Inverter {serial} hasn't reported to Deye Cloud since "
+                f"{dt_util.as_local(when).isoformat()}"
             )
-            return True
-        return False
+        else:
+            if serial in self._offline_serials:
+                self._offline_serials.discard(serial)
+                _LOGGER.info("Inverter %s is reporting to Deye Cloud again", serial)
+            return False
+        if serial not in self._offline_serials:
+            self._offline_serials.add(serial)
+            _LOGGER.warning(why)
+        return True
 
     def _offline(self, serial: str) -> None:
         ir.async_create_issue(
