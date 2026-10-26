@@ -22,6 +22,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - **Serial numbers and firmware versions made only of digits showed as numbers**, e.g. a Deye serial as "2301316667.0" or a BMS version "0000" as "0.0". They are now shown exactly as reported. (#37)
 
+## [2.0.0] - 2026-10-26
+
+The first stable 2.0. It is 2.0.0-rc.1, which nobody reported a problem with, plus two corrections to the README. Everything that changed since 1.9.x is listed under the 2.0.0 betas and rc.1 below.
+
+### Before you upgrade from 1.9.x
+
+- **Take a Home Assistant backup first.** Virtual slot schedules move to per-inverter storage and the old shared record is removed, and the virtual slot entities get new unique IDs (their entity IDs are kept). Going back to 1.9.x without restoring the backup leaves an empty virtual slot schedule and may create duplicate virtual slot entities with a `_2` suffix.
+- **The auto-maintained dashboard is now opt-in.** If you rely on it, enable **Create and maintain Sunsynk dashboard** in the integration's options after upgrading. Dashboards already created stay in place.
+
+### Highlights since 1.9.x
+
+- Every setting write is read back from the inverter, sent again if the inverter lost it, and reported under Repairs if it still isn't applied.
+- Settings are written per settings page from a fresh read, so a change made in the Sunsynk app is not undone.
+- Tariff Manager and the Virtual Slot Scheduler work per inverter, including parallel master/slave systems, and put your own currents and timer back after a charge or discharge, also across a restart.
+- Charge and discharge decisions are exclusive; a discharge stops at the minimum SOC, and every current stays within the battery's BMS limits.
+
+### Fixed
+- **README: Battery Power sign.** Positive is discharge and negative is charge, not the other way round.
+- **README: Battery Mode.** The values 0=Lithium, 1=Lead-acid, 2=Other were not confirmed and have been removed.
+
 ## [2.0.0-rc.1] - 2026-10-21
 
 ### Fixed
