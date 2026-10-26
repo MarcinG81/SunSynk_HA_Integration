@@ -232,7 +232,7 @@ Each inverter appears as a **device** in Home Assistant with the following entit
 | Entity | Unit | Description |
 |---|---|---|
 | Battery SOC | % | State of charge |
-| Battery Power | W | Charge (+) / Discharge (–) power |
+| Battery Power | W | Discharge (+) / charge (–) power |
 | Battery Voltage | V | Battery voltage |
 | Battery Current | A | Battery current |
 | Battery Temperature | °C | Battery temperature |
@@ -346,7 +346,7 @@ These appear under **Settings** entities on the device page.
 | Sell Time 1–6 Power | W | Max sell power per time slot |
 | Time Slot 1–6 Capacity | % | Target SOC per time slot |
 | Generator Start/On/Off Capacity | % | Generator automation thresholds |
-| Battery Mode | 0–2 | 0=Lithium, 1=Lead-acid, 2=Other |
+| Battery Mode | 0–2 | The battery mode set on the inverter's battery page; some inverters with a lithium BMS report -1 |
 | System Work Mode | 0–4 | System operation mode |
 | Energy Mode | 0–1 | Energy priority mode |
 
