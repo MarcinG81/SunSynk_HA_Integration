@@ -234,6 +234,7 @@ class DeyeCloudCoordinator(SunsynkCoordinator):
             return cached
         unsupported = self._unsupported.setdefault(serial, set())
         config: dict[str, dict[str, Any]] = {}
+        newly_unsupported: list[str] = []
         for kind in _CONFIG_GROUPS:
             if kind in unsupported:
                 continue
@@ -241,11 +242,7 @@ class DeyeCloudCoordinator(SunsynkCoordinator):
                 config[kind] = await client.async_get_config(serial, kind)
             except DeyeCloudUnsupportedError:
                 unsupported.add(kind)
-                _LOGGER.info(
-                    "Deye Cloud doesn't offer the %s settings of inverter %s",
-                    kind,
-                    serial,
-                )
+                newly_unsupported.append(kind)
             except DeyeCloudAuthError:
                 raise
             except DeyeCloudApiError as err:
@@ -255,6 +252,14 @@ class DeyeCloudCoordinator(SunsynkCoordinator):
                 )
                 if kind in cached:
                     config[kind] = cached[kind]
+        if newly_unsupported:
+            # One line per inverter, not one per settings group (#37).
+            _LOGGER.info(
+                "Deye Cloud doesn't offer the %s settings of inverter %s%s",
+                ", ".join(newly_unsupported),
+                serial,
+                "; it is read-only" if not self.can_configure(serial) else "",
+            )
         self._config[serial] = config
         self._config_read_at[serial] = now
         return config

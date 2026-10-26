@@ -364,3 +364,19 @@ async def test_going_offline_and_back_is_logged_once_each(
     await coordinator._async_update_data()
 
     assert caplog.text.count("Inverter SN1 is reporting to Deye Cloud again") == 1
+
+
+
+@pytest.mark.asyncio
+async def test_settings_deye_cloud_doesn_t_offer_are_logged_once_per_inverter(
+    coordinator, issues, caplog
+):
+    caplog.set_level("INFO")
+
+    await coordinator._async_update_data()
+
+    lines = [r.getMessage() for r in caplog.records if "doesn't offer" in r.getMessage()]
+    assert lines == [
+        "Deye Cloud doesn't offer the system, battery, tou settings of inverter SN1; "
+        "it is read-only"
+    ]
