@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
@@ -418,6 +421,79 @@ def _resolve_value(data: dict[str, Any], path: str) -> Any:
     return current
 
 
+_LOGGER = logging.getLogger(__name__)
+
+# An energy counter may rise by at most this, per inverter, per hour since the
+# last accepted reading: three times the rated power, or 50 kW if that's more
+# (grid import also feeds loads the inverter doesn't power), plus 1 kWh.
+_COUNTER_RATED_FACTOR = 3
+_COUNTER_MIN_KW = 50
+_COUNTER_MARGIN_KWH = 1.0
+# A reading kept out for this long becomes the new baseline, so a counter
+# that really was reset or replaced isn't held back for good.
+_COUNTER_GIVE_UP = timedelta(hours=1)
+# Data keys of the lifetime counters; the others reset each day, month or year.
+_LIFETIME_KEYS = frozenset(
+    {"etotal", "etotalChg", "etotalDischg", "etotalFrom", "etotalTo", "totalUsed"}
+)
+
+
+class _CounterGuard:
+    """Keeps implausible readings of an energy counter out of its state (#43).
+
+    The Sunsynk cloud sometimes returns a counter with its two 16-bit halves
+    swapped (376.5 kWh as 24,674,304.5 kWh) or as 0. Home Assistant counts
+    such a jump as real energy, and a lifetime counter dropping to 0 as a
+    meter reset, so the Energy dashboard is off by the whole jump. A rise
+    faster than the inverter could have managed, a lifetime counter going
+    down, or a small dip in a daily counter (cloud jitter, which Home
+    Assistant would also warn about) keeps the last good value instead. A
+    daily, monthly or yearly counter falling to well below its last value is
+    its reset and is taken.
+    """
+
+    def __init__(self, lifetime: bool) -> None:
+        self._lifetime = lifetime
+        self._value: float | None = None
+        self._at: datetime | None = None
+        self._held_since: datetime | None = None
+
+    def filter(self, value: float, now: datetime, limit_kw: float, name: str) -> float:
+        if self._value is None or self._at is None:
+            return self._accept(value, now)
+        rise = value - self._value
+        hours = max(0.0, (now - self._at).total_seconds() / 3600)
+        reset = (
+            not self._lifetime and rise < 0 and (value < 1 or value < self._value / 2)
+        )
+        if reset or 0 <= rise <= limit_kw * hours + _COUNTER_MARGIN_KWH:
+            return self._accept(value, now)
+        if self._held_since is None:
+            self._held_since = now
+            if rise > 0 or self._lifetime:
+                _LOGGER.warning(
+                    "%s: ignoring %s kWh from the Sunsynk cloud, keeping %s kWh "
+                    "(not a possible change since the last reading)",
+                    name,
+                    value,
+                    self._value,
+                )
+        elif now - self._held_since >= _COUNTER_GIVE_UP:
+            _LOGGER.warning(
+                "%s: the Sunsynk cloud has reported %s kWh for over an hour, taking it",
+                name,
+                value,
+            )
+            return self._accept(value, now)
+        return self._value
+
+    def _accept(self, value: float, now: datetime) -> float:
+        self._value = value
+        self._at = now
+        self._held_since = None
+        return value
+
+
 class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
     """A single Sunsynk sensor entity."""
 
@@ -436,9 +512,32 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
         self._serial = serial
         self._attr_unique_id = f"{serial}_{description.key}"
         self._attr_device_info = device_info
+        self._guard = (
+            _CounterGuard(description.data_key in _LIFETIME_KEYS)
+            if description.state_class == SensorStateClass.TOTAL_INCREASING
+            else None
+        )
 
     @property
     def native_value(self) -> Any:
+        value = self._reported_value()
+        if self._guard is None or not isinstance(value, float):
+            return value
+        inverter = (
+            (self.coordinator.data or {}).get(self._serial, {}).get("inverter", {})
+        )
+        try:
+            rated_kw = float(inverter.get("ratePower")) / 1000
+        except (TypeError, ValueError):
+            rated_kw = 0.0
+        if not math.isfinite(rated_kw):
+            rated_kw = 0.0
+        limit_kw = max(_COUNTER_RATED_FACTOR * rated_kw, _COUNTER_MIN_KW)
+        return self._guard.filter(
+            value, dt_util.utcnow(), limit_kw, self.entity_id or self.unique_id
+        )
+
+    def _reported_value(self) -> Any:
         serial_data = (self.coordinator.data or {}).get(self._serial, {})
         endpoint_data = serial_data.get(self.entity_description.endpoint, {})
         if not endpoint_data:
