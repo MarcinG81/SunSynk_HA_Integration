@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **The diagnostics file showed the plant's ID** on each of the plant's tariff rates (`stationId`). It is now masked like the other IDs. (#44)
+
 ## [2.1.0-beta.2] - 2026-10-28
 
 In HACS, turn on *Show beta versions* for this integration to see it. **If you set the daily kWh to buy or sell in beta.1 on a parallel system, set it again for the whole system** (e.g. double it for a pair).

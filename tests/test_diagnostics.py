@@ -224,13 +224,14 @@ def test_real_api_payload_identifiers_are_redacted():
             "lon": -0.72,
             "principal": "Jane Doe",
             "master": {"nickname": "installer@example.com"},
+            "charges": [{"id": 7, "price": 0.13, "stationId": 286433}],
         },
     }
 
     redacted = _redacted_data(payload, {})
 
     text = str(redacted)
-    for secret in ("E4701", "owner@", "0700", "Solar Ltd", "51.08", "-0.72", "Jane Doe", "installer@", "example.invalid"):
+    for secret in ("E4701", "owner@", "0700", "Solar Ltd", "51.08", "-0.72", "Jane Doe", "installer@", "example.invalid", "286433"):
         assert secret not in text
 
 

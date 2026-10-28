@@ -54,6 +54,9 @@ _TO_REDACT = {
     "principal",
     "thumbUrl",
     "custCode",
+    # The plant id again, on each of the plant's tariff rates (#44), and on
+    # Deye Cloud device data.
+    "stationId",
     # Deye Cloud entries: the developer app, the login and its password hash.
     CONF_DEYE_APP_ID,
     CONF_DEYE_APP_SECRET,
