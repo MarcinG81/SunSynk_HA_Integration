@@ -68,6 +68,7 @@ from .const import (
     CONF_PLAN_BUY_KWH,
     CONF_PLAN_EXPORT_ENTITIES,
     CONF_PLAN_IMPORT_ENTITIES,
+    CONF_PLAN_PAUSED,
     CONF_PLAN_SELL_KWH,
     CONF_PRICE_ENTITY,
     CONF_PRICE_MAX_AGE,
@@ -922,6 +923,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             plan_export_entities=_opt(CONF_PLAN_EXPORT_ENTITIES),
             plan_buy_kwh=_opt(CONF_PLAN_BUY_KWH),
             plan_sell_kwh=_opt(CONF_PLAN_SELL_KWH),
+            plan_paused=bool(_opt(CONF_PLAN_PAUSED, False)),
+            max_export_power=_opt(CONF_MAX_EXPORT_POWER),
         )
         await tariff_manager.async_load()
         hass.data[DOMAIN][f"{entry.entry_id}_tariff"] = tariff_manager

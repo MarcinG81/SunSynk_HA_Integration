@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased — 2.1.0-beta.2]
+
+### Changed
+- **The amount to buy or sell a day is for the whole system,** like the maximum export power: 10 kWh means 10 kWh for a parallel pair, not for each inverter. If you set it per inverter in beta.1, double it for a pair. (#42)
+- **The plan uses the power the system really charges or discharges at.** Per inverter the Tariff Manager current × battery voltage, now also within the BMS limit shared in a parallel group, the inverter's rated power and, for selling, the maximum export power, times the inverters. The Tariff Mode sensor shows it as `planned_power_kw`. (#42)
+
+### Fixed
+- **A day already under way got its whole amount.** Set up part way through a day, or after a restart, the plan put the day's full amount into the slots left. It now plans only the share of the amount for the slots still ahead, and plans are kept over a restart, so a restart doesn't plan a day again. Found by pay4property. (#42)
+
+### Added
+- **Tariff Plan kWh to Buy / to Sell numbers,** to change the daily amounts from a dashboard or an automation (e.g. from the solar forecast) without Configure; 0 turns that side of the plan off. Suggested by pay4property. (#42)
+- **Tariff Price Plan switch** to pause the plan, e.g. while a car charges: off, nothing planned charges or discharges; on again, the slots still ahead apply. Kept over a restart. Suggested by pay4property. (#42)
+- **Planned slots on the Tariff view** of the generated dashboard, with the power they were planned at and whether the plan is paused. Suggested by pay4property. (#42)
+
 ## [2.1.0-beta.1] - 2026-10-27
 
 The first 2.1 beta. In HACS, turn on *Show beta versions* for this integration to see it. It includes everything in 2.0.0.

@@ -53,6 +53,7 @@ from .const import (
     CONF_PLAN_BUY_KWH,
     CONF_PLAN_EXPORT_ENTITIES,
     CONF_PLAN_IMPORT_ENTITIES,
+    CONF_PLAN_PAUSED,
     CONF_PLAN_SELL_KWH,
     CONF_PRICE_ENTITY,
     CONF_PRICE_MAX_AGE,
@@ -493,12 +494,13 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                             **forecast_fields,
                             **export_fields,
                             **tariff_fields,
-                            # Saved by the Tariff Manager switch, not a form field.
-                            **(
-                                {CONF_TARIFF_ENABLED: opts[CONF_TARIFF_ENABLED]}
-                                if CONF_TARIFF_ENABLED in opts and tariff_fields
-                                else {}
-                            ),
+                            # Saved by the Tariff Manager and price plan
+                            # switches, not form fields.
+                            **{
+                                key: opts[key]
+                                for key in (CONF_TARIFF_ENABLED, CONF_PLAN_PAUSED)
+                                if key in opts and tariff_fields
+                            },
                         },
                     )
 

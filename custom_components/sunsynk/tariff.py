@@ -7,7 +7,7 @@ import math
 from asyncio import Lock
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
@@ -21,7 +21,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
-from .current_limits import battery_safe_current
+from .current_limits import battery_safe_current, group_sizes
 from .price_plan import Rate, by_day, in_slot, merge_rates, parse_rates, plan_day
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,6 +54,15 @@ class ManualSession:
     current: int | None = None
     soc: int | None = None
     power: int | None = None
+
+
+def _positive(value: Any) -> float | None:
+    """A reported reading as a positive number, None if it isn't one."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) and number > 0 else None
 
 
 class TariffChargingManager:
@@ -126,6 +135,9 @@ class TariffChargingManager:
         plan_export_entities: list[str] | None = None,
         plan_buy_kwh: float | None = None,
         plan_sell_kwh: float | None = None,
+        plan_paused: bool = False,
+        # the most the whole system may export, in W (caps the plan's power)
+        max_export_power: int | None = None,
     ) -> None:
         self._hass = hass
         self._coordinator = coordinator
@@ -172,18 +184,30 @@ class TariffChargingManager:
         # over the price, works with Tariff Manager off, and isn't kept over
         # a restart: everything goes back to normal then.
         self._manual: dict[str, ManualSession] = {}
-        # Planned slots per direction and day, with the prices they were
-        # planned from: a day is planned once, when its prices appear, so
+        # Planned slots per direction and day, with the prices and amount they
+        # were planned from: a day is planned once, when its prices appear, so
         # slots that have passed aren't replaced by others (which would buy
-        # or sell more than the day's amount). New prices for a day replan it.
-        self._plan_setup = {
-            "charge": (tuple(plan_import_entities or ()), plan_buy_kwh),
-            "discharge": (tuple(plan_export_entities or ()), plan_sell_kwh),
+        # or sell more than the day's amount). New prices or a new amount for
+        # a day replan it. The amounts are for the whole system (#42), and
+        # plans are saved, so a restart doesn't plan a day's amount again.
+        self._plan_entities = {
+            "charge": tuple(plan_import_entities or ()),
+            "discharge": tuple(plan_export_entities or ()),
         }
+        self._plan_kwh: dict[str, float | None] = {
+            "charge": plan_buy_kwh,
+            "discharge": plan_sell_kwh,
+        }
+        self._plan_paused = plan_paused
+        self._max_export_power = max_export_power
         self._plans: dict[str, dict[Any, tuple[tuple, list[Rate]]]] = {
             "charge": {},
             "discharge": {},
         }
+        self._plan_power: dict[str, float] = {}
+        self._plan_store: Store | None = (
+            Store(hass, 1, f"{DOMAIN}_price_plan_{entry_id}") if entry_id else None
+        )
         self._manual_defaults = {
             MANUAL_CHARGE: (manual_charge_current, manual_target_soc, None),
             MANUAL_DISCHARGE: (
@@ -918,36 +942,44 @@ class TariffChargingManager:
     # ── Plan by the prices ahead (#40) ─────────────────────────────────────
 
     def _plans_on(self, direction: str) -> bool:
-        entities, kwh = self._plan_setup[direction]
-        return bool(entities) and bool(kwh)
+        return bool(self._plan_entities[direction]) and bool(self._plan_kwh[direction])
 
     def _refresh_plans(self, targets: list[str]) -> None:
-        """Plan each day whose prices are new or have changed."""
+        """Plan each day whose prices or amount are new or have changed."""
         now = dt_util.utcnow()
         today = dt_util.as_local(now).date()
+        changed = False
         for direction in ("charge", "discharge"):
             if not self._plans_on(direction):
                 continue
-            entities, kwh = self._plan_setup[direction]
+            kwh = float(self._plan_kwh[direction] or 0)
             groups = []
-            for entity_id in entities:
+            for entity_id in self._plan_entities[direction]:
                 state = self._hass.states.get(entity_id)
                 if state is not None:
                     groups.append(parse_rates(state.attributes))
             plans = self._plans[direction]
             for day in [day for day in plans if day < today]:
                 del plans[day]
+                changed = True
             power_kw = self._plan_power_kw(direction, targets)
+            self._plan_power[direction] = power_kw
             for day, rates in by_day(merge_rates(*groups)).items():
                 if day < today:
                     continue
-                prices = tuple((rate.start, rate.price) for rate in rates)
+                prices = (kwh, *((rate.start, rate.price) for rate in rates))
                 if day in plans and plans[day][0] == prices:
                     continue
+                # A day already under way gets the share of its amount for the
+                # slots still ahead: what was bought or sold earlier that day
+                # isn't known, so planning the whole amount would overdo it.
+                hours = sum(rate.hours for rate in rates)
+                ahead = sum(rate.hours for rate in rates if rate.start >= now)
+                share = ahead / hours if hours else 0.0
                 chosen = plan_day(
                     rates,
                     now,
-                    float(kwh),
+                    kwh * share,
                     power_kw,
                     dearest=direction == "discharge",
                     limit=(
@@ -957,10 +989,13 @@ class TariffChargingManager:
                     ),
                 )
                 plans[day] = (prices, chosen)
+                changed = True
                 _LOGGER.info(
-                    "Tariff: planned %s for %s at %.1f kW: %s",
+                    "Tariff: planned %s for %s, %.1f of %.1f kWh at %.1f kW: %s",
                     direction,
                     day,
+                    kwh * share,
+                    kwh,
                     power_kw,
                     ", ".join(
                         f"{dt_util.as_local(rate.start):%H:%M} ({rate.price:g})"
@@ -968,26 +1003,129 @@ class TariffChargingManager:
                     )
                     or "no slot within the price limit",
                 )
+        if changed:
+            self._save_plans()
 
     def _plan_power_kw(self, direction: str, targets: list[str]) -> float:
-        """Each inverter's charge or discharge power: the Tariff Manager
-        current at the battery voltage (51.2 V until one is reported)."""
+        """What the whole system charges or discharges at, in kW.
+
+        Per inverter, the Tariff Manager current at the battery voltage (51.2 V
+        until one is reported), within the BMS limit shared in a parallel
+        group, the inverter's rated power and, for a discharge, its share of
+        the maximum export power; times the inverters in each group (#42).
+        """
         amps = (
             self._peak_discharge_current
             if direction == "discharge"
             else self._cheap_current
         ) or 0
-        volts = 51.2
+        sizes = group_sizes(self._coordinator)
+        total = 0.0
         for serial in targets:
-            battery = (self._coordinator.data or {}).get(serial, {}).get("battery", {})
-            try:
-                reported = float(battery.get("voltage"))
-            except (TypeError, ValueError):
-                continue
-            if math.isfinite(reported) and reported > 0:
-                volts = reported
-                break
-        return amps * volts / 1000
+            data = (self._coordinator.data or {}).get(serial, {})
+            volts = _positive(data.get("battery", {}).get("voltage")) or 51.2
+            watts = self._safe(serial, direction, int(amps)) * volts
+            rated = _positive(data.get("inverter", {}).get("ratePower"))
+            if rated:
+                watts = min(watts, rated)
+            inverters = max(1, sizes.get(serial, 1))
+            if direction == "discharge" and self._max_export_power:
+                watts = min(watts, self._max_export_power / inverters)
+            total += watts * inverters
+        return total / 1000
+
+    def _save_plans(self) -> None:
+        if self._plan_store is None:
+            return
+        self._plan_store.async_delay_save(self._plans_data, 1)
+
+    def _plans_data(self) -> dict[str, Any]:
+        return {
+            direction: {
+                day.isoformat(): {
+                    "kwh": prices[0],
+                    "prices": [
+                        [start.isoformat(), price] for start, price in prices[1:]
+                    ],
+                    "chosen": [
+                        [rate.start.isoformat(), rate.end.isoformat(), rate.price]
+                        for rate in chosen
+                    ],
+                }
+                for day, (prices, chosen) in days.items()
+            }
+            for direction, days in self._plans.items()
+        }
+
+    async def _async_load_plans(self, store: Store) -> None:
+        data = await store.async_load() or {}
+        today = dt_util.as_local(dt_util.utcnow()).date()
+        for direction in ("charge", "discharge"):
+            for day_text, saved in (data.get(direction) or {}).items():
+                try:
+                    day = date.fromisoformat(day_text)
+                    prices = (
+                        saved["kwh"],
+                        *(
+                            (dt_util.parse_datetime(start), price)
+                            for start, price in saved["prices"]
+                        ),
+                    )
+                    chosen = [
+                        Rate(
+                            dt_util.parse_datetime(start),
+                            dt_util.parse_datetime(end),
+                            price,
+                        )
+                        for start, end, price in saved["chosen"]
+                    ]
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if day >= today:
+                    self._plans[direction][day] = (prices, chosen)
+
+    def set_plan_buy_kwh(self, value: float | None) -> None:
+        self._set_plan_kwh("charge", value)
+
+    def set_plan_sell_kwh(self, value: float | None) -> None:
+        self._set_plan_kwh("discharge", value)
+
+    def _set_plan_kwh(self, direction: str, value: float | None) -> None:
+        self._plan_kwh[direction] = None if value is None else float(value)
+        self._re_evaluate()
+        self._notify_listeners()
+
+    @property
+    def plan_buy_kwh(self) -> float | None:
+        return self._plan_kwh["charge"]
+
+    @property
+    def plan_sell_kwh(self) -> float | None:
+        return self._plan_kwh["discharge"]
+
+    def plans_configured(self, direction: str) -> bool:
+        """Whether price entities are set to plan this direction from."""
+        return bool(self._plan_entities[direction])
+
+    @property
+    def plan_paused(self) -> bool:
+        return self._plan_paused
+
+    def set_plan_paused(self, paused: bool) -> None:
+        """Pause the plan, e.g. while a car charges: no planned charge or
+        discharge until it's resumed, then the slots still ahead apply."""
+        self._plan_paused = paused
+        self._re_evaluate()
+        self._notify_listeners()
+
+    @property
+    def plan_power(self) -> dict[str, float]:
+        """The system power each direction was planned at, in kW."""
+        return {
+            direction: round(power, 2)
+            for direction, power in self._plan_power.items()
+            if self._plans_on(direction)
+        }
 
     def _planned(self, direction: str) -> list[Rate]:
         return sorted(
@@ -1000,9 +1138,13 @@ class TariffChargingManager:
         )
 
     def _planned_now(self, direction: str) -> Rate | None:
+        if self._plan_paused:
+            return None
         return in_slot(self._planned(direction), dt_util.utcnow())
 
     def _plan_reason(self, direction: str) -> str:
+        if self._plan_paused:
+            return "the price plan is paused"
         now = dt_util.utcnow()
         upcoming = [rate for rate in self._planned(direction) if rate.start > now]
         if not upcoming:
@@ -1038,6 +1180,8 @@ class TariffChargingManager:
             return
         data = await self._sell_off_store.async_load() or {}
         self._sell_off_serials = set(data.get("sell_off") or ())
+        if self._plan_store is not None:
+            await self._async_load_plans(self._plan_store)
 
     async def _async_save_sell_off(self) -> None:
         if self._sell_off_store is not None:

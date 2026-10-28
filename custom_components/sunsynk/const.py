@@ -128,6 +128,8 @@ CONF_PLAN_IMPORT_ENTITIES: Final = "plan_import_entities"
 CONF_PLAN_BUY_KWH: Final = "plan_buy_kwh"
 CONF_PLAN_EXPORT_ENTITIES: Final = "plan_export_entities"
 CONF_PLAN_SELL_KWH: Final = "plan_sell_kwh"
+# Paused from its switch, e.g. while a car charges (#42); kept over restarts.
+CONF_PLAN_PAUSED: Final = "plan_paused"
 # Remembers the Tariff Manager switch across restarts (#30).
 CONF_TARIFF_ENABLED: Final = "tariff_enabled"
 DEFAULT_PRICE_MAX_AGE: Final = 90  # minutes

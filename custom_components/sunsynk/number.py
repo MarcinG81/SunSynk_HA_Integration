@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricCurrent,
+    UnitOfEnergy,
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant, callback
@@ -32,6 +33,8 @@ from .const import (
     CONF_NORMAL_CHARGE_CURRENT,
     CONF_NORMAL_DISCHARGE_CURRENT,
     CONF_PEAK_DISCHARGE_CURRENT,
+    CONF_PLAN_BUY_KWH,
+    CONF_PLAN_SELL_KWH,
     DOMAIN,
     is_deyecloud,
 )
@@ -401,6 +404,8 @@ class TariffNumberEntityDescription:
     native_unit_of_measurement: str | None = None
     suggested_display_precision: int = 3
     icon: str | None = None
+    # Only created when the price plan for this direction has price entities.
+    plan_direction: str | None = None
 
 
 TARIFF_NUMBERS: tuple[TariffNumberEntityDescription, ...] = (
@@ -504,6 +509,36 @@ TARIFF_NUMBERS: tuple[TariffNumberEntityDescription, ...] = (
         suggested_display_precision=0,
         icon="mdi:battery-arrow-down-outline",
     ),
+    # Changed day to day, e.g. from the solar forecast, without Configure
+    # (#42). For the whole system; 0 turns that side of the plan off.
+    TariffNumberEntityDescription(
+        key="plan_buy_kwh",
+        name="Tariff Plan kWh to Buy",
+        native_min_value=0,
+        native_max_value=1000,
+        native_step=0.1,
+        manager_attr="plan_buy_kwh",
+        manager_setter="set_plan_buy_kwh",
+        option_key=CONF_PLAN_BUY_KWH,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        icon="mdi:transmission-tower-import",
+        plan_direction="charge",
+    ),
+    TariffNumberEntityDescription(
+        key="plan_sell_kwh",
+        name="Tariff Plan kWh to Sell",
+        native_min_value=0,
+        native_max_value=1000,
+        native_step=0.1,
+        manager_attr="plan_sell_kwh",
+        manager_setter="set_plan_sell_kwh",
+        option_key=CONF_PLAN_SELL_KWH,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        icon="mdi:transmission-tower-export",
+        plan_direction="discharge",
+    ),
 )
 
 
@@ -538,6 +573,10 @@ async def async_setup_entry(
         first_serial = coordinator.serials[0]
         device_info = build_device_info(coordinator, first_serial)
         for description in TARIFF_NUMBERS:
+            if description.plan_direction and not (
+                tariff_manager.plans_configured(description.plan_direction)
+            ):
+                continue
             entities.append(
                 TariffNumberEntity(
                     entry.entry_id, tariff_manager, description, device_info, entry

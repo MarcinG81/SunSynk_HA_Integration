@@ -138,6 +138,9 @@ def build_dashboard(
     tariff_peak_dis_cur = t("peak_discharge_current")
     tariff_normal_dis_cur = t("normal_discharge_current")
     tariff_min_soc = t("discharge_min_soc")
+    tariff_plan_sw = t("plan")
+    tariff_plan_buy = t("plan_buy_kwh")
+    tariff_plan_sell = t("plan_sell_kwh")
     has_tariff = tariff_mode is not None
 
     # Virtual Slot Scheduler entity IDs — only populated when configured
@@ -678,6 +681,78 @@ def build_dashboard(
                                     ),
                                 ],
                             },
+                            *(
+                                [
+                                    {
+                                        "type": "entities",
+                                        "title": "Price Plan",
+                                        "entities": [
+                                            {
+                                                "entity": tariff_plan_sw,
+                                                "name": "Follow the plan",
+                                            },
+                                            *(
+                                                [
+                                                    {
+                                                        "entity": tariff_plan_buy,
+                                                        "name": "kWh to buy a day",
+                                                    }
+                                                ]
+                                                if tariff_plan_buy
+                                                else []
+                                            ),
+                                            *(
+                                                [
+                                                    {
+                                                        "entity": tariff_plan_sell,
+                                                        "name": "kWh to sell a day",
+                                                    }
+                                                ]
+                                                if tariff_plan_sell
+                                                else []
+                                            ),
+                                        ],
+                                    },
+                                    {
+                                        "type": "markdown",
+                                        "title": "Planned Slots",
+                                        "content": (
+                                            "{% set plan = state_attr('"
+                                            + tariff_mode
+                                            + "', 'planned_slots') or {} %}"
+                                            "{% set power = state_attr('"
+                                            + tariff_mode
+                                            + "', 'planned_power_kw') or {} %}"
+                                            "{% if state_attr('"
+                                            + tariff_mode
+                                            + "', 'plan_paused') %}"
+                                            "**Paused.**\n\n"
+                                            "{% endif %}"
+                                            "{% for direction, slots in plan.items() %}"
+                                            "**{{ 'Buy' if direction == 'charge' else 'Sell' }}**"
+                                            "{% if power.get(direction) %}"
+                                            " at {{ power[direction] }} kW"
+                                            "{% endif %}\n\n"
+                                            "{% if slots %}"
+                                            "| Start | End | Price |\n"
+                                            "|---|---|---|\n"
+                                            "{% for s in slots %}"
+                                            "| {{ as_timestamp(s.start) | timestamp_custom('%a %H:%M') }} | "
+                                            "{{ as_timestamp(s.end) | timestamp_custom('%H:%M') }} | "
+                                            "{{ s.price }} |\n"
+                                            "{% endfor %}"
+                                            "{% else %}"
+                                            "_No slot planned ahead._\n"
+                                            "{% endif %}\n"
+                                            "{% else %}"
+                                            "_No plan yet: the prices may not be in._\n"
+                                            "{% endfor %}"
+                                        ),
+                                    },
+                                ]
+                                if tariff_plan_sw and tariff_mode
+                                else []
+                            ),
                             {
                                 "type": "history-graph",
                                 "title": "Tariff Mode & Battery SOC — last 24 hours",

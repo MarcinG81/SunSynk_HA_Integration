@@ -507,7 +507,7 @@ The Tariff Manager automatically charges the battery when electricity is cheap a
 | **Price max age (minutes)** | Used only when the option above is ticked (default 90) |
 | **Test mode** *(2.0)* | Off by default. Tariff Manager decides as usual and shows it in Tariff Mode, its notifications and the log, but sends nothing to the inverter |
 | **Stop selling solar at a negative export price** *(2.1)* | Off by default. When ticked, Tariff Manager turns Solar Sell off while the export price is below zero, and back on afterwards; only where Solar Sell was on |
-| **Plan: import prices ahead** / **Plan: kWh to buy a day** *(2.1)* | Price entities with the coming slots (Octopus Energy current + next day rates, Nord Pool, …) and how much to charge from the grid a day per inverter: Tariff Manager then charges in the cheapest slots of each day; the cheap threshold only caps the price |
+| **Plan: import prices ahead** / **Plan: kWh to buy a day** *(2.1)* | Price entities with the coming slots (Octopus Energy current + next day rates, Nord Pool, …) and how much to charge from the grid a day, for the whole system: Tariff Manager then charges in the cheapest slots of each day; the cheap threshold only caps the price |
 | **Plan: export prices ahead** / **Plan: kWh to sell a day** *(2.1)* | The same for export: discharges in the dearest slots of each day; the expensive threshold is the lowest price it sells at |
 | **Charge now: current (A)** *(2.1)* | Default current for the Charge Now action. Blank: the cheap-rate charge current |
 | **Charge now: target SOC (%)** *(2.1)* | Charge Now charges up to here. Blank: the cheap-rate target SOC |
@@ -518,6 +518,8 @@ The Tariff Manager automatically charges the battery when electricity is cheap a
 3. After setup, go to your inverter device and **turn on the Tariff Manager switch** — it starts **off** by default.
 
 > Both cheap-rate charging and expensive-rate discharging are independent — configure one, both, or neither.
+
+> **Planning by the prices ahead** *(2.1)*: the number of slots comes from the day's amount and the power the whole system charges or discharges at: per inverter the Tariff Manager current × battery voltage, within the BMS limit, the rated power and (for selling) the maximum export power, times the inverters. The Tariff Mode sensor shows the planned slots (`planned_slots`) and that power (`planned_power_kw`), and so does the Tariff view of the generated dashboard. A day is planned once, when its prices appear, and plans are kept over a restart; a day already under way when it's first planned gets only the share of its amount for the slots still ahead. The **Tariff Plan kWh to Buy / to Sell** numbers change the daily amounts without Configure (0 turns that side off), and the **Tariff Price Plan** switch pauses the plan, e.g. while a car charges: off, nothing planned charges or discharges; on again, the slots still ahead apply. Charge now / discharge now win over the plan while they run.
 
 > **Currents are per inverter** and are checked when you save: Configure refuses one above the inverter's Max A or its share of the battery's BMS limit, and shows the maximum.
 

@@ -13,7 +13,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_TARIFF_ENABLED, DOMAIN
+from .const import CONF_PLAN_PAUSED, CONF_TARIFF_ENABLED, DOMAIN
 from .coordinator import SunsynkCoordinator
 from .helpers import build_device_info, persist_runtime_option
 
@@ -258,6 +258,12 @@ async def async_setup_entry(
         entities.append(
             TariffManagerSwitch(entry.entry_id, tariff_manager, device_info, entry)
         )
+        if tariff_manager.plans_configured("charge") or tariff_manager.plans_configured(
+            "discharge"
+        ):
+            entities.append(
+                TariffPlanSwitch(entry.entry_id, tariff_manager, device_info, entry)
+            )
 
     vslot_schedulers: dict[str, VirtualSlotScheduler] = hass.data[DOMAIN].get(
         f"{entry.entry_id}_vslots", {}
@@ -378,6 +384,60 @@ class TariffManagerSwitch(SwitchEntity):
         self._manager.set_enabled(enabled)
         if self._entry is not None:
             persist_runtime_option(self.hass, self._entry, CONF_TARIFF_ENABLED, enabled)
+
+
+class TariffPlanSwitch(SwitchEntity):
+    """Follow the price plan, or pause it, e.g. while a car charges (#42).
+
+    Off: no planned charge or discharge until it's turned on again, then the
+    slots still ahead apply. Kept over restarts.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Tariff Price Plan"
+    _attr_icon = "mdi:calendar-sync"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry_id: str,
+        manager: TariffChargingManager,
+        device_info: DeviceInfo,
+        entry: ConfigEntry | None = None,
+    ) -> None:
+        self._manager = manager
+        self._entry = entry
+        self._unsub: Any = None
+        self._attr_unique_id = f"{entry_id}_tariff_plan"
+        self._attr_device_info = device_info
+
+    async def async_added_to_hass(self) -> None:
+        self._unsub = self._manager.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub:
+            self._unsub()
+            self._unsub = None
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def is_on(self) -> bool:
+        return not self._manager.plan_paused
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self._set_paused(False)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self._set_paused(True)
+
+    def _set_paused(self, paused: bool) -> None:
+        self._manager.set_plan_paused(paused)
+        if self._entry is not None:
+            persist_runtime_option(self.hass, self._entry, CONF_PLAN_PAUSED, paused)
 
 
 class VirtualSlotSchedulerSwitch(SwitchEntity):

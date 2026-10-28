@@ -137,9 +137,9 @@
           "manual_min_soc": "Ontlaai nou eindig hier. Leeg: die Tariff Manager se minimum SOC.",
           "manual_discharge_power": "Die meeste wat Ontlaai nou uitvoer, bv. 3000 vir 3 kW. Leeg: die maksimum uitvoerkrag, anders die omsetter se gegradeerde krag.",
           "plan_import_entities": "Entiteite met die komende invoerpryse per gleuf, bv. Octopus Energy se current en next day rates of 'n Nord Pool-sensor. Met kWh om te koop, laai Tariff Manager in die goedkoopste gleuwe van elke dag in plaas van altyd wanneer die prys onder die goedkoop drempel is; die drempel beperk dan net die prys.",
-          "plan_buy_kwh": "Hoeveel om elke dag per omsetter in die goedkoopste gleuwe van die netwerk te laai. Leeg: plan af.",
+          "plan_buy_kwh": "Hoeveel om elke dag vir die hele stelsel in die goedkoopste gleuwe van die netwerk te laai. Leeg: plan af.",
           "plan_export_entities": "Entiteite met die komende uitvoerpryse per gleuf, bv. Octopus Energy se export current en next day rates. Met kWh om te verkoop, ontlaai Tariff Manager in die duurste gleuwe van elke dag; die duur drempel is dan die laagste prys waarteen dit verkoop.",
-          "plan_sell_kwh": "Hoeveel om elke dag per omsetter in die duurste gleuwe uit die battery uit te voer. Leeg: plan af."
+          "plan_sell_kwh": "Hoeveel om elke dag vir die hele stelsel in die duurste gleuwe uit die battery uit te voer. Leeg: plan af."
         }
       },
       "deyecloud": {

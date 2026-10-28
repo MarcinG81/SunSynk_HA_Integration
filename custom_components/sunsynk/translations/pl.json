@@ -137,9 +137,9 @@
           "manual_min_soc": "Rozładuj teraz kończy się na tym poziomie. Puste: minimalny SOC z Tariff Managera.",
           "manual_discharge_power": "Najwięcej, ile Rozładuj teraz oddaje do sieci, np. 3000 dla 3 kW. Puste: maksymalna moc eksportu, a bez niej moc znamionowa falownika.",
           "plan_import_entities": "Encje z nadchodzącymi cenami zakupu dla każdego slotu, np. current i next day rates z Octopus Energy albo czujnik Nord Pool. Gdy podasz kWh do kupienia, Tariff Manager ładuje w najtańszych slotach każdego dnia zamiast zawsze, gdy cena jest poniżej progu taniej energii; próg ogranicza wtedy tylko cenę.",
-          "plan_buy_kwh": "Ile ładować z sieci dziennie, na falownik, w najtańszych slotach. Puste: plan wyłączony.",
+          "plan_buy_kwh": "Ile ładować z sieci dziennie, dla całego systemu, w najtańszych slotach. Puste: plan wyłączony.",
           "plan_export_entities": "Encje z nadchodzącymi cenami sprzedaży dla każdego slotu, np. export current i next day rates z Octopus Energy. Gdy podasz kWh do sprzedania, Tariff Manager rozładowuje w najdroższych slotach każdego dnia; próg drogiej energii to wtedy najniższa cena, za jaką sprzedaje.",
-          "plan_sell_kwh": "Ile oddać z baterii do sieci dziennie, na falownik, w najdroższych slotach. Puste: plan wyłączony."
+          "plan_sell_kwh": "Ile oddać z baterii do sieci dziennie, dla całego systemu, w najdroższych slotach. Puste: plan wyłączony."
         }
       },
       "deyecloud": {

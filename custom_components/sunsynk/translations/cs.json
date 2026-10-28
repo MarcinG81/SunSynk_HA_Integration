@@ -137,9 +137,9 @@
           "manual_min_soc": "Vybít nyní skončí na této hodnotě. Prázdné: minimální SOC Tariff Manageru.",
           "manual_discharge_power": "Nejvíce, co Vybít nyní exportuje, např. 3000 pro 3 kW. Prázdné: maximální exportní výkon, jinak jmenovitý výkon střídače.",
           "plan_import_entities": "Entity s nadcházejícími nákupními cenami pro každý úsek, např. current a next day rates z Octopus Energy nebo senzor Nord Pool. S kWh k nákupu Tariff Manager nabíjí v nejlevnějších úsecích každého dne místo vždy, když je cena pod levným prahem; ten pak jen omezuje cenu.",
-          "plan_buy_kwh": "Kolik nabít ze sítě denně, na střídač, v nejlevnějších úsecích. Prázdné: plán vypnut.",
+          "plan_buy_kwh": "Kolik nabít ze sítě denně, pro celý systém, v nejlevnějších úsecích. Prázdné: plán vypnut.",
           "plan_export_entities": "Entity s nadcházejícími výkupními cenami pro každý úsek, např. export current a next day rates z Octopus Energy. S kWh k prodeji Tariff Manager vybíjí v nejdražších úsecích každého dne; drahý práh je pak nejnižší cena, za kterou prodává.",
-          "plan_sell_kwh": "Kolik exportovat z baterie denně, na střídač, v nejdražších úsecích. Prázdné: plán vypnut."
+          "plan_sell_kwh": "Kolik exportovat z baterie denně, pro celý systém, v nejdražších úsecích. Prázdné: plán vypnut."
         }
       },
       "deyecloud": {
