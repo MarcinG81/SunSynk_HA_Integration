@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Fixed
+- **The README's Battery 1/2 row is back, corrected.** beta.3 removed it as if those sensors didn't exist, but they do: Battery 1/2 SOC, Voltage, Current, Power and Temperature are created when the Sunsynk cloud reports a voltage for that battery. Many setups get none, as the cloud reports those fields as 0 or empty. (#44)
+
 ## [2.1.0-beta.4] - 2026-10-28
 
 In HACS, turn on *Show beta versions* for this integration to see it.
