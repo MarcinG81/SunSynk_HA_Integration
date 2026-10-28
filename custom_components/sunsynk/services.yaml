@@ -66,7 +66,7 @@ charge_now_start:
           mode: box
     current:
       name: Current
-      description: Charge current in A. Without it, the Charge now option, else the cheap-rate current.
+      description: Charge current in A. Without it, the Charge now option, else the cheap-rate current. Some inverters (e.g. three-phase) keep to the slot power instead.
       required: false
       selector:
         number:
@@ -83,6 +83,16 @@ charge_now_start:
           min: 1
           max: 100
           unit_of_measurement: "%"
+          mode: box
+    power:
+      name: Charge Power
+      description: The timer slot's power on each inverter, e.g. 3000 for 3 kW. Without it, the rated power.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 100000
+          unit_of_measurement: W
           mode: box
 
 charge_now_stop:
@@ -123,7 +133,7 @@ discharge_now_start:
           mode: box
     current:
       name: Current
-      description: Discharge current in A. Without it, the Discharge now option, else the peak discharge current.
+      description: Discharge current in A. Without it, the Discharge now option, else the peak discharge current. Some inverters (e.g. three-phase) keep to the export power instead.
       required: false
       selector:
         number:
@@ -143,7 +153,7 @@ discharge_now_start:
           mode: box
     power:
       name: Export Power
-      description: The most to export, e.g. 3000 for 3 kW. Without it, the Discharge now option, else the maximum export power or the rated power.
+      description: The most to export on each inverter, e.g. 3000 for 3 kW. Without it, the Discharge now option, else the maximum export power or the rated power.
       required: false
       selector:
         number:

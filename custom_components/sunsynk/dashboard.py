@@ -13,6 +13,7 @@ def build_dashboard(
     tariff_eid: Callable[[str], str | None] | None = None,
     entry_id: str = "",
     vslot_eid: Callable[[str], str | None] | None = None,
+    test_mode: bool = False,
 ) -> dict[str, Any]:
     """Return a full Lovelace dashboard config dict with correct entity IDs.
 
@@ -21,6 +22,8 @@ def build_dashboard(
         eid: Optional callable that maps sensor key to the actual registered
              entity_id, or None if not in registry.  When None is returned the
              entity is omitted from optional card sections.
+        test_mode: Tariff Manager is in test mode: each view starts with a
+             notice that nothing is written to the inverters (#42).
     """
 
     def e(key: str, suffix: str | None = None, domain: str = "sensor") -> str:
@@ -151,7 +154,7 @@ def build_dashboard(
     vslot_state = vs("state")
     has_vslots = vslot_sw is not None
 
-    return {
+    config: dict[str, Any] = {
         "views": [
             # ── VIEW 1: OVERVIEW ─────────────────────────────────────────
             {
@@ -972,3 +975,17 @@ def build_dashboard(
             },
         ]
     }
+    if test_mode and has_tariff:
+        for view in config["views"]:
+            view["cards"].insert(0, dict(_TEST_MODE_NOTICE))
+    return config
+
+
+_TEST_MODE_NOTICE: dict[str, Any] = {
+    "type": "markdown",
+    "content": (
+        '<ha-alert alert-type="warning">**Tariff Manager is in test mode:** '
+        "nothing is written to the inverters. Turn test mode off in Configure "
+        "for it to charge and discharge.</ha-alert>"
+    ),
+}

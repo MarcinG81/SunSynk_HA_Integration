@@ -148,6 +148,21 @@ class TestTariffGating:
         card_titles = [c.get("title") for c in _overview_stack_cards(config)]
         assert "Tariff Manager" not in card_titles
 
+    def test_test_mode_notice_tops_every_view(self):
+        config = build_dashboard(
+            "myprefix", tariff_eid=lambda key: f"sensor.resolved_{key}", test_mode=True
+        )
+        for view in config["views"]:
+            assert "test mode" in view["cards"][0]["content"]
+
+    def test_no_test_mode_notice_without_tariff_manager_or_test_mode(self):
+        for config in (
+            build_dashboard("myprefix", test_mode=True),
+            build_dashboard("myprefix", tariff_eid=lambda key: f"sensor.resolved_{key}"),
+        ):
+            for view in config["views"]:
+                assert "test mode" not in str(view["cards"][0].get("content", ""))
+
     def test_overview_tariff_summary_card_present_when_configured(self):
         config = build_dashboard("myprefix", tariff_eid=lambda key: f"sensor.resolved_{key}")
         card_titles = [c.get("title") for c in _overview_stack_cards(config)]

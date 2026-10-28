@@ -195,7 +195,7 @@ async def test_dashboard_builder_resolves_registered_entity_id():
         {"sunsynk-abcdef12": dashboard}
     )
 
-    def _build(_prefix, entity_id, *_args):
+    def _build(_prefix, entity_id, *_args, **_kwargs):
         assert entity_id("battery_soc") == "sensor.battery_soc"
         return {}
 

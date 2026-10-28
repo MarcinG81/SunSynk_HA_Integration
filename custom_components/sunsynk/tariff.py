@@ -45,8 +45,9 @@ class ManualSession:
     """A charge or discharge started by hand (#39), until stopped or `until`.
 
     `current`, `soc` (charge: target, discharge: minimum) and `power` (the
-    export cap while discharging) override the Tariff Manager's own values;
-    None means its value.
+    timer slot's power: the export cap while discharging, the charge power
+    while charging) override the Tariff Manager's own values; None means its
+    value.
     """
 
     mode: str
@@ -1009,10 +1010,12 @@ class TariffChargingManager:
     def _plan_power_kw(self, direction: str, targets: list[str]) -> float:
         """What the whole system charges or discharges at, in kW.
 
-        Per inverter, the Tariff Manager current at the battery voltage (51.2 V
-        until one is reported), within the BMS limit shared in a parallel
-        group, the inverter's rated power and, for a discharge, its share of
-        the maximum export power; times the inverters in each group (#42).
+        Per inverter, the power the Virtual Slot Scheduler writes into the
+        timer slot, which the inverter keeps to rather than the current (#42):
+        its rated power and, for a discharge, within its share of the maximum
+        export power; times the inverters in each group. Until the rated power
+        is known, the Tariff Manager current at the battery voltage (51.2 V
+        until one is reported), within the BMS limit shared in the group.
         """
         amps = (
             self._peak_discharge_current
@@ -1023,11 +1026,12 @@ class TariffChargingManager:
         total = 0.0
         for serial in targets:
             data = (self._coordinator.data or {}).get(serial, {})
-            volts = _positive(data.get("battery", {}).get("voltage")) or 51.2
-            watts = self._safe(serial, direction, int(amps)) * volts
             rated = _positive(data.get("inverter", {}).get("ratePower"))
             if rated:
-                watts = min(watts, rated)
+                watts = rated
+            else:
+                volts = _positive(data.get("battery", {}).get("voltage")) or 51.2
+                watts = self._safe(serial, direction, int(amps)) * volts
             inverters = max(1, sizes.get(serial, 1))
             if direction == "discharge" and self._max_export_power:
                 watts = min(watts, self._max_export_power / inverters)
@@ -1315,7 +1319,7 @@ class TariffChargingManager:
                 until,
                 current,
                 soc,
-                power if mode == MANUAL_DISCHARGE else None,
+                power,
             )
             if until is not None:
                 self._manual_timers[serial] = async_track_point_in_utc_time(

@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.0-beta.4] - 2026-10-28
+
+In HACS, turn on *Show beta versions* for this integration to see it.
+
+### Fixed
+- **The price plan took too many slots on inverters that keep to the slot power.** It worked out the power from the Tariff Manager current × battery voltage, but a timer slot charges and discharges at the power the slot is given, whatever the current (tested on a three-phase parallel pair). The plan now uses the same power the Virtual Slot Scheduler writes into the slot: per inverter the rated power and, for selling, its share of the maximum export power, times the inverters. A pair of 12 kW inverters with a 12 kW export limit sells 10 kWh in two half-hour slots, not four. Found by pay4property. (#42)
+
+### Added
+- **`power` on Charge Now** (`sunsynk.charge_now_start`), the timer slot's power on each inverter, like Discharge Now's: without it, the rated power, as before. The `current` of both actions stays, as some inverters do keep to it; their descriptions now say that others keep to the slot power. Suggested by pay4property. (#42)
+- **A test mode notice** at the top of each view of the generated dashboard while Tariff Manager is in test mode. Suggested by pay4property. (#42)
+
 ## [2.1.0-beta.3] - 2026-10-28
 
 In HACS, turn on *Show beta versions* for this integration to see it.

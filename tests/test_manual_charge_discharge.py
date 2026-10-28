@@ -416,6 +416,11 @@ async def test_the_scheduler_uses_the_session_s_soc_and_power(
     await manager.async_start_manual(SERIAL, MANUAL_CHARGE, soc=60)
     charge = scheduler._resolve_override()
     assert charge.target_soc == 60
+    assert charge.sell_power == 0  # the rated power
+
+    # #42: the slot power is what the inverter charges at.
+    await manager.async_start_manual(SERIAL, MANUAL_CHARGE, power=4000)
+    assert scheduler._resolve_override().sell_power == 4000
 
     await manager.async_stop_manual(SERIAL, MANUAL_CHARGE)
     manager._charging_active_serials.add(SERIAL)  # a price charge: its own values
@@ -452,3 +457,38 @@ async def test_the_action_checks_current_and_power_limits(actions):
     manager.async_start_manual.assert_awaited_once_with(
         "MASTER", MANUAL_DISCHARGE, None, current=None, soc=30, power=3000
     )
+
+
+@pytest.mark.asyncio
+async def test_the_charge_action_takes_a_power_within_the_rated_power(actions):
+    hass, handlers = actions
+    coordinator = MagicMock()
+    coordinator.resolve_write_target.return_value = "MASTER"
+    manager = MagicMock(async_start_manual=AsyncMock())
+    hass.data = {DOMAIN: {"entry_tariff": manager}}
+    scheduler = MagicMock()
+    scheduler.charge_power_limit.return_value = (8000, "inverter rated 8000 W")
+
+    with (
+        patch.object(integration, "_async_ensure_control_allowed", AsyncMock()),
+        patch.object(integration, "_find_coordinator", return_value=coordinator),
+        patch.object(integration, "_find_entry_id_for_serial", return_value="entry"),
+        patch.object(integration, "_find_virtual_slot_scheduler", return_value=scheduler),
+    ):
+        with pytest.raises(ServiceValidationError, match="may charge at most 8000 W"):
+            await handlers["charge_now_start"](_call({"serial": "INV1", "power": 9000}))
+        await handlers["charge_now_start"](_call({"serial": "INV1", "power": 3000}))
+
+    manager.async_start_manual.assert_awaited_once_with(
+        "MASTER", MANUAL_CHARGE, None, current=None, soc=None, power=3000
+    )
+
+
+def test_the_charge_power_limit_is_the_rated_power(mock_coordinator):
+    from custom_components.sunsynk.virtual_slots import VirtualSlotScheduler
+
+    scheduler = VirtualSlotScheduler(MagicMock(), mock_coordinator, "entry", SERIAL)
+    mock_coordinator.data[SERIAL]["inverter"] = {"ratePower": 8000}
+    assert scheduler.charge_power_limit() == (8000, "inverter rated 8000 W")
+    mock_coordinator.data[SERIAL]["inverter"] = {}
+    assert scheduler.charge_power_limit() == (None, "")

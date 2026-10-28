@@ -902,7 +902,9 @@ class VirtualSlotScheduler:
                 target_soc=(
                     manual.soc if manual and manual.soc is not None else tm.target_soc
                 ),
-                sell_power=0,
+                # The slot power is also the charge power (#42); 0 means
+                # the rated power.
+                sell_power=(manual.power if manual else None) or 0,
                 source="price_override",
             )
         if tm.is_discharging_active_for(self._serial):
@@ -967,6 +969,11 @@ class VirtualSlotScheduler:
             return None
         inverters = max(1, group_sizes(self._coordinator).get(self._serial, 1))
         return max(1, int(self._max_export_power) // inverters)
+
+    def charge_power_limit(self) -> tuple[int | None, str]:
+        """Most a charge window may draw on this inverter, in W, and why."""
+        rated = self._rated_power()
+        return rated, (f"inverter rated {rated} W" if rated is not None else "")
 
     def sell_power_limit(self) -> tuple[int | None, str]:
         """Most a discharge window may sell on this inverter, in W, and why.
@@ -1241,11 +1248,12 @@ class VirtualSlotScheduler:
         # most the inverter may draw from the battery for the house load.
         # 0 W pushed the whole house onto the grid while VSS was holding an
         # idle window (#21), so only a discharge window carries a real cap.
-        pac = (
-            resolution.sell_power
-            if resolution.mode == MODE_DISCHARGE
-            else self._uncapped_sell_power()
-        )
+        if resolution.mode == MODE_DISCHARGE:
+            pac = resolution.sell_power
+        elif resolution.mode == MODE_CHARGE and resolution.source == "price_override":
+            pac = resolution.sell_power or self._uncapped_sell_power()
+        else:
+            pac = self._uncapped_sell_power()
         rated = self._rated_power()
         if resolution.mode == MODE_DISCHARGE and rated is not None and pac > rated:
             # More than the inverter can deliver means nothing, and would

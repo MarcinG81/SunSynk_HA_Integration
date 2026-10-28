@@ -274,6 +274,21 @@ def test_the_power_stays_within_the_rated_power_and_export_share(
     assert manager._plan_power_kw("charge", [SERIAL]) == pytest.approx(3.0)
 
 
+def test_the_plan_uses_the_slot_power_not_the_current(mock_hass, coordinator):
+    """#42: a pair of 12 kW inverters keeps to the slot power, 6 kW each
+    within a 12 kW export limit, whatever the 27 A current."""
+    _pair(coordinator)
+    coordinator.data[SERIAL]["inverter"] = {"ratePower": 12000}
+    coordinator.data[SERIAL]["battery"]["voltage"] = 196.7
+    manager = _manager(mock_hass, coordinator, sell_kwh=10)
+    manager._peak_discharge_current = 27
+    manager._cheap_current = 5
+    manager._max_export_power = 12000
+
+    assert manager._plan_power_kw("discharge", [SERIAL]) == pytest.approx(12.0)
+    assert manager._plan_power_kw("charge", [SERIAL]) == pytest.approx(24.0)
+
+
 @pytest.mark.asyncio
 async def test_a_day_under_way_gets_its_share_of_the_amount(
     mock_hass, coordinator, states

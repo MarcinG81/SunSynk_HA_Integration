@@ -169,6 +169,8 @@ _NOW_START_FIELDS = {
     vol.Optional("current"): vol.All(
         vol.Coerce(int), vol.Range(min=1, max=MAX_CURRENT_A)
     ),
+    # The timer slot's power, per inverter (#42).
+    vol.Optional("power"): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_POWER_W)),
 }
 _SERVICE_CHARGE_NOW_SCHEMA = vol.Schema(
     {
@@ -180,9 +182,6 @@ _SERVICE_DISCHARGE_NOW_SCHEMA = vol.Schema(
     {
         **_NOW_START_FIELDS,
         vol.Optional("min_soc"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
-        vol.Optional("power"): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=MAX_POWER_W)
-        ),
     }
 )
 _SERVICE_NOW_STOP_SCHEMA = vol.Schema({vol.Required("serial"): str})
@@ -646,11 +645,16 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             power = call.data.get("power")
             scheduler = _find_virtual_slot_scheduler(hass, serial)
             if power is not None and scheduler is not None:
-                max_sell, why = scheduler.sell_power_limit()
-                if max_sell is not None and power > max_sell:
+                charging = mode == MANUAL_CHARGE
+                most, why = (
+                    scheduler.charge_power_limit()
+                    if charging
+                    else scheduler.sell_power_limit()
+                )
+                if most is not None and power > most:
                     raise ServiceValidationError(
-                        f"Power {power} W is too high: inverter {target} may sell "
-                        f"at most {max_sell} W ({why})"
+                        f"Power {power} W is too high: inverter {target} may "
+                        f"{'charge' if charging else 'sell'} at most {most} W ({why})"
                     )
             await manager.async_start_manual(
                 target,
@@ -1147,7 +1151,17 @@ async def _async_setup_dashboard(
     vslot_eid_fn = (lambda key: vslot_uid_map.get(key)) if vslot_uid_map else None
 
     dashboard_config = build_dashboard(
-        prefix, eid, forecast_eid_fn, tariff_eid_fn, entry.entry_id, vslot_eid_fn
+        prefix,
+        eid,
+        forecast_eid_fn,
+        tariff_eid_fn,
+        entry.entry_id,
+        vslot_eid_fn,
+        test_mode=bool(
+            entry.options.get(
+                CONF_TARIFF_TEST_MODE, entry.data.get(CONF_TARIFF_TEST_MODE, False)
+            )
+        ),
     )
 
     lovelace = hass.data.get("lovelace")
