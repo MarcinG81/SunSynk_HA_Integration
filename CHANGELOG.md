@@ -3,7 +3,9 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased — 2.1.0-beta.2]
+## [2.1.0-beta.2] - 2026-10-28
+
+In HACS, turn on *Show beta versions* for this integration to see it. **If you set the daily kWh to buy or sell in beta.1 on a parallel system, set it again for the whole system** (e.g. double it for a pair).
 
 ### Changed
 - **The amount to buy or sell a day is for the whole system,** like the maximum export power: 10 kWh means 10 kWh for a parallel pair, not for each inverter. If you set it per inverter in beta.1, double it for a pair. (#42)
