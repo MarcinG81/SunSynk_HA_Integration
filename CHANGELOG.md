@@ -3,9 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.1.0-beta.3] - 2026-10-28
+
+In HACS, turn on *Show beta versions* for this integration to see it.
 
 ### Fixed
+- **An impossible energy total sent for hours still reached the Energy dashboard.** Since 28 October the Sunsynk cloud (and the Connect app) has reported some grid import totals as around 24,680,000 kWh, and today's import as an impossible 395.8 kWh, on every reading rather than once. The beta.2 guard took such a value after an hour, and took any value as it was after a restart. Now a rise faster than the inverters could manage is never taken: the energy counters keep their last good value until the cloud is right again, and that value is restored after a restart. The limit is twice the rated power of the inverters in the parallel group, at least 16 kW, plus 1 kWh; a real rise above it is only taken later, once it fits. A lifetime total reported lower is still taken after an hour, so a replaced inverter isn't held back. Found by nickcmaynard. (#43)
+- **The README listed Battery 1/2 SOC, Voltage, Power and Temp sensors** that the integration has never had. The row is gone. Found by Pa-wel. (#44)
 - **The diagnostics file showed the plant's ID** on each of the plant's tariff rates (`stationId`). It is now masked like the other IDs. (#44)
 
 ## [2.1.0-beta.2] - 2026-10-28

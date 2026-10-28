@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
@@ -41,6 +42,7 @@ from .const import (
     is_deyecloud,
 )
 from .coordinator import SolarForecastCoordinator, SunsynkCoordinator
+from .current_limits import group_sizes
 from .deyecloud.mapping import PROVIDED as DEYECLOUD_PROVIDED
 from .helpers import build_device_info
 
@@ -146,7 +148,7 @@ async def async_setup_entry(
             uid = f"{serial}_{description.key}"
             registered_uids.add(uid)
             entities.append(
-                SunsynkSensor(coordinator, serial, description, device_info)
+                _sunsynk_sensor(coordinator, serial, description, device_info)
             )
         entities.append(InverterInternalPowerSensor(coordinator, serial, device_info))
         for helper in BATTERY_HELPERS:
@@ -175,7 +177,7 @@ async def async_setup_entry(
                 if uid not in registered_uids:
                     registered_uids.add(uid)
                     new_entities.append(
-                        SunsynkSensor(coordinator, serial, desc, device_info)
+                        _sunsynk_sensor(coordinator, serial, desc, device_info)
                     )
         if new_entities:
             async_add_entities(new_entities)
@@ -423,14 +425,18 @@ def _resolve_value(data: dict[str, Any], path: str) -> Any:
 
 _LOGGER = logging.getLogger(__name__)
 
-# An energy counter may rise by at most this, per inverter, per hour since the
-# last accepted reading: three times the rated power, or 50 kW if that's more
-# (grid import also feeds loads the inverter doesn't power), plus 1 kWh.
-_COUNTER_RATED_FACTOR = 3
-_COUNTER_MIN_KW = 50
+# An energy counter may rise by at most this per hour since the last accepted
+# reading: twice the rated power of the inverters in the parallel group, or
+# 16 kW if that's more (grid import also feeds loads the inverter doesn't
+# power), plus 1 kWh. A real rise above it is only delayed: the allowance
+# grows with time, so the reading is taken once it fits.
+_COUNTER_RATED_FACTOR = 2
+_COUNTER_MIN_KW = 16
 _COUNTER_MARGIN_KWH = 1.0
-# A reading kept out for this long becomes the new baseline, so a counter
-# that really was reset or replaced isn't held back for good.
+# A lifetime counter reported lower for this long becomes the new baseline,
+# so a counter that really was reset or replaced isn't held back for good. A
+# rise is never given up on: the cloud has sent the same impossible total for
+# a whole day (#43).
 _COUNTER_GIVE_UP = timedelta(hours=1)
 # Data keys of the lifetime counters; the others reset each day, month or year.
 _LIFETIME_KEYS = frozenset(
@@ -449,7 +455,8 @@ class _CounterGuard:
     down, or a small dip in a daily counter (cloud jitter, which Home
     Assistant would also warn about) keeps the last good value instead. A
     daily, monthly or yearly counter falling to well below its last value is
-    its reset and is taken.
+    its reset and is taken. The last good value is restored at start-up, so
+    a restart while the cloud is wrong doesn't take its reading either.
     """
 
     def __init__(self, lifetime: bool) -> None:
@@ -457,6 +464,10 @@ class _CounterGuard:
         self._value: float | None = None
         self._at: datetime | None = None
         self._held_since: datetime | None = None
+
+    def restore(self, value: float, at: datetime) -> None:
+        if self._value is None:
+            self._accept(value, at)
 
     def filter(self, value: float, now: datetime, limit_kw: float, name: str) -> float:
         if self._value is None or self._at is None:
@@ -478,7 +489,7 @@ class _CounterGuard:
                     value,
                     self._value,
                 )
-        elif now - self._held_since >= _COUNTER_GIVE_UP:
+        elif rise < 0 and self._lifetime and now - self._held_since >= _COUNTER_GIVE_UP:
             _LOGGER.warning(
                 "%s: the Sunsynk cloud has reported %s kWh for over an hour, taking it",
                 name,
@@ -532,7 +543,10 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
             rated_kw = 0.0
         if not math.isfinite(rated_kw):
             rated_kw = 0.0
-        limit_kw = max(_COUNTER_RATED_FACTOR * rated_kw, _COUNTER_MIN_KW)
+        inverters = group_sizes(self.coordinator).get(
+            self.coordinator.resolve_write_target(self._serial), 1
+        )
+        limit_kw = max(_COUNTER_RATED_FACTOR * rated_kw * inverters, _COUNTER_MIN_KW)
         return self._guard.filter(
             value, dt_util.utcnow(), limit_kw, self.entity_id or self.unique_id
         )
@@ -566,6 +580,34 @@ class SunsynkSensor(CoordinatorEntity[SunsynkCoordinator], SensorEntity):
             if self.entity_description.state_class is not None:
                 return None
             return str(value) if value != "" else None
+
+
+class SunsynkEnergySensor(SunsynkSensor, RestoreSensor):
+    """An energy counter, its guard starting from the value it had before."""
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        data = await self.async_get_last_sensor_data()
+        state = await self.async_get_last_state()
+        if self._guard is None or data is None or state is None:
+            return
+        try:
+            value = float(data.native_value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return
+        if math.isfinite(value):
+            self._guard.restore(value, state.last_updated)
+
+
+def _sunsynk_sensor(
+    coordinator: SunsynkCoordinator,
+    serial: str,
+    description: SunsynkSensorEntityDescription,
+    device_info: DeviceInfo,
+) -> SunsynkSensor:
+    if description.state_class == SensorStateClass.TOTAL_INCREASING:
+        return SunsynkEnergySensor(coordinator, serial, description, device_info)
+    return SunsynkSensor(coordinator, serial, description, device_info)
 
 
 @dataclass(frozen=True, kw_only=True)

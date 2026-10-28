@@ -240,7 +240,6 @@ Each inverter appears as a **device** in Home Assistant with the following entit
 | Battery Discharge Today | kWh | Energy discharged today |
 | Battery Charge Total | kWh | Lifetime charged |
 | Battery Discharge Total | kWh | Lifetime discharged |
-| Battery 1/2 SOC, Voltage, Power, Temp | various | Per-battery data (parallel batteries) |
 
 Worked out by the integration from the readings above (2.1):
 
