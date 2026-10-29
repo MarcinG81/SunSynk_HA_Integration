@@ -56,13 +56,13 @@ The difficult reports are what made the integration better.
 
 ### Screenshots
 
-*From a demo parallel pair (two 12 kW inverters), not a real installation.*
+*From demo systems, not a real installation.*
 
 The optional generated dashboard, with the bundled Sunsynk Power Flow Card:
 
 ![Generated dashboard: power flow, battery, solar, grid and Tariff Manager](docs/images/dashboard-overview.png)
 
-Tariff Manager's own tab, with every threshold and current editable in place:
+Tariff Manager's own tab, with every threshold and current editable in place, here in test mode with the price plan *(2.1)*:
 
 ![Tariff Manager tab](docs/images/dashboard-tariff.png)
 
