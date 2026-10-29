@@ -241,6 +241,7 @@ Each inverter appears as a **device** in Home Assistant with the following entit
 | Battery Charge Total | kWh | Lifetime charged |
 | Battery Discharge Total | kWh | Lifetime discharged |
 | Battery 1/2 SOC, Voltage, Current, Power, Temp | various | Per-battery data, only when the Sunsynk cloud reports a voltage for that battery (`batteryVolt1` / `batteryVolt2`); many setups get none |
+| Battery Pack 1, 2… SOC, SOH, Voltage, Current, Power, Temperature, Cycles | various | Each Sunsynk battery bank and pack the cloud lists under Equipment → Battery: pack 1 is the bank (`…M01`), then the packs behind it. Only the fields a pack reports; batteries of other makes aren't listed. The list is read again every hour |
 
 Worked out by the integration from the readings above (2.1):
 

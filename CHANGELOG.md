@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **Battery Pack sensors for Sunsynk batteries**: SOC, SOH, voltage, current, power, temperature and cycles of each bank and pack the Sunsynk cloud lists under Equipment → Battery, as the sunsynk.net battery page shows them. Pack 1 is the bank (`…M01`), then the packs behind it, so the packs' SOCs can be compared, e.g. to be told when they drift apart. Only the fields a pack reports get a sensor. Batteries of other makes aren't listed, so they get none. The list is read again every hour, the readings on every update, and a failed read never holds up the rest. Pack serials are left out of diagnostics. Found with Pa-wel. (#44)
+
 ## [2.1.0-beta.5] - 2026-10-29
 
 In HACS, turn on *Show beta versions* for this integration to see it.

@@ -73,6 +73,10 @@ async def _setup(hass, options):
             "custom_components.sunsynk.api.client.SunsynkClient.async_write_settings",
             AsyncMock(),
         ),
+        patch(
+            "custom_components.sunsynk.api.client.SunsynkClient.async_get_battery_packs",
+            AsyncMock(return_value=[]),
+        ),
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
@@ -173,6 +177,10 @@ async def _setup_parallel(hass, options):
         patch(
             "custom_components.sunsynk.api.client.SunsynkClient.async_get_plant_info",
             AsyncMock(return_value={}),
+        ),
+        patch(
+            "custom_components.sunsynk.api.client.SunsynkClient.async_get_battery_packs",
+            AsyncMock(return_value=[]),
         ),
     )
     for p in patches:

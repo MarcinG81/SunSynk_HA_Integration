@@ -7,6 +7,7 @@ import logging
 import re
 from datetime import date
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -254,6 +255,57 @@ class SunsynkClient:
         url = f"{self._base}/api/v1/plant/{plant_id}/income"
         await self._post(session, url, payload, params={"lan": "en"})
         _LOGGER.debug("Plant income settings written for plant %s", plant_id)
+
+    async def async_get_battery_packs(
+        self, session: aiohttp.ClientSession, serial: str
+    ) -> list[dict[str, str]]:
+        """The Sunsynk batteries on an inverter: each bank, then its packs (#44).
+
+        The cloud lists a bank (`<inverter serial>M01`) under Equipment →
+        Battery; the packs behind it come from the bank's `slave` list, as
+        the sunsynk.net battery page reads them. Batteries of other makes
+        aren't listed.
+        """
+        listing = await self._get(
+            session,
+            f"{self._base}/api/v1/batteries",
+            params={"pageNumber": 1, "pageSize": 10, "status": -1, "invSn": serial},
+        )
+        packs: list[dict[str, str]] = []
+        for bank in listing.get("infos") or []:
+            if not isinstance(bank, dict) or not bank.get("sn"):
+                continue
+            if bank.get("invSn") and str(bank["invSn"]) != serial:
+                continue
+            gsn = str(bank.get("gsn") or "")
+            packs.append({"sn": str(bank["sn"]), "gsn": gsn})
+            try:
+                package_num = int(bank.get("packageNum") or 0)
+            except (TypeError, ValueError):
+                package_num = 0
+            if bank.get("id") is None or not (bank.get("hasSlave") or package_num > 1):
+                continue
+            slaves = await self._get(
+                session,
+                f"{self._base}/api/v1/batteries/{quote(str(bank['id']), safe='')}/slave",
+                params={"id": bank["id"]},
+            )
+            for slave in slaves if isinstance(slaves, list) else []:
+                if isinstance(slave, dict) and slave.get("sn"):
+                    packs.append(
+                        {"sn": str(slave["sn"]), "gsn": str(slave.get("gsn") or gsn)}
+                    )
+        return packs
+
+    async def async_get_battery_pack_realtime(
+        self, session: aiohttp.ClientSession, serial: str, pack: dict[str, str]
+    ) -> dict[str, Any]:
+        """A battery bank's or pack's own readings: SOC, SOH, voltage... (#44)."""
+        params = {"sn": pack["sn"], "invSn": serial}
+        if pack.get("gsn"):
+            params["gsn"] = pack["gsn"]
+        url = f"{self._base}/api/v1/battery/{quote(pack['sn'], safe='')}/realtime"
+        return await self._get(session, url, params=params)
 
     async def async_fetch_all(
         self, session: aiohttp.ClientSession, serial: str

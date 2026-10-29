@@ -370,6 +370,66 @@ def _build_dynamic_descriptions(
                     )
                 )
 
+    # Each Sunsynk battery bank and pack the cloud lists, with its own SOC (#44):
+    # pack 1 is the bank (`...M01`), then the packs behind it. A bank doesn't
+    # report cycles or cell data, a pack no limits, so only reported fields
+    # get a sensor.
+    packs = serial_data.get("packs", {}).get("packs", [])
+    for idx, pack in enumerate(packs):
+        for field_key, name_suffix, api_key, fallback, unit, dev_class in [
+            ("soc", "SOC", "soc", None, PERCENTAGE, SensorDeviceClass.BATTERY),
+            ("soh", "SOH", "soh", None, PERCENTAGE, None),
+            (
+                "voltage",
+                "Voltage",
+                "voltage",
+                None,
+                UnitOfElectricPotential.VOLT,
+                SensorDeviceClass.VOLTAGE,
+            ),
+            (
+                "current",
+                "Current",
+                "current",
+                None,
+                UnitOfElectricCurrent.AMPERE,
+                SensorDeviceClass.CURRENT,
+            ),
+            (
+                "power",
+                "Power",
+                "power",
+                None,
+                UnitOfPower.WATT,
+                SensorDeviceClass.POWER,
+            ),
+            (
+                "temp",
+                "Temperature",
+                "temp",
+                "aveTemp",
+                UnitOfTemperature.CELSIUS,
+                SensorDeviceClass.TEMPERATURE,
+            ),
+            ("cycles", "Cycles", "cycleNumber", None, None, None),
+        ]:
+            if pack.get(api_key) is None and (
+                fallback is None or pack.get(fallback) is None
+            ):
+                continue
+            descriptions.append(
+                SunsynkSensorEntityDescription(
+                    key=f"battery_pack{idx + 1}_{field_key}",
+                    name=f"Battery Pack {idx + 1} {name_suffix}",
+                    endpoint="packs",
+                    data_key=f"packs.{idx}.{api_key}",
+                    fallback_data_key=f"packs.{idx}.{fallback}" if fallback else "",
+                    native_unit_of_measurement=unit,
+                    device_class=dev_class,
+                    state_class=SensorStateClass.MEASUREMENT,
+                )
+            )
+
     # Generator/micro-inverter power — only the /flow endpoint reports these, and
     # only when that port is actually wired up (existsGen/existsMin flags). A
     # micro-inverter physically wired into the generator port (#17) may surface

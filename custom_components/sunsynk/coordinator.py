@@ -52,6 +52,8 @@ _VERIFY_WRITE_OFFSETS = (5, 10, 15, 30, 60)
 # by then means something else changed it, e.g. the Sunsynk app, and it is
 # left alone.
 _MAX_RESENDS = 3
+# How often the list of Sunsynk battery banks and packs is read again (#44).
+_BATTERY_PACKS_REFRESH = timedelta(hours=1)
 _UNKNOWN = object()
 
 
@@ -91,6 +93,8 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._verify_tasks: set[asyncio.Task[None]] = set()
         # serial -> last parallel role read from valid data (2.0 audit A2).
         self._known_roles: dict[str, str | None] = {}
+        # serial -> (when read, the Sunsynk battery banks and packs listed).
+        self._battery_packs: dict[str, tuple[datetime, list[dict[str, str]]]] = {}
 
     async def _async_get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -247,6 +251,10 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             else:
                 result[serial]["plant"] = {}
 
+            result[serial]["packs"] = await SunsynkCoordinator._async_battery_packs(
+                self, client, session, serial
+            )
+
         if self.serials and len(inverter_failures) == len(self.serials):
             serial, err = inverter_failures[0]
             raise UpdateFailed(
@@ -254,6 +262,38 @@ class SunsynkCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             ) from err
 
         return result
+
+    async def _async_battery_packs(
+        self, client: SunsynkClient, session: aiohttp.ClientSession, serial: str
+    ) -> dict[str, Any]:
+        """Each Sunsynk battery bank's and pack's own readings (#44).
+
+        The list of banks and packs is read again every hour; their readings
+        on every update. Most setups have none listed. A failed read keeps
+        the last list or readings, and the list isn't asked for again before
+        the hour is up.
+        """
+        cache = getattr(self, "_battery_packs", None)
+        if cache is None:
+            cache = self._battery_packs = {}
+        read_at, packs = cache.get(serial, (None, []))
+        now = dt_util.utcnow()
+        if read_at is None or now - read_at >= _BATTERY_PACKS_REFRESH:
+            try:
+                packs = await client.async_get_battery_packs(session, serial)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Could not list battery packs for %s: %s", serial, err)
+            cache[serial] = (now, packs)
+        previous = (self.data or {}).get(serial, {}).get("packs", {})
+        try:
+            readings = [
+                await client.async_get_battery_pack_realtime(session, serial, pack)
+                for pack in packs
+            ]
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Could not read battery packs for %s: %s", serial, err)
+            return previous
+        return {"packs": readings} if readings else {}
 
     def resolve_write_target(self, serial: str) -> str:
         """Return the physical inverter that owns writes for ``serial``.

@@ -57,6 +57,12 @@ _TO_REDACT = {
     # The plant id again, on each of the plant's tariff rates (#44), and on
     # Deye Cloud device data.
     "stationId",
+    # Serials in a Sunsynk battery bank's or pack's readings (#44).
+    "invSn",
+    "packSN",
+    "packSn",
+    "bmsSn",
+    "parentSn",
     # Deye Cloud entries: the developer app, the login and its password hash.
     CONF_DEYE_APP_ID,
     CONF_DEYE_APP_SECRET,
