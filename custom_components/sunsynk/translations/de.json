@@ -26,7 +26,7 @@
       },
       "deyecloud": {
         "title": "Deye Cloud",
-        "description": "Erstellen Sie eine kostenlose Entwickler-App auf developer.deyecloud.com (mit Ihrem Deye-Cloud-Konto anmelden) und kopieren Sie App ID und App Secret. Deye-Cloud-Wechselrichter sind vorerst nur lesbar: nur Sensoren, keine Steuerung.",
+        "description": "Erstellen Sie eine kostenlose Entwickler-App auf developer.deyecloud.com (mit Ihrem Deye-Cloud-Konto anmelden) und kopieren Sie App ID und App Secret. Die Deye-Cloud-Unterstützung wird noch getestet: Einstellungen ändern ist experimentell und bleibt aus, bis Sie es unter Konfigurieren einschalten.",
         "data": {
           "region": "Rechenzentrum",
           "app_id": "App ID",

@@ -26,7 +26,7 @@
       },
       "deyecloud": {
         "title": "Deye Cloud",
-        "description": "Cree una aplicación de desarrollador gratuita en developer.deyecloud.com (inicie sesión con su cuenta de Deye Cloud) y copie su App ID y App Secret. Por ahora los inversores de Deye Cloud son de solo lectura: solo sensores, sin controles.",
+        "description": "Cree una aplicación de desarrollador gratuita en developer.deyecloud.com (inicie sesión con su cuenta de Deye Cloud) y copie su App ID y App Secret. La compatibilidad con Deye Cloud aún está en pruebas: cambiar ajustes es experimental y sigue desactivado hasta que lo active en Configurar.",
         "data": {
           "region": "Centro de datos",
           "app_id": "App ID",

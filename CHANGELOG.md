@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **The house showed 0 W on the dashboard's power flow** while it was drawing power, e.g. from the battery at night. The card worked the house out from the inverter's and the grid's power, and read 0 W whenever the cloud reported those as 0. It now shows the cloud's load power (`Load Total Power`), as the Sunsynk app does. The generated dashboard picks it up on the next restart, and the YAML example uses it too.
+- **The Deye Cloud setup form said Deye Cloud inverters were read-only, with no controls.** Settings can be changed through Deye Cloud since beta.1, as an experimental option in Configure. The form now says so, in every language.
 
 ### Documentation
 - **The README and the HACS page describe Deye Cloud**: supported inverters, what's needed (a developer app from developer.deyecloud.com), the setup fields, what works and what doesn't yet. Until now only the wiki did.

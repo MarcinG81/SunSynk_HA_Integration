@@ -26,7 +26,7 @@
       },
       "deyecloud": {
         "title": "Deye Cloud",
-        "description": "Vytvořte si bezplatnou vývojářskou aplikaci na developer.deyecloud.com (přihlaste se účtem Deye Cloud) a zkopírujte její App ID a App Secret. Střídače Deye Cloud jsou zatím jen pro čtení: pouze senzory, bez ovládání.",
+        "description": "Vytvořte si bezplatnou vývojářskou aplikaci na developer.deyecloud.com (přihlaste se účtem Deye Cloud) a zkopírujte její App ID a App Secret. Podpora Deye Cloud se ještě testuje: změny nastavení jsou experimentální a zůstanou vypnuté, dokud je nezapnete v Konfigurovat.",
         "data": {
           "region": "Datové centrum",
           "app_id": "App ID",

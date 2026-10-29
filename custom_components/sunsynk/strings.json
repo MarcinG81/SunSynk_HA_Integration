@@ -26,7 +26,7 @@
       },
       "deyecloud": {
         "title": "Deye Cloud",
-        "description": "Create a free developer app at developer.deyecloud.com (sign in with your Deye Cloud account) and copy its App ID and App Secret. Deye Cloud inverters are read-only for now: sensors only, no controls.",
+        "description": "Create a free developer app at developer.deyecloud.com (sign in with your Deye Cloud account) and copy its App ID and App Secret. Deye Cloud support is still being tested: changing settings is experimental and stays off until you turn it on in Configure.",
         "data": {
           "region": "Data centre",
           "app_id": "App ID",

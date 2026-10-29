@@ -26,7 +26,7 @@
       },
       "deyecloud": {
         "title": "Deye Cloud",
-        "description": "在 developer.deyecloud.com 创建免费的开发者应用（使用您的 Deye Cloud 账户登录），并复制其 App ID 和 App Secret。Deye Cloud 逆变器目前仅支持读取：只有传感器，没有控制。",
+        "description": "在 developer.deyecloud.com 创建免费的开发者应用（使用您的 Deye Cloud 账户登录），并复制其 App ID 和 App Secret。Deye Cloud 支持仍在测试中：更改设置为实验性功能，在“配置”中开启之前保持关闭。",
         "data": {
           "region": "数据中心",
           "app_id": "App ID",

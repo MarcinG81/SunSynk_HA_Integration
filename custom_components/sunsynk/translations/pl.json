@@ -26,7 +26,7 @@
       },
       "deyecloud": {
         "title": "Deye Cloud",
-        "description": "Utwórz darmową aplikację deweloperską na developer.deyecloud.com (zaloguj się kontem Deye Cloud) i skopiuj jej App ID oraz App Secret. Falowniki Deye Cloud są na razie tylko do odczytu: same czujniki, bez sterowania.",
+        "description": "Utwórz darmową aplikację deweloperską na developer.deyecloud.com (zaloguj się kontem Deye Cloud) i skopiuj jej App ID oraz App Secret. Obsługa Deye Cloud jest jeszcze testowana: zmiana ustawień jest eksperymentalna i pozostaje wyłączona, dopóki nie włączysz jej w Konfiguruj.",
         "data": {
           "region": "Centrum danych",
           "app_id": "App ID",

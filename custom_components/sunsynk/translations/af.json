@@ -26,7 +26,7 @@
       },
       "deyecloud": {
         "title": "Deye Cloud",
-        "description": "Skep 'n gratis ontwikkelaar-toepassing by developer.deyecloud.com (meld aan met jou Deye Cloud-rekening) en kopieer sy App ID en App Secret. Deye Cloud-omsetters is vir eers slegs leesbaar: net sensors, geen beheer nie.",
+        "description": "Skep 'n gratis ontwikkelaar-toepassing by developer.deyecloud.com (meld aan met jou Deye Cloud-rekening) en kopieer sy App ID en App Secret. Deye Cloud-ondersteuning word nog getoets: instellings verander is eksperimenteel en bly af totdat jy dit in Konfigureer aanskakel.",
         "data": {
           "region": "Datasentrum",
           "app_id": "App ID",

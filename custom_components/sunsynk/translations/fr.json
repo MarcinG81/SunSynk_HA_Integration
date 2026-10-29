@@ -26,7 +26,7 @@
       },
       "deyecloud": {
         "title": "Deye Cloud",
-        "description": "Créez une application développeur gratuite sur developer.deyecloud.com (connectez-vous avec votre compte Deye Cloud) et copiez son App ID et son App Secret. Les onduleurs Deye Cloud sont pour l'instant en lecture seule : capteurs uniquement, sans commandes.",
+        "description": "Créez une application développeur gratuite sur developer.deyecloud.com (connectez-vous avec votre compte Deye Cloud) et copiez son App ID et son App Secret. La prise en charge de Deye Cloud est encore en test : la modification des réglages est expérimentale et reste désactivée tant que vous ne l'activez pas dans Configurer.",
         "data": {
           "region": "Centre de données",
           "app_id": "App ID",
