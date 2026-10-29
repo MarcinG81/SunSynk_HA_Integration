@@ -1,6 +1,6 @@
 # Sunsynk / Deye Solar Inverter
 
-Native Home Assistant integration for **Sunsynk** and **Deye / Inteless** solar inverters via the cloud API.
+Native Home Assistant integration for **Sunsynk** and **Deye / Inteless** solar inverters via the cloud API, and from 2.1 for Deye inverters on **Deye Cloud**.
 
 No add-on, virtual machine, container, MQTT bridge or extra YAML — configure
 everything through the Home Assistant UI.
@@ -47,6 +47,7 @@ Power flow card + charts + settings — opt in through the integration options.
 |---|---|
 | Sunsynk | `api.sunsynk.net` |
 | Deye / Inteless | `pv.inteless.com` |
+| Deye on a SOLARMAN / LSW logger *(2.1, still being tested)* | Deye Cloud, with your own developer app from developer.deyecloud.com |
 
 Independent and parallel multi-inverter systems are supported (multiple serial
 numbers per account).

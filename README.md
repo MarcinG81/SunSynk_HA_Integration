@@ -8,9 +8,9 @@
 [![Tests](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/tests.yaml/badge.svg)](https://github.com/MarcinG81/SunSynk_HA_Integration/actions/workflows/tests.yaml)
 [![GitHub release](https://img.shields.io/github/v/release/MarcinG81/SunSynk_HA_Integration?sort=semver)](https://github.com/MarcinG81/SunSynk_HA_Integration/releases/latest)
 
-A native Home Assistant **integration** (not an add-on) for monitoring and controlling Sunsynk and Deye hybrid solar inverters via the Sunsynk cloud API.
+A native Home Assistant **integration** (not an add-on) for monitoring and controlling Sunsynk and Deye hybrid solar inverters via the Sunsynk cloud API, or, from 2.1, Deye Cloud.
 
-> **Note:** This integration communicates with the **Sunsynk cloud API** (`api.sunsynk.net` or `pv.inteless.com`). Your inverter must already be connected to the cloud via the Sunsynk dongle/Wi-Fi stick.
+> **Note:** This integration communicates with the **Sunsynk cloud API** (`api.sunsynk.net` or `pv.inteless.com`), or with **Deye Cloud** for Deye inverters on a SOLARMAN / LSW logger *(2.1)*. Your inverter must already be connected to that cloud.
 
 ---
 
@@ -46,6 +46,7 @@ The difficult reports are what made the integration better.
 - **Solar Forecast** — Optional sensors for predicted PV yield today/tomorrow, cloud cover, precipitation and solar irradiance (GHI/DNI) via Open-Meteo (free, no API key)
 - **Tariff Manager** — Automatic cheap-rate charging and peak-rate discharging based on any HA electricity price sensor (Octopus Agile, NordPool, Tibber, G12, `input_number`, etc.), with an optional separate export price and a test mode that decides without touching the inverter
 - **Virtual Slot Scheduler** — Up to 10 charge/discharge/idle windows per inverter, defined in Home Assistant and put onto the inverter's own timer, with Tariff Manager price decisions taking priority. With nothing scheduled it leaves your own timer alone
+- **Deye Cloud** *(2.1, still being tested)* — Deye inverters on a SOLARMAN / LSW logger, which Sunsynk Connect and Inteless don't accept: the sensors each model reports, offline detection and experimental settings control. See [Deye Cloud inverters](#deye-cloud-inverters-21)
 - **Multiple and parallel inverters** — One integration entry supports multiple serial numbers. A parallel group's slave is recognised and every write goes to its master
 - **Safety limits** — Charge and discharge currents are checked against the inverter's own Max A and the battery's BMS limit (shared across a parallel group), and an optional **Maximum export power** caps what scheduled selling slots may put out
 - **Admin-only control** — Optionally allow only Home Assistant administrators to run the control actions
@@ -80,6 +81,10 @@ Any inverter accessible through the Sunsynk cloud API, including:
 - **Sunsynk** hybrid inverters (all kW ratings)
 - **Deye** hybrid inverters (using `pv.inteless.com` endpoint)
 
+and, from 2.1, through Deye Cloud:
+
+- **Deye** hybrid inverters on a SOLARMAN / LSW logger, single- and three-phase (see [Deye Cloud inverters](#deye-cloud-inverters-21))
+
 ---
 
 ## Prerequisites
@@ -87,6 +92,8 @@ Any inverter accessible through the Sunsynk cloud API, including:
 1. A **Sunsynk account** at [https://home.sunsynk.net](https://home.sunsynk.net) (no MFA — multi-factor authentication is not supported by the API)
 2. Your inverter connected to the Sunsynk cloud (dongle shows green / data visible in the Sunsynk app)
 3. Your **inverter serial number** (visible in the Sunsynk app under _Device_ → _About_)
+
+For **Deye Cloud** *(2.1)*: a Deye Cloud account with the inverter on it, and your own free developer app at [developer.deyecloud.com](https://developer.deyecloud.com/) for its App ID and App Secret. The inverters are picked from the account, so no serial number is needed.
 
 ---
 
@@ -153,11 +160,33 @@ Any inverter accessible through the Sunsynk cloud API, including:
 
 4. Click **Submit** — HA will validate your credentials and create the integration
 
+### Deye Cloud inverters *(2.1)*
+
+Deye inverters on a SOLARMAN / LSW logger report to **Deye Cloud**, not to Sunsynk Connect or Inteless ([#37](https://github.com/MarcinG81/SunSynk_HA_Integration/issues/37)). Deye Cloud support is new and still being tested: reading works on a 17-inverter account, and the experimental controls have only been tried on one inverter so far.
+
+When adding the integration, choose **Deye Cloud** instead of Sunsynk:
+
+| Field | Description |
+|---|---|
+| **Data centre** | The one shown on your developer app (EMEA / APAC is `eu`) |
+| **App ID / App Secret** | From your own free developer app at developer.deyecloud.com: sign in with your Deye Cloud account and create one |
+| **Deye Cloud email or username** | If the email is refused, try the username set in your Deye Cloud account settings |
+| **Deye Cloud password** | Only a hash of it is stored |
+| **Company ID** | Business accounts only; leave it empty for a personal account |
+| **Refresh Interval** | Deye loggers upload about every 5 minutes, so 300 s is a good value |
+
+Then pick the inverters from the account.
+
+- **Sensors:** the same as for Sunsynk inverters, single- and three-phase, but only those the model reports, so nothing stays *Unknown*. Also the external CT (meter) power, grid reactive power and generator power.
+- **Offline loggers:** Deye Cloud keeps answering with the last values of an inverter whose logger is offline, so these aren't taken as current: the inverter is shown as offline, Tariff Manager gets no SOC and a Repair is raised. **Last Cloud Update** shows when the inverter last reported.
+- **Experimental controls** (Configure → *Experimental: change settings through Deye Cloud*, off by default): work mode, energy pattern, battery max charge / discharge current and max sell power, on the inverters Deye Cloud lets you configure (on the accounts tested, three-phase models). Each change is a Deye Cloud order and waits until the inverter applies it; Home Assistant can show the previous value for a while after a change.
+- **Not yet:** Tariff Manager, the Virtual Slot Scheduler and the generated dashboard don't work with Deye Cloud inverters, and the time-of-use table can't be changed.
+
 ### Options (Configure)
 
 **Settings → Devices & Services → Sunsynk → Configure** lets you change everything above, plus the options below.
 
-> **This README describes 2.0, currently in beta.** Options marked *2.0* don't exist in the stable 1.9.x releases.
+> **This README describes 2.1, currently in beta.** Options marked *2.1* don't exist in the stable 2.0.x releases, nor those marked *2.0* in 1.9.x.
 
 | Option | Description |
 |---|---|
