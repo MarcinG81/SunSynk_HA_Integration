@@ -268,6 +268,9 @@ class TestSensors:
         )
         assert sensors["battery_pack2_soc"].name == "Battery Pack 2 SOC"
         assert sensors["battery_pack2_soc"].native_unit_of_measurement == "%"
+        assert sensors["battery_pack2_voltage"].suggested_display_precision == 1
+        assert sensors["battery_pack2_cycles"].suggested_display_precision == 0
+        assert sensors["battery_pack2_soh"].icon == "mdi:battery-heart-variant"
 
     def test_the_readings(self):
         coordinator = SimpleNamespace(

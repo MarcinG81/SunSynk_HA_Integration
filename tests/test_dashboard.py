@@ -116,6 +116,11 @@ class TestPowerFlowCardEntities:
         )
         assert flow_card["entities"]["nonessential_power"] == "none"
 
+    def test_the_grid_box_is_the_grid_power(self):
+        config = build_dashboard("myprefix")
+        entities = config["views"][0]["cards"][0]["cards"][0]["entities"]
+        assert entities["grid_ct_power_172"] == entities["grid_power_169"]
+
     def test_the_house_is_derived_without_a_load_power(self):
         config = build_dashboard(
             "myprefix",

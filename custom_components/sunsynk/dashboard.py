@@ -193,6 +193,8 @@ def build_dashboard(
                                         "day_battery_charge_70": bat_chg_today,
                                         "day_battery_discharge_71": bat_dschg_today,
                                         "grid_power_169": grid_power,
+                                        # The grid box shows the CT power, not 169.
+                                        "grid_ct_power_172": grid_power,
                                         "day_grid_import_76": grid_imp_today,
                                         "day_grid_export_77": grid_exp_today,
                                         "day_load_energy_84": load_today,

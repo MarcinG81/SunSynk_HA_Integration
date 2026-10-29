@@ -249,6 +249,14 @@ def _deyecloud_reports(
     return _resolve_value(endpoint_data, description.data_key) not in (None, "")
 
 
+# Pack voltages to 0.1 V, to compare packs; cycles as whole numbers.
+_PACK_SENSOR_EXTRAS: dict[str, dict[str, Any]] = {
+    "voltage": {"suggested_display_precision": 1},
+    "soh": {"icon": "mdi:battery-heart-variant"},
+    "cycles": {"icon": "mdi:battery-sync", "suggested_display_precision": 0},
+}
+
+
 def _build_dynamic_descriptions(
     coordinator: SunsynkCoordinator, serial: str, *, only_reported: bool = False
 ) -> list[SunsynkSensorEntityDescription]:
@@ -427,6 +435,7 @@ def _build_dynamic_descriptions(
                     native_unit_of_measurement=unit,
                     device_class=dev_class,
                     state_class=SensorStateClass.MEASUREMENT,
+                    **_PACK_SENSOR_EXTRAS.get(field_key, {}),
                 )
             )
 

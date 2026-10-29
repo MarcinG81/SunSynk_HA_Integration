@@ -76,6 +76,7 @@ views:
               day_battery_charge_70: sensor.INVERTER_battery_charge_today
               day_battery_discharge_71: sensor.INVERTER_battery_discharge_today
               grid_power_169: sensor.INVERTER_grid_power
+              grid_ct_power_172: sensor.INVERTER_grid_power   # the grid box shows this one
               day_grid_import_76: sensor.INVERTER_grid_import_today
               day_grid_export_77: sensor.INVERTER_grid_export_today
               day_load_energy_84: sensor.INVERTER_load_energy_used_today
