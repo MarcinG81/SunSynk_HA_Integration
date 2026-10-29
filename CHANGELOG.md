@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **The README's Battery 1/2 row is back, corrected.** beta.3 removed it as if those sensors didn't exist, but they do: Battery 1/2 SOC, Voltage, Current, Power and Temperature are created when the Sunsynk cloud reports a voltage for that battery. Many setups get none, as the cloud reports those fields as 0 or empty. (#44)
+- **The test mode notice hid the power flow on the first view.** That view is a panel, which shows only its first card, so the notice took the power flow's place. The notice is now left off it, as the power flow is the same in or out of test mode. Found by pay4property. (#42)
+
+### Changed
+- **Charge Now's `power` description says that some inverters charge at their rated power whatever the slot power** (a three-phase pair charged at 24 kW with a 1 kW slot). (#42)
 
 ## [2.1.0-beta.4] - 2026-10-28
 

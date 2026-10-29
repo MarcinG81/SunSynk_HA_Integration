@@ -86,7 +86,7 @@ charge_now_start:
           mode: box
     power:
       name: Charge Power
-      description: The timer slot's power on each inverter, e.g. 3000 for 3 kW. Without it, the rated power.
+      description: The timer slot's power on each inverter, e.g. 3000 for 3 kW. Without it, the rated power. Some inverters (e.g. three-phase) charge at their rated power whatever the slot power.
       required: false
       selector:
         number:

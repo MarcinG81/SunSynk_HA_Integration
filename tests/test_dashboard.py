@@ -148,12 +148,16 @@ class TestTariffGating:
         card_titles = [c.get("title") for c in _overview_stack_cards(config)]
         assert "Tariff Manager" not in card_titles
 
-    def test_test_mode_notice_tops_every_view(self):
+    def test_test_mode_notice_tops_every_view_but_the_panel(self):
         config = build_dashboard(
             "myprefix", tariff_eid=lambda key: f"sensor.resolved_{key}", test_mode=True
         )
         for view in config["views"]:
-            assert "test mode" in view["cards"][0]["content"]
+            if view.get("type") == "panel":
+                # A panel view shows only its first card: the power flow (#42).
+                assert "test mode" not in str(view["cards"][0].get("content", ""))
+            else:
+                assert "test mode" in view["cards"][0]["content"]
 
     def test_no_test_mode_notice_without_tariff_manager_or_test_mode(self):
         for config in (

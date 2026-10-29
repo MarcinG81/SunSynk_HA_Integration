@@ -23,7 +23,8 @@ def build_dashboard(
              entity_id, or None if not in registry.  When None is returned the
              entity is omitted from optional card sections.
         test_mode: Tariff Manager is in test mode: each view starts with a
-             notice that nothing is written to the inverters (#42).
+             notice that nothing is written to the inverters (#42). Not the
+             panel view, which shows only its first card.
     """
 
     def e(key: str, suffix: str | None = None, domain: str = "sensor") -> str:
@@ -977,7 +978,8 @@ def build_dashboard(
     }
     if test_mode and has_tariff:
         for view in config["views"]:
-            view["cards"].insert(0, dict(_TEST_MODE_NOTICE))
+            if view.get("type") != "panel":
+                view["cards"].insert(0, dict(_TEST_MODE_NOTICE))
     return config
 
 
