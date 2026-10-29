@@ -107,11 +107,22 @@ class TestPowerFlowCardEntities:
         flow_card = config["views"][0]["cards"][0]["cards"][0]
         assert flow_card["solar"]["mppts"] == 1
 
-    def test_essential_and_nonessential_power_are_literal_none_markers(self):
+    def test_the_house_is_the_load_power(self):
         config = build_dashboard("myprefix")
         flow_card = config["views"][0]["cards"][0]["cards"][0]
-        assert flow_card["entities"]["essential_power"] == "none"
+        assert (
+            flow_card["entities"]["essential_power"]
+            == "sensor.myprefix_load_total_power"
+        )
         assert flow_card["entities"]["nonessential_power"] == "none"
+
+    def test_the_house_is_derived_without_a_load_power(self):
+        config = build_dashboard(
+            "myprefix",
+            eid=lambda key: None if key == "load_total_power" else f"sensor.{key}",
+        )
+        flow_card = config["views"][0]["cards"][0]["cards"][0]
+        assert flow_card["entities"]["essential_power"] == "none"
 
 
 class TestForecastGating:

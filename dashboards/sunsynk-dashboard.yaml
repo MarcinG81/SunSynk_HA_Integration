@@ -81,7 +81,7 @@ views:
               day_load_energy_84: sensor.INVERTER_load_energy_used_today
               inverter_power_175: sensor.INVERTER_ac_power
               load_frequency_192: sensor.INVERTER_grid_frequency
-              essential_power: none          # "none" tells the card to derive this from inverter_power_175
+              essential_power: sensor.INVERTER_load_total_power   # the house; "none" derives it from inverter_power_175
               nonessential_power: none       # "none" tells the card to derive this from grid_power_169
             solar:
               mppts: 2                       # set to 1 if you only have one MPPT string

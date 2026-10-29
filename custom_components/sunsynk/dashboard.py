@@ -198,10 +198,13 @@ def build_dashboard(
                                         "day_load_energy_84": load_today,
                                         "inverter_power_175": inv_pac,
                                         "load_frequency_192": grid_freq,
-                                        # Literal "none" tells the card to derive these
-                                        # from inverter_power_175 / grid_power_169 instead
-                                        # of a dedicated essential/non-essential sensor.
-                                        "essential_power": "none",
+                                        # The house: the cloud's load power. Derived
+                                        # from inverter_power_175 / grid_power_169
+                                        # (literal "none"), it read 0 W whenever the
+                                        # cloud reported either as 0. The card has no
+                                        # non-essential sensor to use.
+                                        "essential_power": e_opt("load_total_power")
+                                        or "none",
                                         "nonessential_power": "none",
                                     }.items()
                                     if v is not None
