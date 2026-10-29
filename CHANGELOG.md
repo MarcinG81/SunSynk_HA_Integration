@@ -3,7 +3,9 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2.1.0-beta.7] - 2026-10-29
+
+In HACS, turn on *Show beta versions* for this integration to see it.
 
 ### Changed
 - **Battery Pack sensors show the voltage to 0.1 V and the cycles as a whole number**, with their own icons for SOH and cycles. (#44)
