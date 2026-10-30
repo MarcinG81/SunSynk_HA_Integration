@@ -640,3 +640,132 @@ async def test_after_a_restart_its_own_layout_is_still_recognised():
     (rewrite,) = _writes(coordinator2)
     assert rewrite["sellTime1En"] == "0"
     assert restarted._original_settings == _USER_TIMER
+
+
+# ── The user's timer put back on the way out must be what the inverter
+# has before the next start takes it as the user's (#42) ─────────────────
+
+
+async def _taken_over_to_discharge(coordinator, scheduler, tariff):
+    """Taken over for a discharge: the inverter has the scheduler's layout."""
+    await scheduler._async_bootstrap()
+    tariff.is_discharging_active_for.return_value = True
+    await scheduler._async_tick_locked()
+    layout = dict(coordinator.data[SERIAL]["settings"])
+    assert layout["sellTime1En"] == 1
+    return layout
+
+
+async def _reloaded(tariff, saved, reported):
+    """The scheduler as set up again, the inverter reporting `reported`."""
+    coordinator, scheduler = _setup(tariff)
+    scheduler._store.async_load.return_value = saved
+    await scheduler.async_load()
+    coordinator.data[SERIAL]["settings"] = dict(reported)
+    return coordinator, scheduler
+
+
+@pytest.mark.asyncio
+async def test_a_reload_mid_discharge_never_takes_the_discharge_for_the_user_timer():
+    """Reloaded mid-discharge, the user's timer is put back, but the inverter
+    still reports the discharge when the scheduler starts again. Taken as the
+    user's timer, Sell would have been left ticked after every discharge."""
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    layout = await _taken_over_to_discharge(coordinator, scheduler, tariff)
+    assert await scheduler.async_shutdown() is True
+    saved = scheduler._store.async_save.call_args.args[0]
+    assert saved["put_back"] == _USER_TIMER
+    assert saved["original_settings"] is None
+
+    tariff.is_discharging_active_for.return_value = False
+    coordinator2, reloaded = await _reloaded(tariff, saved, layout)
+    reloaded._enabled = True
+    await reloaded._async_bootstrap()
+
+    (rewrite,) = _writes(coordinator2)
+    assert rewrite["sellTime1En"] == "0"
+    assert reloaded._original_settings == _USER_TIMER
+    assert reloaded._put_back is None
+
+    # Reported at last: the user's timer, nothing more written.
+    coordinator2.async_write_settings.reset_mock()
+    await reloaded._async_tick_locked()
+    assert _writes(coordinator2) == []
+    assert reloaded._restore_pending is False
+
+
+@pytest.mark.asyncio
+async def test_a_reload_with_the_put_back_already_reported_writes_nothing():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _taken_over_to_discharge(coordinator, scheduler, tariff)
+    await scheduler.async_shutdown()
+    saved = scheduler._store.async_save.call_args.args[0]
+
+    tariff.is_discharging_active_for.return_value = False
+    coordinator2, reloaded = await _reloaded(tariff, saved, _USER_TIMER)
+    reloaded._enabled = True
+    await reloaded._async_bootstrap()
+
+    assert _writes(coordinator2) == []
+    assert reloaded._original_settings == _USER_TIMER
+    assert reloaded._restore_pending is False
+
+
+@pytest.mark.asyncio
+async def test_switched_off_mid_discharge_a_lost_put_back_is_written_again():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    layout = await _taken_over_to_discharge(coordinator, scheduler, tariff)
+    scheduler._enabled = False
+    scheduler._wanted_enabled = False
+    await scheduler._async_shutdown()
+    assert scheduler._put_back == _USER_TIMER
+
+    # Not yet polled, or from a failed refresh: nothing to check against.
+    coordinator.async_write_settings.reset_mock()
+    coordinator.data[SERIAL]["settings"] = {}
+    await scheduler._async_tick()
+    coordinator.data[SERIAL]["settings"] = dict(layout)
+    coordinator.last_update_success = False
+    await scheduler._async_tick()
+    assert _writes(coordinator) == []
+
+    coordinator.last_update_success = True
+    await scheduler._async_tick()
+    (rewrite,) = _writes(coordinator)
+    assert rewrite["sellTime1En"] == "0"
+    assert scheduler._put_back == _USER_TIMER
+
+    coordinator.async_write_settings.reset_mock()
+    await scheduler._async_tick()  # now reported
+    assert _writes(coordinator) == []
+    assert scheduler._put_back is None
+    await scheduler._async_check_put_back()  # nothing left to check
+
+
+@pytest.mark.asyncio
+async def test_a_put_back_still_unconfirmed_is_kept_over_a_shutdown():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _discharge_then_restore_lost(coordinator, scheduler, tariff)
+    assert scheduler._restore_pending is True
+
+    await scheduler.async_shutdown()
+
+    assert _writes(coordinator) == []
+    assert scheduler._put_back == _USER_TIMER
+
+
+@pytest.mark.asyncio
+async def test_a_failed_put_back_on_the_way_out_is_not_taken_as_written():
+    tariff = _tariff()
+    coordinator, scheduler = _setup(tariff)
+    await _taken_over_to_discharge(coordinator, scheduler, tariff)
+    coordinator.async_write_settings.side_effect = RuntimeError("cloud down")
+
+    assert await scheduler.async_shutdown() is False
+
+    assert scheduler._put_back is None
+    assert scheduler._original_settings == _USER_TIMER

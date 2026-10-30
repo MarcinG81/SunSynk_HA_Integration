@@ -971,31 +971,55 @@ class TariffChargingManager:
                 prices = (kwh, *((rate.start, rate.price) for rate in rates))
                 if day in plans and plans[day][0] == prices:
                     continue
-                # A day already under way gets the share of its amount for the
-                # slots still ahead: what was bought or sold earlier that day
-                # isn't known, so planning the whole amount would overdo it.
-                hours = sum(rate.hours for rate in rates)
-                ahead = sum(rate.hours for rate in rates if rate.start >= now)
-                share = ahead / hours if hours else 0.0
-                chosen = plan_day(
-                    rates,
-                    now,
-                    kwh * share,
-                    power_kw,
-                    dearest=direction == "discharge",
-                    limit=(
-                        self._expensive_threshold
-                        if direction == "discharge"
-                        else self._cheap_threshold
-                    ),
+                limit = (
+                    self._expensive_threshold
+                    if direction == "discharge"
+                    else self._cheap_threshold
                 )
+                # Replanned while under way (new prices, e.g. the next day's
+                # entity bringing some of today's, or a new amount), the slots
+                # already started stay, and the rest of the amount is planned
+                # in the slots ahead. Planned again from a share of the day,
+                # an evening's discharge was cut short (#42).
+                started = (
+                    [rate for rate in plans[day][1] if rate.start <= now]
+                    if day in plans
+                    else []
+                )
+                if started:
+                    done = sum(power_kw * rate.hours for rate in started)
+                    amount = max(0.0, kwh - done)
+                    chosen = started + plan_day(
+                        [rate for rate in rates if rate.start > now],
+                        now,
+                        amount,
+                        power_kw,
+                        dearest=direction == "discharge",
+                        limit=limit,
+                    )
+                else:
+                    # A day first planned while under way gets the share of
+                    # its amount for the slots still ahead: what was bought or
+                    # sold earlier that day isn't known, so planning the whole
+                    # amount would overdo it.
+                    hours = sum(rate.hours for rate in rates)
+                    ahead = sum(rate.hours for rate in rates if rate.start >= now)
+                    amount = kwh * (ahead / hours if hours else 0.0)
+                    chosen = plan_day(
+                        rates,
+                        now,
+                        amount,
+                        power_kw,
+                        dearest=direction == "discharge",
+                        limit=limit,
+                    )
                 plans[day] = (prices, chosen)
                 changed = True
                 _LOGGER.info(
                     "Tariff: planned %s for %s, %.1f of %.1f kWh at %.1f kW: %s",
                     direction,
                     day,
-                    kwh * share,
+                    amount,
                     kwh,
                     power_kw,
                     ", ".join(

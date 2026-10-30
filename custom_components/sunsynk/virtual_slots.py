@@ -305,6 +305,10 @@ class VirtualSlotScheduler:
         # seen reporting it yet, and how often it was written again.
         self._restore_pending = False
         self._restore_rewrites = 0
+        # The user's timer put back on the way out (a reload, or switched
+        # off), until the inverter is seen reporting it: the cloud can go on
+        # reporting the old slots for a while, or lose the write (#42).
+        self._put_back: dict[str, Any] | None = None
         self._owned_at_load = True
         self._last_current_key: tuple[str, int] | _CurrentState | None = None
         # Currents a window set that still have to go back to normal, kept
@@ -377,6 +381,7 @@ class VirtualSlotScheduler:
         # layout still isn't taken for the user's timer (#36).
         self._written_layout = dict(data.get("written_layout") or {})
         self._currents_to_restore = set(data.get("currents_to_restore") or ())
+        self._put_back = data.get("put_back") or None
         # Whether the timer was this scheduler's when it last saved; stores
         # from before 2.0.0-rc.1 don't say, and are taken as owned, as then.
         self._owned_at_load = bool(data.get("owns_timer", True))
@@ -393,6 +398,7 @@ class VirtualSlotScheduler:
                 "written_layout": self._written_layout,
                 "currents_to_restore": sorted(self._currents_to_restore),
                 "owns_timer": self._owns_timer,
+                "put_back": self._put_back,
             }
         )
 
@@ -476,7 +482,19 @@ class VirtualSlotScheduler:
             # the race. Never take ownership after shutdown has begun.
             if not self._enabled or not self._drives_inverter():
                 return
-            if self._original_settings is None:
+            if self._original_settings is None and self._put_back:
+                # Put back on the way out, but maybe not reported yet. Taken
+                # from the inverter now, the user's timer could be this
+                # scheduler's discharge, Sell still ticked, and that would be
+                # put back after every discharge from then on (#42). Check it
+                # is there first, as after a stand-by.
+                self._original_settings = self._put_back
+                self._put_back = None
+                self._standing_by = True
+                self._restore_pending = True
+                self._restore_rewrites = 0
+                await self._async_persist()
+            elif self._original_settings is None:
                 # Nothing has been written yet: the user's timer is in place.
                 # If it can't be captured yet (no settings polled), the tick
                 # keeps trying and drives nothing until it can.
@@ -529,6 +547,18 @@ class VirtualSlotScheduler:
         await self._async_persist()
         return True
 
+    async def _async_check_put_back(self) -> None:
+        """Switched off, make sure the timer put back on the way out is what
+        the inverter reports, and write it again if not (#42)."""
+        if self._enabled or not self._put_back:
+            return
+        if getattr(self._coordinator, "last_update_success", True) is False:
+            return
+        current = self._current_managed_settings()
+        if current and not await self._async_check_restore(current, self._put_back):
+            self._put_back = None
+            await self._async_persist()
+
     def _current_managed_settings(self) -> dict[str, Any]:
         settings = (
             (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
@@ -554,7 +584,11 @@ class VirtualSlotScheduler:
         if self._standing_by:
             if getattr(self._coordinator, "last_update_success", True) is not False:
                 current = self._current_managed_settings()
-                if self._restore_pending and await self._async_check_restore(current):
+                if (
+                    self._restore_pending
+                    and current
+                    and await self._async_check_restore(current)
+                ):
                     return False
                 if current and current != self._original_settings:
                     self._original_settings = current
@@ -590,7 +624,9 @@ class VirtualSlotScheduler:
         )
         return True
 
-    async def _async_check_restore(self, current: dict[str, Any]) -> bool:
+    async def _async_check_restore(
+        self, current: dict[str, Any], original: dict[str, Any] | None = None
+    ) -> bool:
         """Make sure the user's timer put back is what the inverter has.
 
         A write can be lost when it crosses another (#36): the discharge
@@ -605,7 +641,7 @@ class VirtualSlotScheduler:
         Returns True when the inverter still holds the scheduler's layout,
         so the caller doesn't take it as the user's timer.
         """
-        original = self._original_settings or {}
+        original = original or self._original_settings or {}
         differs = {
             key: current[key]
             for key, value in original.items()
@@ -719,11 +755,17 @@ class VirtualSlotScheduler:
             )
             pending: dict[str, Any] = {}
             pending_currents: dict[str, Any] = {}
+            put_back = (
+                self._original_settings
+                if self._standing_by and self._restore_pending
+                else None
+            )
             if self._original_settings and owns:
                 try:
                     await self._coordinator.async_write_settings(
                         self._serial, self._original_settings
                     )
+                    put_back = self._original_settings
                 except Exception as err:  # noqa: BLE001
                     success = False
                     pending.update(self._original_settings)
@@ -783,6 +825,8 @@ class VirtualSlotScheduler:
 
             self._original_settings = pending or None
             self._pending_current_restore = pending_currents or None
+            self._put_back = put_back or None
+            self._restore_rewrites = 0
             self._standing_by = False
             self._last_written = {}
             self._last_current_key = None
@@ -1131,6 +1175,10 @@ class VirtualSlotScheduler:
             # Switched off, but a restore failed: keep retrying it on every
             # update until the inverter has the user's settings back.
             await self._async_shutdown(force_disable=False)
+            return
+        if not self._enabled and self._put_back:
+            async with self._operation_lock:
+                await self._async_check_put_back()
             return
         async with self._operation_lock:
             await self._async_tick_locked()

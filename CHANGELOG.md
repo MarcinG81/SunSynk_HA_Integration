@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.0-beta.8] - 2026-10-30
+
+In HACS, turn on *Show beta versions* for this integration to see it.
+
+### Fixed
+- **A discharge could be left on after the integration was reloaded mid-discharge** (reloaded by hand, or after its options were changed). On the way out the user's timer is put back, but the Sunsynk cloud can go on reporting the discharge slots for a while (or lose the write, as in #36). Set up again, the scheduler took what the inverter reported for the user's own timer, Sell ticked on every slot, and put that back after every discharge from then on: the discharge didn't stop at the end of the plan's slots, and switching the Virtual Slot Scheduler off changed nothing. The timer put back is now kept until the inverter reports it, and written again if it still has the scheduler's slots, also with the scheduler switched off. Found by pay4property. (#42)
+- **The plan's evening discharge stopped early** when a day under way was planned again, e.g. when the next day's prices brought some of today's, or the amount was changed. It was planned again from a share of the day, as if nothing had been planned before, which could cut a 15:00-20:00 discharge to 15:00-18:30. Now the slots already started stay, and the rest of the day's amount is planned in the slots ahead. Found by pay4property. (#42)
+
 ## [2.1.0-beta.7] - 2026-10-29
 
 In HACS, turn on *Show beta versions* for this integration to see it.

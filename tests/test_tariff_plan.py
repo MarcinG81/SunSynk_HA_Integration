@@ -306,6 +306,44 @@ async def test_a_day_under_way_gets_its_share_of_the_amount(
 
 
 @pytest.mark.asyncio
+async def test_a_replan_under_way_keeps_the_slots_started(
+    mock_hass, coordinator, states
+):
+    """Planned at 05:00, 06:00-09:00 and 15:00-20:00. At 16:18 the next
+    day's entity brings a slot of today's, so today is planned again: the
+    slots already started stay and the rest of the amount goes in the
+    slots ahead, rather than a share of the day cutting the evening short
+    (#42)."""
+    states["event.export_today"] = _rates(
+        prices=[0.20] * 6 + [0.10] * 12 + [0.25] * 10, first_hour=6
+    )
+    manager = _manager(mock_hass, coordinator, sell_kwh=40)
+    with _at(5):
+        await manager._evaluate()
+        assert len(manager.plans["discharge"]) == 16
+
+    states["event.export_tomorrow"] = _rates(prices=[0.12], first_hour=20)
+    with _at(16, 18):
+        await manager._evaluate()
+        assert [
+            f"{datetime.fromisoformat(slot['start']).astimezone(BST):%H:%M}"
+            for slot in manager.plans["discharge"]
+        ] == [
+            "16:00",
+            "16:30",
+            "17:00",
+            "17:30",
+            "18:00",
+            "18:30",
+            "19:00",
+            "19:30",
+        ]
+    with _at(18, 25):
+        await manager._evaluate()
+    assert manager.is_discharging_active_for(SERIAL)
+
+
+@pytest.mark.asyncio
 async def test_a_new_amount_replans_the_day(mock_hass, coordinator, states):
     manager = _manager(mock_hass, coordinator)
     assert manager.plan_sell_kwh == 5
