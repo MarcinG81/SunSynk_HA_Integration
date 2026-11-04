@@ -103,8 +103,10 @@
           "manual_discharge_power": "Vybít nyní: exportní výkon (W)",
           "plan_import_entities": "Plán: budoucí nákupní ceny",
           "plan_buy_kwh": "Plán: kWh k nákupu denně",
+          "plan_buy_skip": "Plán: nikdy nekupovat mezi",
           "plan_export_entities": "Plán: budoucí výkupní ceny",
-          "plan_sell_kwh": "Plán: kWh k prodeji denně"
+          "plan_sell_kwh": "Plán: kWh k prodeji denně",
+          "plan_sell_skip": "Plán: nikdy neprodávat mezi"
         },
         "data_description": {
           "password": "Ponechte prázdné, chcete-li zachovat uložené heslo. Nové heslo zadejte po jeho změně na portálu Sunsynk nebo Deye.",
@@ -138,8 +140,10 @@
           "manual_discharge_power": "Nejvíce, co Vybít nyní exportuje, např. 3000 pro 3 kW. Prázdné: maximální exportní výkon, jinak jmenovitý výkon střídače.",
           "plan_import_entities": "Entity s nadcházejícími nákupními cenami pro každý úsek, např. current a next day rates z Octopus Energy nebo senzor Nord Pool. S kWh k nákupu Tariff Manager nabíjí v nejlevnějších úsecích každého dne místo vždy, když je cena pod levným prahem; ten pak jen omezuje cenu.",
           "plan_buy_kwh": "Kolik nabít ze sítě denně, pro celý systém, v nejlevnějších úsecích. Prázdné: plán vypnut.",
+          "plan_buy_skip": "Místní časy, kdy plán nikdy nekupuje, např. 23:30-05:30 (může přes půlnoc). Prázdné: žádné.",
           "plan_export_entities": "Entity s nadcházejícími výkupními cenami pro každý úsek, např. export current a next day rates z Octopus Energy. S kWh k prodeji Tariff Manager vybíjí v nejdražších úsecích každého dne; drahý práh je pak nejnižší cena, za kterou prodává.",
-          "plan_sell_kwh": "Kolik exportovat z baterie denně, pro celý systém, v nejdražších úsecích. Prázdné: plán vypnut."
+          "plan_sell_kwh": "Kolik exportovat z baterie denně, pro celý systém, v nejdražších úsecích. Prázdné: plán vypnut.",
+          "plan_sell_skip": "Místní časy, kdy plán nikdy neprodává, např. časy nabíjení baterie 23:30-05:30 (může přes půlnoc): nabíjení má přednost, takže prodej naplánovaný v tu dobu propadne. Úseky naplánované k nákupu se vždy vynechají. Prázdné: žádné."
         }
       },
       "deyecloud": {
@@ -161,6 +165,7 @@
       "invalid_serials": "Neplatné sériové číslo/čísla. Zadejte alespoň jedno sériové číslo.",
       "invalid_forecast_config": "Solární předpověď vyžaduje platnou zeměpisnou šířku, délku a výkon panelů v kWp.",
       "invalid_tariff_config": "Chyba konfigurace tarifu. Levné nabíjení vyžaduje práh + nabíjecí proud + normální proud (všechny tři). Vybíjení vyžaduje práh + špičkový proud + normální proud (všechny tři).",
+      "invalid_plan_window": "Čas vynechaný z plánu není časové okno: zapište jej jako začátek-konec, např. 23:30-05:30.",
       "charge_current_above_limit": "Příliš vysoké: váš systém nabíjí baterii nejvýše {charge_max} A ({charge_limits}). Vyšší hodnota nemá žádný účinek.",
       "discharge_current_above_limit": "Příliš vysoké: váš systém vybíjí baterii nejvýše {discharge_max} A ({discharge_limits}). Vyšší hodnota nemá žádný účinek.",
       "invalid_export_power": "Maximální výkon exportu musí být celé číslo ve wattech od 1 do 30000."

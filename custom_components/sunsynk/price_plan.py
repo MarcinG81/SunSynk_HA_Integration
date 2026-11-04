@@ -124,5 +124,43 @@ def by_day(rates: Iterable[Rate]) -> dict[date, list[Rate]]:
     return days
 
 
+def parse_window(value: Any) -> tuple[int, int] | None:
+    """`"23:30-05:30"` as minutes of the day, or None if blank or not one.
+
+    The end may be earlier than the start, for a window across midnight; a
+    window can't be empty.
+    """
+    text = str(value or "").replace(" ", "")
+    if not text:
+        return None
+    try:
+        start, end = (
+            int(hours) * 60 + int(minutes)
+            for hours, minutes in (part.split(":") for part in text.split("-"))
+        )
+    except ValueError:
+        return None
+    if not (0 <= start < 1440 and 0 <= end < 1440) or start == end:
+        return None
+    return start, end
+
+
+def in_window(rate: Rate, window: tuple[int, int] | None) -> bool:
+    """Whether any part of the slot falls in the local time `window`."""
+    if window is None:
+        return False
+    first, last = window
+
+    def inside(minute: int) -> bool:
+        if first < last:
+            return first <= minute < last
+        return minute >= first or minute < last
+
+    start = dt_util.as_local(rate.start)
+    minute = start.hour * 60 + start.minute
+    length = max(1, math.ceil((rate.end - rate.start).total_seconds() / 60))
+    return any(inside((minute + step) % 1440) for step in range(length))
+
+
 def in_slot(plan: Iterable[Rate], now: datetime) -> Rate | None:
     return next((rate for rate in plan if rate.start <= now < rate.end), None)

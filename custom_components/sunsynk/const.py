@@ -128,6 +128,9 @@ CONF_PLAN_IMPORT_ENTITIES: Final = "plan_import_entities"
 CONF_PLAN_BUY_KWH: Final = "plan_buy_kwh"
 CONF_PLAN_EXPORT_ENTITIES: Final = "plan_export_entities"
 CONF_PLAN_SELL_KWH: Final = "plan_sell_kwh"
+# Local times never planned in, e.g. "23:30-05:30" (#42).
+CONF_PLAN_BUY_SKIP: Final = "plan_buy_skip"
+CONF_PLAN_SELL_SKIP: Final = "plan_sell_skip"
 # Paused from its switch, e.g. while a car charges (#42); kept over restarts.
 CONF_PLAN_PAUSED: Final = "plan_paused"
 # Remembers the Tariff Manager switch across restarts (#30).

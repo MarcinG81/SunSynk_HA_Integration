@@ -22,7 +22,16 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .coordinator import SunsynkCoordinator
 from .current_limits import battery_safe_current, group_sizes
-from .price_plan import Rate, by_day, in_slot, merge_rates, parse_rates, plan_day
+from .price_plan import (
+    Rate,
+    by_day,
+    in_slot,
+    in_window,
+    merge_rates,
+    parse_rates,
+    parse_window,
+    plan_day,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -137,6 +146,9 @@ class TariffChargingManager:
         plan_buy_kwh: float | None = None,
         plan_sell_kwh: float | None = None,
         plan_paused: bool = False,
+        # local times never planned in, e.g. "23:30-05:30" (#42)
+        plan_buy_skip: str | None = None,
+        plan_sell_skip: str | None = None,
         # the most the whole system may export, in W (caps the plan's power)
         max_export_power: int | None = None,
     ) -> None:
@@ -200,6 +212,10 @@ class TariffChargingManager:
             "discharge": plan_sell_kwh,
         }
         self._plan_paused = plan_paused
+        self._plan_skip = {
+            "charge": parse_window(plan_buy_skip),
+            "discharge": parse_window(plan_sell_skip),
+        }
         self._max_export_power = max_export_power
         self._plans: dict[str, dict[Any, tuple[tuple, list[Rate]]]] = {
             "charge": {},
@@ -965,10 +981,28 @@ class TariffChargingManager:
                 changed = True
             power_kw = self._plan_power_kw(direction, targets)
             self._plan_power[direction] = power_kw
-            for day, rates in by_day(merge_rates(*groups)).items():
+            # Never planned in: the window set for it, and selling, the slots
+            # planned for buying. The battery charges then, as charging comes
+            # first, and a sale planned there was lost (#42).
+            buying = self._planned("charge") if direction == "discharge" else []
+            for day, all_rates in by_day(merge_rates(*groups)).items():
                 if day < today:
                     continue
-                prices = (kwh, *((rate.start, rate.price) for rate in rates))
+                skipped = tuple(
+                    rate.start
+                    for rate in all_rates
+                    if in_window(rate, self._plan_skip[direction])
+                    or any(
+                        rate.start < bought.end and bought.start < rate.end
+                        for bought in buying
+                    )
+                )
+                rates = [rate for rate in all_rates if rate.start not in skipped]
+                prices = (
+                    kwh,
+                    skipped,
+                    *((rate.start, rate.price) for rate in all_rates),
+                )
                 if day in plans and plans[day][0] == prices:
                     continue
                 limit = (
@@ -1002,8 +1036,8 @@ class TariffChargingManager:
                     # its amount for the slots still ahead: what was bought or
                     # sold earlier that day isn't known, so planning the whole
                     # amount would overdo it.
-                    hours = sum(rate.hours for rate in rates)
-                    ahead = sum(rate.hours for rate in rates if rate.start >= now)
+                    hours = sum(rate.hours for rate in all_rates)
+                    ahead = sum(rate.hours for rate in all_rates if rate.start >= now)
                     amount = kwh * (ahead / hours if hours else 0.0)
                     chosen = plan_day(
                         rates,
@@ -1072,8 +1106,9 @@ class TariffChargingManager:
             direction: {
                 day.isoformat(): {
                     "kwh": prices[0],
+                    "skipped": [start.isoformat() for start in prices[1]],
                     "prices": [
-                        [start.isoformat(), price] for start, price in prices[1:]
+                        [start.isoformat(), price] for start, price in prices[2:]
                     ],
                     "chosen": [
                         [rate.start.isoformat(), rate.end.isoformat(), rate.price]
@@ -1094,6 +1129,10 @@ class TariffChargingManager:
                     day = date.fromisoformat(day_text)
                     prices = (
                         saved["kwh"],
+                        tuple(
+                            dt_util.parse_datetime(start)
+                            for start in saved.get("skipped", ())
+                        ),
                         *(
                             (dt_util.parse_datetime(start), price)
                             for start, price in saved["prices"]

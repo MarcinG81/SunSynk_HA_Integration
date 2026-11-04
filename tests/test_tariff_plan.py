@@ -34,7 +34,14 @@ def _rates(day=21, prices=_EVENING, first_hour=16):
 
 
 def _manager(
-    hass, coordinator, *, sell_kwh=5, buy_kwh=None, expensive=0.15, entry_id=""
+    hass,
+    coordinator,
+    *,
+    sell_kwh=5,
+    buy_kwh=None,
+    expensive=0.15,
+    entry_id="",
+    **options,
 ):
     manager = TariffChargingManager(
         hass=hass,
@@ -53,6 +60,7 @@ def _manager(
         plan_import_entities=["event.import_today"] if buy_kwh else None,
         plan_buy_kwh=buy_kwh,
         entry_id=entry_id,
+        **options,
     )
     manager._enabled = True
     # A setter's re-evaluation is run by each test itself.
@@ -461,3 +469,91 @@ async def test_the_price_plan_switch_pauses_and_persists():
     await switch.async_will_remove_from_hass()
     manager.async_add_listener.return_value.assert_called_once()
     await switch.async_will_remove_from_hass()
+
+
+# ── Times never planned in (#42) ─────────────────────────────────────────
+
+# The windows are local times: the tests' rates are in BST.
+_LOCAL_BST = patch("homeassistant.util.dt.DEFAULT_TIME_ZONE", BST)
+
+
+@pytest.mark.asyncio
+async def test_no_sale_is_planned_in_the_window_left_out(
+    mock_hass, coordinator, states
+):
+    """18:00-18:30 is the dearest slot, but the battery charges then: the
+    next dearest two are planned instead."""
+    manager = _manager(mock_hass, coordinator, plan_sell_skip="18:00-18:30")
+    with _LOCAL_BST, _at(12):
+        await manager._evaluate()
+        assert [slot["price"] for slot in manager.plans["discharge"]] == [
+            0.2607,
+            0.2659,
+        ]
+
+
+@pytest.mark.asyncio
+async def test_a_window_across_midnight(mock_hass, coordinator, states):
+    states["event.export_today"] = _rates(
+        prices=[0.40, 0.20, 0.20, 0.30], first_hour=23
+    )
+    # Each day is planned on its own: 23:00 on the first, 00:30 on the next.
+    manager = _manager(
+        mock_hass, coordinator, sell_kwh=2.5, plan_sell_skip="23:30-00:30"
+    )
+    with _LOCAL_BST, _at(12):
+        await manager._evaluate()
+        assert [slot["price"] for slot in manager.plans["discharge"]] == [0.40, 0.30]
+
+    manager = _manager(
+        mock_hass, coordinator, sell_kwh=2.5, plan_sell_skip="22:00-00:00"
+    )
+    with _LOCAL_BST, _at(12):
+        await manager._evaluate()
+        assert [slot["price"] for slot in manager.plans["discharge"]] == [0.30]
+
+
+@pytest.mark.asyncio
+async def test_no_sale_is_planned_in_a_slot_planned_for_buying(
+    mock_hass, coordinator, states
+):
+    states["event.import_today"] = _rates(
+        prices=[0.30, 0.30, 0.30, 0.30, 0.05, 0.30, 0.30, 0.30]
+    )
+    manager = _manager(mock_hass, coordinator, buy_kwh=2.5)
+    with _at(12):
+        await manager._evaluate()
+        assert [slot["price"] for slot in manager.plans["charge"]] == [0.05]
+        assert [slot["price"] for slot in manager.plans["discharge"]] == [
+            0.2607,
+            0.2659,
+        ]
+
+
+@pytest.mark.asyncio
+async def test_a_plan_with_slots_left_out_is_kept_over_a_restart(
+    mock_hass, coordinator, states
+):
+    store = MagicMock()
+    store.async_load = AsyncMock(return_value=None)
+    with (
+        _LOCAL_BST,
+        patch("custom_components.sunsynk.tariff.Store", return_value=store),
+    ):
+        manager = _manager(
+            mock_hass, coordinator, entry_id="entry", plan_sell_skip="18:00-18:30"
+        )
+        with _at(12):
+            await manager._evaluate()
+        saved = store.async_delay_save.call_args.args[0]()
+        assert len(saved["discharge"]["2026-10-21"]["skipped"]) == 1
+
+        store.async_delay_save.reset_mock()
+        store.async_load = AsyncMock(return_value=saved)
+        restarted = _manager(
+            mock_hass, coordinator, entry_id="entry", plan_sell_skip="18:00-18:30"
+        )
+        with _at(12, 30):
+            await restarted.async_load()
+            await restarted._evaluate()
+        store.async_delay_save.assert_not_called()

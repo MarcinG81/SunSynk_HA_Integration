@@ -66,10 +66,12 @@ from .const import (
     CONF_PEAK_DISCHARGE_CURRENT,
     CONF_PERFORMANCE_RATIO,
     CONF_PLAN_BUY_KWH,
+    CONF_PLAN_BUY_SKIP,
     CONF_PLAN_EXPORT_ENTITIES,
     CONF_PLAN_IMPORT_ENTITIES,
     CONF_PLAN_PAUSED,
     CONF_PLAN_SELL_KWH,
+    CONF_PLAN_SELL_SKIP,
     CONF_PRICE_ENTITY,
     CONF_PRICE_MAX_AGE,
     CONF_PRICE_STALE_CHECK,
@@ -928,6 +930,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             plan_buy_kwh=_opt(CONF_PLAN_BUY_KWH),
             plan_sell_kwh=_opt(CONF_PLAN_SELL_KWH),
             plan_paused=bool(_opt(CONF_PLAN_PAUSED, False)),
+            plan_buy_skip=_opt(CONF_PLAN_BUY_SKIP),
+            plan_sell_skip=_opt(CONF_PLAN_SELL_SKIP),
             max_export_power=_opt(CONF_MAX_EXPORT_POWER),
         )
         await tariff_manager.async_load()

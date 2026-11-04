@@ -112,6 +112,11 @@ async def test_options_flow_form_validation_and_success_paths():
             {**base, "price_entity": "sensor.price", "cheap_threshold": "0.1"}
         )
     )["errors"]["base"] == "invalid_tariff_config"
+    assert (
+        await flow.async_step_init(
+            {**base, "price_entity": "sensor.price", "plan_sell_skip": "23:30"}
+        )
+    )["errors"]["base"] == "invalid_plan_window"
 
     full = {
         **base,
@@ -593,3 +598,17 @@ def test_the_price_plan_is_parsed():
 def test_a_daily_amount_out_of_range_is_refused(kwh):
     with pytest.raises(ValueError):
         SunsynkOptionsFlow._parse_tariff_fields({"plan_sell_kwh": kwh})
+
+
+def test_the_windows_left_out_of_the_plan_are_parsed():
+    result = SunsynkOptionsFlow._parse_tariff_fields(
+        {"plan_sell_skip": " 23:30 - 05:30 ", "plan_buy_skip": ""}
+    )
+    assert result["plan_sell_skip"] == "23:30-05:30"
+    assert "plan_buy_skip" not in result
+
+
+@pytest.mark.parametrize("window", ["23:30", "25:00-01:00", "10:00-10:00"])
+def test_a_window_that_is_not_one_is_refused(window):
+    with pytest.raises(ValueError, match="like 23:30-05:30"):
+        SunsynkOptionsFlow._parse_tariff_fields({"plan_buy_skip": window})

@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.0-beta.9] - 2026-11-04
+
+In HACS, turn on *Show beta versions* for this integration to see it.
+
+### Added
+- **Times the plan never buys or sells in**: *Plan: never buy between* and *Plan: never sell between* in Configure, e.g. `23:30-05:30` (a window may cross midnight). Leave the battery's charge times out of selling: charging comes first, so a sale planned then was lost, and the day's amount wasn't sold. The plan now picks the dearest slots outside the window instead. Suggested by pay4property. (#42)
+
+### Changed
+- **No sale is planned in a slot planned for buying**, for the same reason, when both plans are on. (#42)
+
 ## [2.1.0-beta.8] - 2026-10-30
 
 In HACS, turn on *Show beta versions* for this integration to see it.

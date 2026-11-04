@@ -103,8 +103,10 @@
           "manual_discharge_power": "Rozładuj teraz: moc eksportu (W)",
           "plan_import_entities": "Plan: ceny zakupu na przód",
           "plan_buy_kwh": "Plan: kWh do kupienia dziennie",
+          "plan_buy_skip": "Plan: nigdy nie kupuj między",
           "plan_export_entities": "Plan: ceny sprzedaży na przód",
-          "plan_sell_kwh": "Plan: kWh do sprzedania dziennie"
+          "plan_sell_kwh": "Plan: kWh do sprzedania dziennie",
+          "plan_sell_skip": "Plan: nigdy nie sprzedawaj między"
         },
         "data_description": {
           "password": "Zostaw puste, aby zachować zapisane hasło. Wpisz nowe hasło po zmianie w portalu Sunsynk lub Deye.",
@@ -138,8 +140,10 @@
           "manual_discharge_power": "Najwięcej, ile Rozładuj teraz oddaje do sieci, np. 3000 dla 3 kW. Puste: maksymalna moc eksportu, a bez niej moc znamionowa falownika.",
           "plan_import_entities": "Encje z nadchodzącymi cenami zakupu dla każdego slotu, np. current i next day rates z Octopus Energy albo czujnik Nord Pool. Gdy podasz kWh do kupienia, Tariff Manager ładuje w najtańszych slotach każdego dnia zamiast zawsze, gdy cena jest poniżej progu taniej energii; próg ogranicza wtedy tylko cenę.",
           "plan_buy_kwh": "Ile ładować z sieci dziennie, dla całego systemu, w najtańszych slotach. Puste: plan wyłączony.",
+          "plan_buy_skip": "Godziny lokalne, w których plan nigdy nie kupuje, np. 23:30-05:30 (może przechodzić przez północ). Puste: brak.",
           "plan_export_entities": "Encje z nadchodzącymi cenami sprzedaży dla każdego slotu, np. export current i next day rates z Octopus Energy. Gdy podasz kWh do sprzedania, Tariff Manager rozładowuje w najdroższych slotach każdego dnia; próg drogiej energii to wtedy najniższa cena, za jaką sprzedaje.",
-          "plan_sell_kwh": "Ile oddać z baterii do sieci dziennie, dla całego systemu, w najdroższych slotach. Puste: plan wyłączony."
+          "plan_sell_kwh": "Ile oddać z baterii do sieci dziennie, dla całego systemu, w najdroższych slotach. Puste: plan wyłączony.",
+          "plan_sell_skip": "Godziny lokalne, w których plan nigdy nie sprzedaje, np. godziny ładowania baterii 23:30-05:30 (może przechodzić przez północ): ładowanie ma pierwszeństwo, więc zaplanowana wtedy sprzedaż przepada. Sloty zaplanowane do kupna są zawsze pomijane. Puste: brak."
         }
       },
       "deyecloud": {
@@ -161,6 +165,7 @@
       "invalid_serials": "Nieprawidłowy numer(y) seryjny. Podaj co najmniej jeden numer.",
       "invalid_forecast_config": "Prognoza słoneczna wymaga prawidłowej szerokości, długości geograficznej i mocy paneli kWp.",
       "invalid_tariff_config": "Błąd konfiguracji taryfy. Ładowanie wymaga progu + prądu ładowania + normalnego prądu (wszystkich trzech). Rozładowanie wymaga progu + szczytowego prądu + normalnego prądu.",
+      "invalid_plan_window": "Godziny do pominięcia w planie to nie przedział czasu: wpisz je jako początek-koniec, np. 23:30-05:30.",
       "charge_current_above_limit": "Za dużo: Twój system ładuje baterię prądem najwyżej {charge_max} A ({charge_limits}). Wyższa wartość nic nie zmienia.",
       "discharge_current_above_limit": "Za dużo: Twój system rozładowuje baterię prądem najwyżej {discharge_max} A ({discharge_limits}). Wyższa wartość nic nie zmienia.",
       "invalid_export_power": "Maksymalna moc eksportu musi być liczbą całkowitą watów od 1 do 30000."

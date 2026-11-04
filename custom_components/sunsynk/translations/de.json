@@ -103,8 +103,10 @@
           "manual_discharge_power": "Jetzt entladen: Exportleistung (W)",
           "plan_import_entities": "Plan: Importpreise voraus",
           "plan_buy_kwh": "Plan: kWh pro Tag kaufen",
+          "plan_buy_skip": "Plan: nie kaufen zwischen",
           "plan_export_entities": "Plan: Exportpreise voraus",
-          "plan_sell_kwh": "Plan: kWh pro Tag verkaufen"
+          "plan_sell_kwh": "Plan: kWh pro Tag verkaufen",
+          "plan_sell_skip": "Plan: nie verkaufen zwischen"
         },
         "data_description": {
           "password": "Leer lassen, um das gespeicherte Passwort zu behalten. Ein neues Passwort eingeben, nachdem es im Sunsynk- oder Deye-Portal geändert wurde.",
@@ -138,8 +140,10 @@
           "manual_discharge_power": "Höchstens so viel exportiert Jetzt entladen, z. B. 3000 für 3 kW. Leer: die maximale Exportleistung, sonst die Nennleistung des Wechselrichters.",
           "plan_import_entities": "Entitäten mit den kommenden Importpreisen pro Zeitfenster, z. B. die Current- und Next-Day-Rates von Octopus Energy oder ein Nord-Pool-Sensor. Mit kWh zum Kaufen lädt der Tariff Manager in den günstigsten Zeitfenstern jedes Tages statt immer dann, wenn der Preis unter der günstigen Schwelle liegt; die Schwelle begrenzt dann nur den Preis.",
           "plan_buy_kwh": "Wie viel pro Tag für die ganze Anlage in den günstigsten Zeitfenstern aus dem Netz geladen wird. Leer: Plan aus.",
+          "plan_buy_skip": "Ortszeiten, in denen der Plan nie kauft, z. B. 23:30-05:30 (auch über Mitternacht). Leer: keine.",
           "plan_export_entities": "Entitäten mit den kommenden Exportpreisen pro Zeitfenster, z. B. die Export-Current- und Next-Day-Rates von Octopus Energy. Mit kWh zum Verkaufen entlädt der Tariff Manager in den teuersten Zeitfenstern jedes Tages; die teure Schwelle ist dann der niedrigste Verkaufspreis.",
-          "plan_sell_kwh": "Wie viel pro Tag für die ganze Anlage in den teuersten Zeitfenstern aus der Batterie exportiert wird. Leer: Plan aus."
+          "plan_sell_kwh": "Wie viel pro Tag für die ganze Anlage in den teuersten Zeitfenstern aus der Batterie exportiert wird. Leer: Plan aus.",
+          "plan_sell_skip": "Ortszeiten, in denen der Plan nie verkauft, z. B. die Ladezeiten der Batterie 23:30-05:30 (auch über Mitternacht): Laden hat Vorrang, ein dort geplanter Verkauf geht verloren. Zum Kaufen geplante Zeitfenster werden immer ausgelassen. Leer: keine."
         }
       },
       "deyecloud": {
@@ -161,6 +165,7 @@
       "invalid_serials": "Ungültige Seriennummer(n). Mindestens eine Seriennummer eingeben.",
       "invalid_forecast_config": "Solarprognose erfordert gültigen Breiten- und Längengrad sowie Panel-kWp.",
       "invalid_tariff_config": "Tarifkonfigurationsfehler. Günstiges Laden benötigt Schwelle + Ladestrom + Normalstrom (alle drei). Entladen benötigt Schwelle + Spitzenstrom + Normalstrom (alle drei).",
+      "invalid_plan_window": "Eine vom Plan ausgenommene Zeit ist kein Zeitfenster: als Beginn-Ende eingeben, z. B. 23:30-05:30.",
       "charge_current_above_limit": "Zu hoch: Ihr System lädt die Batterie mit höchstens {charge_max} A ({charge_limits}). Ein höherer Wert hat keine Wirkung.",
       "discharge_current_above_limit": "Zu hoch: Ihr System entlädt die Batterie mit höchstens {discharge_max} A ({discharge_limits}). Ein höherer Wert hat keine Wirkung.",
       "invalid_export_power": "Die maximale Einspeiseleistung muss eine ganze Zahl in Watt zwischen 1 und 30000 sein."

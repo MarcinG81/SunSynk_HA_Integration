@@ -4,14 +4,18 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from unittest.mock import patch
+
 import pytest
 
 from custom_components.sunsynk.price_plan import (
     Rate,
     by_day,
     in_slot,
+    in_window,
     merge_rates,
     parse_rates,
+    parse_window,
     plan_day,
 )
 
@@ -161,3 +165,37 @@ def test_days_and_the_slot_in_force():
     assert sorted(day.day for day in days) == [21, 22]
     assert in_slot(rates, datetime(2026, 10, 21, 16, 45, tzinfo=BST)).price == 0.2546
     assert in_slot(rates, datetime(2026, 10, 21, 12, 0, tzinfo=BST)) is None
+
+
+@pytest.mark.parametrize(
+    ("text", "window"),
+    [
+        ("23:30-05:30", (1410, 330)),
+        (" 9:00 - 17:00 ", (540, 1020)),
+        ("", None),
+        (None, None),
+        ("23:30", None),
+        ("aa:bb-cc:dd", None),
+        ("24:00-01:00", None),
+        ("10:00-10:00", None),
+    ],
+)
+def test_a_time_window(text, window):
+    assert parse_window(text) == window
+
+
+def test_a_slot_in_a_window():
+    def slot(hour, minute=0):
+        start = datetime(2026, 10, 21, hour, minute, tzinfo=timezone.utc)
+        return Rate(start, start + timedelta(minutes=30), 0.1)
+
+    with patch("homeassistant.util.dt.DEFAULT_TIME_ZONE", timezone.utc):
+        night = parse_window("23:30-05:30")
+        assert in_window(slot(1), night)
+        assert in_window(slot(23, 30), night)
+        assert not in_window(slot(5, 30), night)
+        assert not in_window(slot(23), night)
+        day = parse_window("09:15-17:00")
+        assert in_window(slot(9), day)  # partly in it
+        assert not in_window(slot(17), day)
+        assert not in_window(slot(1), None)

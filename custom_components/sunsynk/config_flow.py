@@ -51,10 +51,12 @@ from .const import (
     CONF_PEAK_DISCHARGE_CURRENT,
     CONF_PERFORMANCE_RATIO,
     CONF_PLAN_BUY_KWH,
+    CONF_PLAN_BUY_SKIP,
     CONF_PLAN_EXPORT_ENTITIES,
     CONF_PLAN_IMPORT_ENTITIES,
     CONF_PLAN_PAUSED,
     CONF_PLAN_SELL_KWH,
+    CONF_PLAN_SELL_SKIP,
     CONF_PRICE_ENTITY,
     CONF_PRICE_MAX_AGE,
     CONF_PRICE_STALE_CHECK,
@@ -82,9 +84,15 @@ from .deyecloud.client import (
     DeyeCloudClient,
     hash_password,
 )
+from .price_plan import parse_window
 from .write_validation import MAX_CURRENT_A, MAX_POWER_W
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class _PlanWindowError(ValueError):
+    """A time window left out of the plan that isn't one, e.g. "23:30"."""
+
 
 STEP_USER_SCHEMA = vol.Schema(
     {
@@ -428,6 +436,8 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                         tariff_fields[CONF_EXPORT_PRICE_ENTITY] = export_price_entity
                     try:
                         tariff_fields.update(self._parse_tariff_fields(user_input))
+                    except _PlanWindowError:
+                        errors["base"] = "invalid_plan_window"
                     except (ValueError, TypeError):
                         errors["base"] = "invalid_tariff_config"
                     else:
@@ -673,6 +683,10 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                     description={"suggested_value": _opt_str(CONF_PLAN_BUY_KWH)},
                 ): str,
                 vol.Optional(
+                    CONF_PLAN_BUY_SKIP,
+                    description={"suggested_value": _opt_str(CONF_PLAN_BUY_SKIP)},
+                ): str,
+                vol.Optional(
                     CONF_PLAN_EXPORT_ENTITIES,
                     description={
                         "suggested_value": _opt(CONF_PLAN_EXPORT_ENTITIES) or None
@@ -683,6 +697,10 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_PLAN_SELL_KWH,
                     description={"suggested_value": _opt_str(CONF_PLAN_SELL_KWH)},
+                ): str,
+                vol.Optional(
+                    CONF_PLAN_SELL_SKIP,
+                    description={"suggested_value": _opt_str(CONF_PLAN_SELL_SKIP)},
                 ): str,
                 # Charge / discharge now (blank = the Tariff Manager values)
                 **{
@@ -912,6 +930,13 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                 result[entities_key] = entities
             if kwh is not None:
                 result[kwh_key] = kwh
+        for key in (CONF_PLAN_BUY_SKIP, CONF_PLAN_SELL_SKIP):
+            text = str(user_input.get(key) or "").replace(" ", "")
+            if not text:
+                continue
+            if parse_window(text) is None:
+                raise _PlanWindowError(f"{key} must be a time window like 23:30-05:30")
+            result[key] = text
         for key, (low, high) in _MANUAL_FIELDS.items():
             value = _parse_int(key)
             if value is None:

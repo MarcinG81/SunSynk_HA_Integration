@@ -103,8 +103,10 @@
           "manual_discharge_power": "立即放电：出口功率 (W)",
           "plan_import_entities": "计划：未来购电价格",
           "plan_buy_kwh": "计划：每天购电 kWh",
+          "plan_buy_skip": "计划：从不在此时段购电",
           "plan_export_entities": "计划：未来售电价格",
-          "plan_sell_kwh": "计划：每天售电 kWh"
+          "plan_sell_kwh": "计划：每天售电 kWh",
+          "plan_sell_skip": "计划：从不在此时段售电"
         },
         "data_description": {
           "password": "留空以保留已保存的密码。在 Sunsynk 或 Deye 门户中更改密码后，请在此输入新密码。",
@@ -138,8 +140,10 @@
           "manual_discharge_power": "“立即放电”最多出口的功率，例如 3 kW 填 3000。留空：使用最大出口功率，否则使用逆变器额定功率。",
           "plan_import_entities": "包含各时段未来购电价格的实体，例如 Octopus Energy 的当天和次日费率，或 Nord Pool 传感器。设置购电量后，Tariff Manager 会在每天最便宜的时段充电，而不是只要价格低于低价阈值就充电；阈值此时仅作为价格上限。",
           "plan_buy_kwh": "整个系统每天在最便宜时段从电网充电的电量。留空：关闭计划。",
+          "plan_buy_skip": "计划从不购电的本地时间，例如 23:30-05:30（可跨午夜）。留空：无。",
           "plan_export_entities": "包含各时段未来售电价格的实体，例如 Octopus Energy 的出口当天和次日费率。设置售电量后，Tariff Manager 会在每天最贵的时段放电；高价阈值此时为最低售电价格。",
-          "plan_sell_kwh": "整个系统每天在最贵时段从电池出口的电量。留空：关闭计划。"
+          "plan_sell_kwh": "整个系统每天在最贵时段从电池出口的电量。留空：关闭计划。",
+          "plan_sell_skip": "计划从不售电的本地时间，例如电池充电时间 23:30-05:30（可跨午夜）：充电优先，此时计划的售电会落空。计划用于购电的时段总是被排除。留空：无。"
         }
       },
       "deyecloud": {
@@ -161,6 +165,7 @@
       "invalid_serials": "序列号无效，请至少输入一个序列号。",
       "invalid_forecast_config": "光伏发电预测需要有效的纬度、经度和组件峰值功率（kWp）。",
       "invalid_tariff_config": "电价配置错误。谷电充电需要阈值 + 充电电流 + 正常电流（三者缺一不可）。放电需要阈值 + 峰值电流 + 正常电流（三者缺一不可）。",
+      "invalid_plan_window": "计划排除的时间不是时间段：请写成 开始-结束，例如 23:30-05:30。",
       "charge_current_above_limit": "过高：您的系统为电池充电的电流最高为 {charge_max} A（{charge_limits}）。更高的值不会生效。",
       "discharge_current_above_limit": "过高：您的系统为电池放电的电流最高为 {discharge_max} A（{discharge_limits}）。更高的值不会生效。",
       "invalid_export_power": "最大上网功率必须是 1 到 30000 之间的整数瓦数。"

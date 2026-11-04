@@ -103,8 +103,10 @@
           "manual_discharge_power": "Ontlaai nou: uitvoerkrag (W)",
           "plan_import_entities": "Plan: invoerpryse vorentoe",
           "plan_buy_kwh": "Plan: kWh om per dag te koop",
+          "plan_buy_skip": "Plan: koop nooit tussen",
           "plan_export_entities": "Plan: uitvoerpryse vorentoe",
-          "plan_sell_kwh": "Plan: kWh om per dag te verkoop"
+          "plan_sell_kwh": "Plan: kWh om per dag te verkoop",
+          "plan_sell_skip": "Plan: verkoop nooit tussen"
         },
         "data_description": {
           "password": "Laat leeg om die gestoorde wagwoord te behou. Voer 'n nuwe wagwoord in nadat jy dit in die Sunsynk- of Deye-portaal verander het.",
@@ -138,8 +140,10 @@
           "manual_discharge_power": "Die meeste wat Ontlaai nou uitvoer, bv. 3000 vir 3 kW. Leeg: die maksimum uitvoerkrag, anders die omsetter se gegradeerde krag.",
           "plan_import_entities": "Entiteite met die komende invoerpryse per gleuf, bv. Octopus Energy se current en next day rates of 'n Nord Pool-sensor. Met kWh om te koop, laai Tariff Manager in die goedkoopste gleuwe van elke dag in plaas van altyd wanneer die prys onder die goedkoop drempel is; die drempel beperk dan net die prys.",
           "plan_buy_kwh": "Hoeveel om elke dag vir die hele stelsel in die goedkoopste gleuwe van die netwerk te laai. Leeg: plan af.",
+          "plan_buy_skip": "Plaaslike tye waarin die plan nooit koop nie, bv. 23:30-05:30 (mag oor middernag gaan). Leeg: geen.",
           "plan_export_entities": "Entiteite met die komende uitvoerpryse per gleuf, bv. Octopus Energy se export current en next day rates. Met kWh om te verkoop, ontlaai Tariff Manager in die duurste gleuwe van elke dag; die duur drempel is dan die laagste prys waarteen dit verkoop.",
-          "plan_sell_kwh": "Hoeveel om elke dag vir die hele stelsel in die duurste gleuwe uit die battery uit te voer. Leeg: plan af."
+          "plan_sell_kwh": "Hoeveel om elke dag vir die hele stelsel in die duurste gleuwe uit die battery uit te voer. Leeg: plan af.",
+          "plan_sell_skip": "Plaaslike tye waarin die plan nooit verkoop nie, bv. die battery se laaitye 23:30-05:30 (mag oor middernag gaan): laai kom eerste, so 'n verkoop wat dan beplan is, gaan verlore. Gleuwe wat vir koop beplan is, word altyd uitgelaat. Leeg: geen."
         }
       },
       "deyecloud": {
@@ -161,6 +165,7 @@
       "invalid_serials": "Ongeldige reeksnommer(s). Voer ten minste een reeksnommer in.",
       "invalid_forecast_config": "Sonsenergie-voorspelling vereis geldige breedtegraad, lengtegraad en paneel-kWp.",
       "invalid_tariff_config": "Tariefkonfigurasie-fout. Goedkoop laaing benodig drempel + laaistroomsterkte + normale stroomsterkte (al drie). Ontlaaing benodig drempel + piekstroomsterkte + normale stroomsterkte (al drie).",
+      "invalid_plan_window": "'n Tyd wat uit die plan gelaat word, is nie 'n tydvenster nie: skryf dit as begin-einde, bv. 23:30-05:30.",
       "charge_current_above_limit": "Te hoog: jou stelsel laai die battery met hoogstens {charge_max} A ({charge_limits}). 'n Hoër waarde het geen effek nie.",
       "discharge_current_above_limit": "Te hoog: jou stelsel ontlaai die battery met hoogstens {discharge_max} A ({discharge_limits}). 'n Hoër waarde het geen effek nie.",
       "invalid_export_power": "Maksimum uitvoerkrag moet 'n heelgetal watt tussen 1 en 30000 wees."

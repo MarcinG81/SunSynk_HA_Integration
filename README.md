@@ -539,6 +539,7 @@ The Tariff Manager automatically charges the battery when electricity is cheap a
 | **Stop selling solar at a negative export price** *(2.1)* | Off by default. When ticked, Tariff Manager turns Solar Sell off while the export price is below zero, and back on afterwards; only where Solar Sell was on |
 | **Plan: import prices ahead** / **Plan: kWh to buy a day** *(2.1)* | Price entities with the coming slots (Octopus Energy current + next day rates, Nord Pool, …) and how much to charge from the grid a day, for the whole system: Tariff Manager then charges in the cheapest slots of each day; the cheap threshold only caps the price |
 | **Plan: export prices ahead** / **Plan: kWh to sell a day** *(2.1)* | The same for export: discharges in the dearest slots of each day; the expensive threshold is the lowest price it sells at |
+| **Plan: never buy between** / **Plan: never sell between** *(2.1)* | Local times the plan never buys or sells in, e.g. `23:30-05:30` (may cross midnight). Use it for the battery's charge times: charging comes first, so a sale planned then is lost and the day's amount isn't sold. Slots planned for buying are always left out of selling |
 | **Charge now: current (A)** *(2.1)* | Default current for the Charge Now action. Blank: the cheap-rate charge current |
 | **Charge now: target SOC (%)** *(2.1)* | Charge Now charges up to here. Blank: the cheap-rate target SOC |
 | **Discharge now: current (A)** *(2.1)* | Default current for the Discharge Now action. Blank: the peak discharge current |
