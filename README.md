@@ -271,6 +271,8 @@ Each inverter appears as a **device** in Home Assistant with the following entit
 | Battery Discharge Total | kWh | Lifetime discharged |
 | Battery 1/2 SOC, Voltage, Current, Power, Temp | various | Per-battery data, only when the Sunsynk cloud reports a voltage for that battery (`batteryVolt1` / `batteryVolt2`); many setups get none |
 | Battery Pack 1, 2… SOC, SOH, Voltage, Current, Power, Temperature, Cycles | various | Each Sunsynk battery bank and pack the cloud lists under Equipment → Battery: pack 1 is the bank (`…M01`), then the packs behind it. Only the fields a pack reports; batteries of other makes aren't listed. The list is read again every hour |
+| Battery Pack 2, 3… Cell Voltage Max, Min, Difference *(2.1)* | V | Highest and lowest cell voltage in a pack, and the gap between them, as diagnostic sensors. Only as fine as the cloud reports them. The cloud gives no voltage for each cell |
+| Battery Pack 1, 2… BMS Warning 1/2, BMS Fault 1/2 *(2.1)* | code | The BMS's raw codes, as diagnostic sensors: `0` is clear. The cloud gives no meaning for a code, so none is shown, and a code that comes and goes between two updates may not be seen |
 
 Worked out by the integration from the readings above (2.1):
 

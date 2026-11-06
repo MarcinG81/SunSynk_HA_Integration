@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.helpers.entity import EntityCategory
 
 from custom_components.sunsynk.api.client import SunsynkApiError, SunsynkClient
 from custom_components.sunsynk.coordinator import SunsynkCoordinator
@@ -29,6 +30,12 @@ _BANK_READING = {
     "aveTemp": None,
     "cycleNumber": None,
     "chargeCurrentLimit": 124.0,
+    "cellMaxVolt": None,
+    "cellMinVolt": None,
+    "batteryFault1": "0",
+    "batteryFault2": "0",
+    "batteryWarning1": "0",
+    "batteryWarning2": "0",
     "packSN": None,
 }
 _PACK_READING = {
@@ -40,7 +47,12 @@ _PACK_READING = {
     "temp": None,
     "aveTemp": 17.0,
     "cycleNumber": 489,
-    "cellMaxVolt": 3.2,
+    "cellMaxVolt": 3.214,
+    "cellMinVolt": 3.187,
+    "batteryFault1": "0",
+    "batteryFault2": "0",
+    "batteryWarning1": "64",
+    "batteryWarning2": "0",
     "packSN": None,
 }
 
@@ -257,6 +269,10 @@ class TestSensors:
                 "battery_pack1_current",
                 "battery_pack1_power",
                 "battery_pack1_temp",
+                "battery_pack1_bms_warning_1",
+                "battery_pack1_bms_warning_2",
+                "battery_pack1_bms_fault_1",
+                "battery_pack1_bms_fault_2",
                 "battery_pack2_soc",
                 "battery_pack2_soh",
                 "battery_pack2_voltage",
@@ -264,6 +280,13 @@ class TestSensors:
                 "battery_pack2_power",
                 "battery_pack2_temp",
                 "battery_pack2_cycles",
+                "battery_pack2_cell_voltage_max",
+                "battery_pack2_cell_voltage_min",
+                "battery_pack2_cell_voltage_difference",
+                "battery_pack2_bms_warning_1",
+                "battery_pack2_bms_warning_2",
+                "battery_pack2_bms_fault_1",
+                "battery_pack2_bms_fault_2",
             ]
         )
         assert sensors["battery_pack2_soc"].name == "Battery Pack 2 SOC"
@@ -271,6 +294,39 @@ class TestSensors:
         assert sensors["battery_pack2_voltage"].suggested_display_precision == 1
         assert sensors["battery_pack2_cycles"].suggested_display_precision == 0
         assert sensors["battery_pack2_soh"].icon == "mdi:battery-heart-variant"
+
+    def test_cell_voltages_and_bms_codes_are_diagnostics(self):
+        sensors = _sensors([_BANK_READING, _PACK_READING])
+        cell = sensors["battery_pack2_cell_voltage_difference"]
+        assert cell.name == "Battery Pack 2 Cell Voltage Difference"
+        assert cell.native_unit_of_measurement == "V"
+        assert cell.suggested_display_precision == 3
+        assert cell.entity_category == EntityCategory.DIAGNOSTIC
+        assert sensors["battery_pack2_cell_voltage_max"].state_class == "measurement"
+        code = sensors["battery_pack2_bms_warning_1"]
+        assert code.name == "Battery Pack 2 BMS Warning 1"
+        assert code.state_class is None
+        assert code.entity_category == EntityCategory.DIAGNOSTIC
+
+    def test_a_difference_needs_both_cell_voltages(self):
+        sensors = _sensors([{**_PACK_READING, "cellMinVolt": None}])
+        assert "battery_pack1_cell_voltage_max" in sensors
+        assert "battery_pack1_cell_voltage_difference" not in sensors
+
+    @pytest.mark.parametrize("reading", [None, "--"])
+    def test_a_difference_without_a_reading_is_unknown(self, reading):
+        coordinator = SimpleNamespace(
+            data={"INV1": {"packs": {"packs": [_PACK_READING]}}}
+        )
+        sensor = next(
+            SunsynkSensor(coordinator, "INV1", desc, MagicMock())
+            for desc in _build_dynamic_descriptions(coordinator, "INV1")
+            if desc.key == "battery_pack1_cell_voltage_difference"
+        )
+        coordinator.data["INV1"]["packs"]["packs"] = [
+            {**_PACK_READING, "cellMinVolt": reading}
+        ]
+        assert sensor.native_value is None
 
     def test_the_readings(self):
         coordinator = SimpleNamespace(
@@ -287,6 +343,11 @@ class TestSensors:
         assert sensors["battery_pack1_temp"].native_value == 17.0
         assert sensors["battery_pack2_temp"].native_value == 17.0
         assert sensors["battery_pack2_cycles"].native_value == 489.0
+        assert sensors["battery_pack2_cell_voltage_max"].native_value == 3.214
+        assert sensors["battery_pack2_cell_voltage_min"].native_value == 3.187
+        assert sensors["battery_pack2_cell_voltage_difference"].native_value == 0.027
+        assert sensors["battery_pack2_bms_warning_1"].native_value == "64"
+        assert sensors["battery_pack2_bms_fault_1"].native_value == "0"
 
     def test_no_packs(self):
         assert _sensors([]) == {}

@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.0-beta.10] - 2026-11-06
+
+In HACS, turn on *Show beta versions* for this integration to see it.
+
+### Added
+- **Cell voltages and BMS codes for each battery pack**: Cell Voltage Max, Cell Voltage Min and Cell Voltage Difference, and BMS Warning 1/2 and BMS Fault 1/2, as diagnostic sensors on Sunsynk batteries. The codes are shown as the cloud reports them, `0` when clear: the cloud gives no meaning for a code, and no voltage for each cell. The cell voltages are only as fine as the cloud reports them. Suggested by Pa-wel. (#48)
+
 ## [2.1.0-beta.9] - 2026-11-04
 
 In HACS, turn on *Show beta versions* for this integration to see it.

@@ -7,6 +7,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
@@ -249,12 +250,43 @@ def _deyecloud_reports(
     return _resolve_value(endpoint_data, description.data_key) not in (None, "")
 
 
+# A BMS code as the cloud reports it (#48): "0" when clear. Text, as it's a
+# code to compare, not a measurement to average or chart.
+_PACK_BMS_CODE: dict[str, Any] = {
+    "text": True,
+    "state_class": None,
+    "entity_category": EntityCategory.DIAGNOSTIC,
+    "icon": "mdi:alert-circle-outline",
+}
+_PACK_CELL_VOLTAGE: dict[str, Any] = {
+    "suggested_display_precision": 3,
+    "entity_category": EntityCategory.DIAGNOSTIC,
+}
+
 # Pack voltages to 0.1 V, to compare packs; cycles as whole numbers.
 _PACK_SENSOR_EXTRAS: dict[str, dict[str, Any]] = {
     "voltage": {"suggested_display_precision": 1},
     "soh": {"icon": "mdi:battery-heart-variant"},
     "cycles": {"icon": "mdi:battery-sync", "suggested_display_precision": 0},
+    "cell_voltage_max": _PACK_CELL_VOLTAGE,
+    "cell_voltage_min": _PACK_CELL_VOLTAGE,
+    "bms_warning_1": _PACK_BMS_CODE,
+    "bms_warning_2": _PACK_BMS_CODE,
+    "bms_fault_1": _PACK_BMS_CODE,
+    "bms_fault_2": _PACK_BMS_CODE,
 }
+
+
+def _pack_cell_voltage_difference(endpoint_data: dict[str, Any], idx: int) -> Any:
+    """Highest cell voltage minus lowest, in one pack (#48)."""
+    try:
+        return round(
+            float(_resolve_value(endpoint_data, f"packs.{idx}.cellMaxVolt"))
+            - float(_resolve_value(endpoint_data, f"packs.{idx}.cellMinVolt")),
+            3,
+        )
+    except (TypeError, ValueError):
+        return None
 
 
 def _build_dynamic_descriptions(
@@ -420,6 +452,26 @@ def _build_dynamic_descriptions(
                 SensorDeviceClass.TEMPERATURE,
             ),
             ("cycles", "Cycles", "cycleNumber", None, None, None),
+            (
+                "cell_voltage_max",
+                "Cell Voltage Max",
+                "cellMaxVolt",
+                None,
+                UnitOfElectricPotential.VOLT,
+                SensorDeviceClass.VOLTAGE,
+            ),
+            (
+                "cell_voltage_min",
+                "Cell Voltage Min",
+                "cellMinVolt",
+                None,
+                UnitOfElectricPotential.VOLT,
+                SensorDeviceClass.VOLTAGE,
+            ),
+            ("bms_warning_1", "BMS Warning 1", "batteryWarning1", None, None, None),
+            ("bms_warning_2", "BMS Warning 2", "batteryWarning2", None, None, None),
+            ("bms_fault_1", "BMS Fault 1", "batteryFault1", None, None, None),
+            ("bms_fault_2", "BMS Fault 2", "batteryFault2", None, None, None),
         ]:
             if pack.get(api_key) is None and (
                 fallback is None or pack.get(fallback) is None
@@ -434,8 +486,24 @@ def _build_dynamic_descriptions(
                     fallback_data_key=f"packs.{idx}.{fallback}" if fallback else "",
                     native_unit_of_measurement=unit,
                     device_class=dev_class,
+                    **{
+                        "state_class": SensorStateClass.MEASUREMENT,
+                        **_PACK_SENSOR_EXTRAS.get(field_key, {}),
+                    },
+                )
+            )
+        if pack.get("cellMaxVolt") is not None and pack.get("cellMinVolt") is not None:
+            descriptions.append(
+                SunsynkSensorEntityDescription(
+                    key=f"battery_pack{idx + 1}_cell_voltage_difference",
+                    name=f"Battery Pack {idx + 1} Cell Voltage Difference",
+                    endpoint="packs",
+                    data_key=f"packs.{idx}.cellMaxVolt",
+                    value_fn=partial(_pack_cell_voltage_difference, idx=idx),
+                    native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+                    device_class=SensorDeviceClass.VOLTAGE,
                     state_class=SensorStateClass.MEASUREMENT,
-                    **_PACK_SENSOR_EXTRAS.get(field_key, {}),
+                    **_PACK_CELL_VOLTAGE,
                 )
             )
 
