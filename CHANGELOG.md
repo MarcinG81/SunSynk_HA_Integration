@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.0-beta.11] - 2026-11-08
+
+In HACS, turn on *Show beta versions* for this integration to see it.
+
+### Added
+- **Battery Warning sensor**: the inverter's own battery warning code from its settings (`batWarn`), as a diagnostic sensor when the cloud reports it. It's a separate code from the packs' BMS Warning 1/2: a code 64 was seen there while the Sunsynk portal and app showed nothing. Shown as reported, `0` when clear, as the cloud gives no meaning for it. Found with Pa-wel. (#48)
+
+### Documentation
+- **Cell voltages come in 0.1 V steps** on the battery tested, so Cell Voltage Difference only shows a large gap. The README says so. (#48)
+
 ## [2.1.0-beta.10] - 2026-11-06
 
 In HACS, turn on *Show beta versions* for this integration to see it.

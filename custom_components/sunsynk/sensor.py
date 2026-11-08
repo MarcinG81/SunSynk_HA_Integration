@@ -410,6 +410,19 @@ def _build_dynamic_descriptions(
                     )
                 )
 
+    # The inverter's own battery warning, from its settings (#48). Not the
+    # packs' batteryWarning1/2: a code 64 showed here while the app showed none.
+    if serial_data.get("settings", {}).get("batWarn") not in (None, ""):
+        descriptions.append(
+            SunsynkSensorEntityDescription(
+                key="battery_warning",
+                name="Battery Warning",
+                endpoint="settings",
+                data_key="batWarn",
+                **_PACK_BMS_CODE,
+            )
+        )
+
     # Each Sunsynk battery bank and pack the cloud lists, with its own SOC (#44):
     # pack 1 is the bank (`...M01`), then the packs behind it. A bank doesn't
     # report cycles or cell data, a pack no limits, so only reported fields

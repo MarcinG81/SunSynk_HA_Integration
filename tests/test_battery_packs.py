@@ -359,6 +359,36 @@ class TestSensors:
         ]
 
 
+class TestBatteryWarning:
+    """The inverter's own battery warning, from its settings (#48)."""
+
+    @staticmethod
+    def _sensor(settings):
+        coordinator = SimpleNamespace(data={"INV1": {"settings": settings}})
+        return next(
+            (
+                SunsynkSensor(coordinator, "INV1", desc, MagicMock())
+                for desc in _build_dynamic_descriptions(coordinator, "INV1")
+                if desc.key == "battery_warning"
+            ),
+            None,
+        )
+
+    @pytest.mark.parametrize(
+        ("reported", "shown"), [("64", "64"), (64, "64"), ("0", "0"), (0, "0")]
+    )
+    def test_the_code_as_reported(self, reported, shown):
+        sensor = self._sensor({"batWarn": reported})
+        assert sensor.native_value == shown
+        assert sensor.entity_description.name == "Battery Warning"
+        assert sensor.entity_description.state_class is None
+        assert sensor.entity_description.entity_category == EntityCategory.DIAGNOSTIC
+
+    @pytest.mark.parametrize("settings", [{}, {"batWarn": None}, {"batWarn": ""}])
+    def test_no_sensor_when_not_reported(self, settings):
+        assert self._sensor(settings) is None
+
+
 def test_pack_serials_are_redacted_in_diagnostics():
     for key in ("sn", "gsn", "id", "invSn", "packSN", "packSn", "bmsSn", "parentSn"):
         assert key in _TO_REDACT
