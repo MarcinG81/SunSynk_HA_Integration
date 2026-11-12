@@ -959,7 +959,13 @@ class TariffChargingManager:
     # ── Plan by the prices ahead (#40) ─────────────────────────────────────
 
     def _plans_on(self, direction: str) -> bool:
-        return bool(self._plan_entities[direction]) and bool(self._plan_kwh[direction])
+        # 0 kWh is a plan to buy (or sell) nothing; only no amount at all
+        # hands back to the thresholds. 0 used to, so setting it from a sunny
+        # forecast charged whenever the price was below the cheap threshold.
+        return (
+            bool(self._plan_entities[direction])
+            and self._plan_kwh[direction] is not None
+        )
 
     def _refresh_plans(self, targets: list[str]) -> None:
         """Plan each day whose prices or amount are new or have changed."""
@@ -981,6 +987,18 @@ class TariffChargingManager:
                 changed = True
             power_kw = self._plan_power_kw(direction, targets)
             self._plan_power[direction] = power_kw
+            limit = (
+                self._expensive_threshold
+                if direction == "discharge"
+                else self._cheap_threshold
+            )
+            # What the plan depends on besides the prices: a new price limit
+            # or power plans the day again. The power at the nominal battery
+            # voltage, as the measured one would replan on every update.
+            basis = (
+                limit,
+                round(self._plan_power_kw(direction, targets, nominal=True), 2),
+            )
             # Never planned in: the window set for it, and selling, the slots
             # planned for buying. The battery charges then, as charging comes
             # first, and a sale planned there was lost (#42).
@@ -1001,15 +1019,11 @@ class TariffChargingManager:
                 prices = (
                     kwh,
                     skipped,
+                    basis,
                     *((rate.start, rate.price) for rate in all_rates),
                 )
                 if day in plans and plans[day][0] == prices:
                     continue
-                limit = (
-                    self._expensive_threshold
-                    if direction == "discharge"
-                    else self._cheap_threshold
-                )
                 # Replanned while under way (new prices, e.g. the next day's
                 # entity bringing some of today's, or a new amount), the slots
                 # already started stay, and the rest of the amount is planned
@@ -1065,7 +1079,9 @@ class TariffChargingManager:
         if changed:
             self._save_plans()
 
-    def _plan_power_kw(self, direction: str, targets: list[str]) -> float:
+    def _plan_power_kw(
+        self, direction: str, targets: list[str], *, nominal: bool = False
+    ) -> float:
         """What the whole system charges or discharges at, in kW.
 
         Per inverter, the power the Virtual Slot Scheduler writes into the
@@ -1088,7 +1104,11 @@ class TariffChargingManager:
             if rated:
                 watts = rated
             else:
-                volts = _positive(data.get("battery", {}).get("voltage")) or 51.2
+                volts = (
+                    None
+                    if nominal
+                    else _positive(data.get("battery", {}).get("voltage"))
+                ) or 51.2
                 watts = self._safe(serial, direction, int(amps)) * volts
             inverters = max(1, sizes.get(serial, 1))
             if direction == "discharge" and self._max_export_power:
@@ -1107,8 +1127,9 @@ class TariffChargingManager:
                 day.isoformat(): {
                     "kwh": prices[0],
                     "skipped": [start.isoformat() for start in prices[1]],
+                    "basis": list(prices[2]),
                     "prices": [
-                        [start.isoformat(), price] for start, price in prices[2:]
+                        [start.isoformat(), price] for start, price in prices[3:]
                     ],
                     "chosen": [
                         [rate.start.isoformat(), rate.end.isoformat(), rate.price]
@@ -1133,6 +1154,9 @@ class TariffChargingManager:
                             dt_util.parse_datetime(start)
                             for start in saved.get("skipped", ())
                         ),
+                        # Saved before 2.1.0-beta.12 without one: planned
+                        # again once, keeping the slots already started.
+                        tuple(saved.get("basis") or ()),
                         *(
                             (dt_util.parse_datetime(start), price)
                             for start, price in saved["prices"]
@@ -1212,6 +1236,8 @@ class TariffChargingManager:
     def _plan_reason(self, direction: str) -> str:
         if self._plan_paused:
             return "the price plan is paused"
+        if not self._plan_kwh[direction]:
+            return "the price plan is set to 0 kWh"
         now = dt_util.utcnow()
         upcoming = [rate for rate in self._planned(direction) if rate.start > now]
         if not upcoming:

@@ -100,6 +100,22 @@ async def test_a_deye_cloud_inverter_is_backed_up_from_what_it_reported(hass, tm
     assert saved["settings"] == {"sysWorkMode": 1}
 
 
+@pytest.mark.asyncio
+async def test_a_deye_cloud_restore_puts_back_only_what_it_can_change(hass):
+    """The rest is listed as left out: planned anyway, Deye Cloud refused the
+    whole restore (audit 2.1 C2)."""
+    coordinator = MagicMock(spec=DeyeCloudCoordinator)
+    coordinator.async_write_settings = AsyncMock()
+    coordinator.data = {"INV1": {"settings": {"sysWorkMode": 1, "time1on": 1}}}
+    file = (await async_backup(hass, coordinator, "INV1"))["file"]
+    coordinator.data = {"INV1": {"settings": {"sysWorkMode": 0, "time1on": 0}}}
+
+    result = await async_restore(hass, coordinator, "INV1", file, dry_run=False, busy=None)
+
+    coordinator.async_write_settings.assert_awaited_once_with("INV1", {"sysWorkMode": 1})
+    assert result["skipped"] == {"time1on": "Deye Cloud can't change it"}
+
+
 def test_a_restore_writes_only_known_settings_that_differ():
     saved = {**SETTINGS, "cap1": "90", "sellTime1": "06:30", "battMode": "-1"}
     current = {**SETTINGS, "battMode": "2"}

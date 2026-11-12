@@ -22,7 +22,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 
 from .coordinator import SunsynkCoordinator
-from .deyecloud.coordinator import DeyeCloudCoordinator
+from .deyecloud.coordinator import DEYE_WRITABLE_KEYS, DeyeCloudCoordinator
 from .write_validation import (
     WRITABLE_SETTING_KEYS,
     SunsynkSettingValidationError,
@@ -108,15 +108,26 @@ async def _async_load(hass: HomeAssistant, file: str) -> dict[str, Any]:
 
 
 def plan_restore(
-    saved: dict[str, Any], current: dict[str, Any]
+    saved: dict[str, Any],
+    current: dict[str, Any],
+    *,
+    can_change: frozenset[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    """What a restore would write, and what it leaves out and why."""
+    """What a restore would write, and what it leaves out and why.
+
+    `can_change`: the settings this cloud can change, if fewer than all those
+    the integration writes (Deye Cloud).
+    """
     changes: dict[str, Any] = {}
     skipped: dict[str, str] = {}
     for key, value in sorted(saved.items()):
         if key not in WRITABLE_SETTING_KEYS:
             continue  # reported only, or not something this integration writes
         if SunsynkCoordinator._values_match(value, current.get(key)):
+            continue
+        if can_change is not None and key not in can_change:
+            # Planned anyway, the whole restore was refused (audit 2.1 C2).
+            skipped[key] = "Deye Cloud can't change it"
             continue
         try:
             validate_setting_value(key, value)
@@ -147,7 +158,15 @@ async def async_restore(
             f"{file} is a backup of inverter {backup['serial']}, not {serial}"
         )
     current = await _async_current_settings(coordinator, serial)
-    changes, skipped = plan_restore(backup["settings"], current)
+    changes, skipped = plan_restore(
+        backup["settings"],
+        current,
+        can_change=(
+            DEYE_WRITABLE_KEYS
+            if isinstance(coordinator, DeyeCloudCoordinator)
+            else None
+        ),
+    )
     result = {
         "file": file,
         "dry_run": dry_run,

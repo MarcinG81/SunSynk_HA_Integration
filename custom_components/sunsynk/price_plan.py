@@ -16,12 +16,16 @@ read, so any supplier they cover works:
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
 from homeassistant.util import dt as dt_util
+
+# A time window, e.g. 23:30-05:30.
+_WINDOW = re.compile(r"(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})")
 
 # Attribute holding the slots, and the key of each slot's price.
 _FORMATS: tuple[tuple[tuple[str, ...], str], ...] = (
@@ -131,16 +135,15 @@ def parse_window(value: Any) -> tuple[int, int] | None:
     window can't be empty.
     """
     text = str(value or "").replace(" ", "")
-    if not text:
+    match = _WINDOW.fullmatch(text)
+    if match is None:
         return None
-    try:
-        start, end = (
-            int(hours) * 60 + int(minutes)
-            for hours, minutes in (part.split(":") for part in text.split("-"))
-        )
-    except ValueError:
+    start_h, start_m, end_h, end_m = (int(part) for part in match.groups())
+    # Each part in range: 10:99 was read as 11:39, a window of almost a day.
+    if max(start_h, end_h) > 23 or max(start_m, end_m) > 59:
         return None
-    if not (0 <= start < 1440 and 0 <= end < 1440) or start == end:
+    start, end = start_h * 60 + start_m, end_h * 60 + end_m
+    if start == end:
         return None
     return start, end
 

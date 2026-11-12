@@ -139,10 +139,10 @@
           "manual_min_soc": "Descargar ahora termina aquí. Vacío: el SOC mínimo de Tariff Manager.",
           "manual_discharge_power": "Lo máximo que exporta Descargar ahora, p. ej. 3000 para 3 kW. Vacío: la potencia máxima de exportación, o la potencia nominal del inversor.",
           "plan_import_entities": "Entidades con los próximos precios de importación por franja, p. ej. current y next day rates de Octopus Energy o un sensor de Nord Pool. Con kWh a comprar, Tariff Manager carga en las franjas más baratas de cada día en lugar de siempre que el precio esté por debajo del umbral barato, que entonces solo limita el precio.",
-          "plan_buy_kwh": "Cuánto cargar de la red al día, para todo el sistema, en las franjas más baratas. Vacío: plan desactivado.",
+          "plan_buy_kwh": "Cuánto cargar de la red al día, para todo el sistema, en las franjas más baratas. Vacío: plan desactivado. 0: nada ese día.",
           "plan_buy_skip": "Horas locales en las que el plan nunca compra, p. ej. 23:30-05:30 (puede cruzar la medianoche). Vacío: ninguna.",
           "plan_export_entities": "Entidades con los próximos precios de exportación por franja, p. ej. export current y next day rates de Octopus Energy. Con kWh a vender, Tariff Manager descarga en las franjas más caras de cada día; el umbral caro es entonces el precio mínimo al que vende.",
-          "plan_sell_kwh": "Cuánto exportar de la batería al día, para todo el sistema, en las franjas más caras. Vacío: plan desactivado.",
+          "plan_sell_kwh": "Cuánto exportar de la batería al día, para todo el sistema, en las franjas más caras. Vacío: plan desactivado. 0: nada ese día.",
           "plan_sell_skip": "Horas locales en las que el plan nunca vende, p. ej. las horas de carga de la batería 23:30-05:30 (puede cruzar la medianoche): la carga va primero, así que una venta planificada entonces se pierde. Las franjas planificadas para comprar siempre se excluyen. Vacío: ninguna."
         }
       },
@@ -168,7 +168,8 @@
       "invalid_plan_window": "Un horario excluido del plan no es una franja horaria: escríbalo como inicio-fin, p. ej. 23:30-05:30.",
       "charge_current_above_limit": "Demasiado alto: su sistema carga la batería con un máximo de {charge_max} A ({charge_limits}). Un valor mayor no tiene efecto.",
       "discharge_current_above_limit": "Demasiado alto: su sistema descarga la batería con un máximo de {discharge_max} A ({discharge_limits}). Un valor mayor no tiene efecto.",
-      "invalid_export_power": "La potencia máxima de exportación debe ser un número entero de vatios entre 1 y 30000."
+      "invalid_export_power": "La potencia máxima de exportación debe ser un número entero de vatios entre 1 y 30000.",
+      "plan_needs_tariff": "Un plan de precios necesita sus ajustes de Tariff Manager: el plan de compra, el umbral barato, la corriente de carga y la corriente normal; el plan de venta, el umbral caro, la corriente de descarga punta y la corriente de descarga normal."
     }
   },
   "issues": {

@@ -90,6 +90,10 @@ from .write_validation import MAX_CURRENT_A, MAX_POWER_W
 _LOGGER = logging.getLogger(__name__)
 
 
+class _PlanNeedsTariffError(ValueError):
+    """A price plan without the threshold and currents it acts with."""
+
+
 class _PlanWindowError(ValueError):
     """A time window left out of the plan that isn't one, e.g. "23:30"."""
 
@@ -438,6 +442,8 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
                         tariff_fields.update(self._parse_tariff_fields(user_input))
                     except _PlanWindowError:
                         errors["base"] = "invalid_plan_window"
+                    except _PlanNeedsTariffError:
+                        errors["base"] = "plan_needs_tariff"
                     except (ValueError, TypeError):
                         errors["base"] = "invalid_tariff_config"
                     else:
@@ -924,12 +930,24 @@ class SunsynkOptionsFlow(config_entries.OptionsFlow):
         ):
             entities = [e for e in user_input.get(entities_key) or [] if e]
             kwh = _parse_float(kwh_key)
-            if kwh is not None and not 0 < kwh <= 1000:
-                raise ValueError(f"{kwh_key} must be above 0 and at most 1000 kWh")
+            # 0: plan to buy / sell nothing, e.g. set by the number on a sunny day.
+            if kwh is not None and not 0 <= kwh <= 1000:
+                raise ValueError(f"{kwh_key} must be 0-1000 kWh")
             if entities:
                 result[entities_key] = entities
             if kwh is not None:
                 result[kwh_key] = kwh
+        # A plan only says when; Tariff Manager charges or discharges with the
+        # threshold's currents, and without them never did (audit 2.1 B2).
+        if result.get(CONF_PLAN_IMPORT_ENTITIES) and CONF_CHEAP_THRESHOLD not in result:
+            raise _PlanNeedsTariffError(
+                "The buy plan needs the cheap charging settings"
+            )
+        if (
+            result.get(CONF_PLAN_EXPORT_ENTITIES)
+            and CONF_EXPENSIVE_THRESHOLD not in result
+        ):
+            raise _PlanNeedsTariffError("The sell plan needs the discharge settings")
         for key in (CONF_PLAN_BUY_SKIP, CONF_PLAN_SELL_SKIP):
             text = str(user_input.get(key) or "").replace(" ", "")
             if not text:

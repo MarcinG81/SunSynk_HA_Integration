@@ -139,10 +139,10 @@
           "manual_min_soc": "Vybít nyní skončí na této hodnotě. Prázdné: minimální SOC Tariff Manageru.",
           "manual_discharge_power": "Nejvíce, co Vybít nyní exportuje, např. 3000 pro 3 kW. Prázdné: maximální exportní výkon, jinak jmenovitý výkon střídače.",
           "plan_import_entities": "Entity s nadcházejícími nákupními cenami pro každý úsek, např. current a next day rates z Octopus Energy nebo senzor Nord Pool. S kWh k nákupu Tariff Manager nabíjí v nejlevnějších úsecích každého dne místo vždy, když je cena pod levným prahem; ten pak jen omezuje cenu.",
-          "plan_buy_kwh": "Kolik nabít ze sítě denně, pro celý systém, v nejlevnějších úsecích. Prázdné: plán vypnut.",
+          "plan_buy_kwh": "Kolik nabít ze sítě denně, pro celý systém, v nejlevnějších úsecích. Prázdné: plán vypnut. 0: ten den nic.",
           "plan_buy_skip": "Místní časy, kdy plán nikdy nekupuje, např. 23:30-05:30 (může přes půlnoc). Prázdné: žádné.",
           "plan_export_entities": "Entity s nadcházejícími výkupními cenami pro každý úsek, např. export current a next day rates z Octopus Energy. S kWh k prodeji Tariff Manager vybíjí v nejdražších úsecích každého dne; drahý práh je pak nejnižší cena, za kterou prodává.",
-          "plan_sell_kwh": "Kolik exportovat z baterie denně, pro celý systém, v nejdražších úsecích. Prázdné: plán vypnut.",
+          "plan_sell_kwh": "Kolik exportovat z baterie denně, pro celý systém, v nejdražších úsecích. Prázdné: plán vypnut. 0: ten den nic.",
           "plan_sell_skip": "Místní časy, kdy plán nikdy neprodává, např. časy nabíjení baterie 23:30-05:30 (může přes půlnoc): nabíjení má přednost, takže prodej naplánovaný v tu dobu propadne. Úseky naplánované k nákupu se vždy vynechají. Prázdné: žádné."
         }
       },
@@ -168,7 +168,8 @@
       "invalid_plan_window": "Čas vynechaný z plánu není časové okno: zapište jej jako začátek-konec, např. 23:30-05:30.",
       "charge_current_above_limit": "Příliš vysoké: váš systém nabíjí baterii nejvýše {charge_max} A ({charge_limits}). Vyšší hodnota nemá žádný účinek.",
       "discharge_current_above_limit": "Příliš vysoké: váš systém vybíjí baterii nejvýše {discharge_max} A ({discharge_limits}). Vyšší hodnota nemá žádný účinek.",
-      "invalid_export_power": "Maximální výkon exportu musí být celé číslo ve wattech od 1 do 30000."
+      "invalid_export_power": "Maximální výkon exportu musí být celé číslo ve wattech od 1 do 30000.",
+      "plan_needs_tariff": "Cenový plán potřebuje k tomu nastavení Tariff Manageru: plán nákupu levný práh, nabíjecí proud a normální proud; plán prodeje drahý práh, špičkový vybíjecí proud a normální vybíjecí proud."
     }
   },
   "issues": {

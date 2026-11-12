@@ -365,8 +365,71 @@ async def test_a_new_amount_replans_the_day(mock_hass, coordinator, states):
         await manager._evaluate()
         assert [slot["price"] for slot in manager.plans["discharge"]] == [0.2661]
 
-    manager.set_plan_sell_kwh(0)
+    manager.set_plan_sell_kwh(None)
     assert manager.plans == {}
+
+
+@pytest.mark.asyncio
+async def test_0_kwh_plans_nothing(mock_hass, coordinator, states):
+    """0 kWh (e.g. set from a sunny forecast) buys nothing that day. It used
+    to hand back to the cheap threshold, which charged all through the cheap
+    period (audit 2.1 B3)."""
+    states["event.import_today"] = _rates(prices=[0.05, 0.05, 0.05, 0.05])
+    states["sensor.price"].state = "0.05"
+    coordinator.data[SERIAL]["battery"]["soc"] = 50
+    manager = _manager(mock_hass, coordinator, buy_kwh=5)
+    manager.set_plan_buy_kwh(0)
+    with _at(16, 10):
+        await manager._evaluate()
+    assert not manager.is_charging_active_for(SERIAL)
+    assert manager.plans["charge"] == []
+    assert manager.decisions[SERIAL]["charging"] == "the price plan is set to 0 kWh"
+
+
+@pytest.mark.asyncio
+async def test_a_new_price_limit_replans_the_day(mock_hass, coordinator, states):
+    """Planned at 0.15, the threshold raised to 0.30: no slot is that dear,
+    so nothing is sold (audit 2.1 B1)."""
+    manager = _manager(mock_hass, coordinator)
+    with _at(12):
+        await manager._evaluate()
+    manager.set_expensive_threshold(0.30)
+    with _at(12, 5):
+        await manager._evaluate()
+        assert manager.plans["discharge"] == []
+    with _at(18, 10):
+        await manager._evaluate()
+    assert not manager.is_discharging_active_for(SERIAL)
+
+
+@pytest.mark.asyncio
+async def test_a_new_power_replans_the_day(mock_hass, coordinator, states):
+    """The rated power read after the day was planned at the current x
+    voltage: 5 kWh at 10 kW is one half hour, not two (audit 2.1 B1)."""
+    manager = _manager(mock_hass, coordinator)
+    with _at(12):
+        await manager._evaluate()
+        assert len(manager.plans["discharge"]) == 2
+    coordinator.data[SERIAL].setdefault("inverter", {})["ratePower"] = 10000
+    with _at(12, 5):
+        await manager._evaluate()
+        assert [slot["price"] for slot in manager.plans["discharge"]] == [0.2661]
+
+
+@pytest.mark.asyncio
+async def test_a_measured_battery_voltage_does_not_replan(
+    mock_hass, coordinator, states
+):
+    """Without a rated power, the plan's power follows the battery voltage,
+    which moves every update; that alone mustn't plan the day again."""
+    manager = _manager(mock_hass, coordinator)
+    with _at(12):
+        await manager._evaluate()
+    saved = manager._plans["discharge"].copy()
+    coordinator.data[SERIAL]["battery"]["voltage"] = 52.3
+    with _at(12, 5):
+        await manager._evaluate()
+    assert manager._plans["discharge"] == saved
 
 
 @pytest.mark.asyncio
@@ -412,6 +475,34 @@ async def test_plans_are_kept_over_a_restart(mock_hass, coordinator, states):
             await restarted._evaluate()
             assert [slot["price"] for slot in restarted.plans["discharge"]] == [
                 0.2659
+            ]
+
+
+@pytest.mark.asyncio
+async def test_a_plan_saved_before_beta_12_keeps_its_started_slots(
+    mock_hass, coordinator, states
+):
+    """Saved without what it was planned with, the day is planned again once
+    after the update, keeping the slot under way."""
+    store = MagicMock()
+    store.async_load = AsyncMock(return_value=None)
+    with patch("custom_components.sunsynk.tariff.Store", return_value=store):
+        manager = _manager(mock_hass, coordinator, entry_id="entry")
+        await manager.async_load()
+        with _at(12):
+            await manager._evaluate()
+    saved = store.async_delay_save.call_args.args[0]()
+    del saved["discharge"]["2026-10-21"]["basis"]
+
+    store.async_load = AsyncMock(return_value=saved)
+    with patch("custom_components.sunsynk.tariff.Store", return_value=store):
+        restarted = _manager(mock_hass, coordinator, entry_id="entry")
+        with _at(18, 10):
+            await restarted.async_load()
+            await restarted._evaluate()
+            assert [slot["price"] for slot in restarted.plans["discharge"]] == [
+                0.2661,
+                0.2659,
             ]
 
 

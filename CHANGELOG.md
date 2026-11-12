@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.1.0-beta.12] - 2026-11-12
+
+In HACS, turn on *Show beta versions* for this integration to see it.
+
+### Fixed
+- **A new price threshold or power didn't change a day already planned.** Raising the sell threshold from 0.15 to 0.30 left slots at 0.27 planned, so it still sold below the new threshold; the same for the buy threshold, and for a new maximum export power or rated power changing how many slots the amount takes. The day is now planned again, keeping the slots already started. A plan saved by an earlier beta is planned again once after updating.
+- **A price plan without Tariff Manager's settings for it never charged or sold**, though its slots showed as planned. Configure now asks for them: the buy plan needs the cheap threshold, charge current and normal current, the sell plan the expensive threshold, peak discharge current and normal discharge current.
+- **A time to leave out of the plan with minutes above 59 was taken**: `10:99-11:00` read as 11:39-11:00, leaving out almost the whole day. It is now refused.
+- **A settings restore on Deye Cloud was refused as a whole** when the backup had settings Deye Cloud can't change. Those are now listed as left out, and the rest is put back.
+
+### Changed
+- **0 kWh to buy or sell plans nothing that day.** It used to turn the plan off, and Tariff Manager then charged whenever the price was below the cheap threshold (or sold above the expensive one), the opposite of what setting 0 from e.g. a sunny forecast meant. To go back to charging by the threshold, clear the amount in Configure. Configure now takes 0 too.
+
 ## [2.1.0-beta.11] - 2026-11-08
 
 In HACS, turn on *Show beta versions* for this integration to see it.

@@ -139,10 +139,10 @@
           "manual_min_soc": "Décharger maintenant s'arrête ici. Vide : le SOC minimum de Tariff Manager.",
           "manual_discharge_power": "Le maximum exporté par Décharger maintenant, p. ex. 3000 pour 3 kW. Vide : la puissance d'export maximale, sinon la puissance nominale de l'onduleur.",
           "plan_import_entities": "Entités avec les prochains prix d'achat par créneau, p. ex. current et next day rates d'Octopus Energy ou un capteur Nord Pool. Avec des kWh à acheter, Tariff Manager charge dans les créneaux les moins chers de chaque jour au lieu de chaque fois que le prix passe sous le seuil bas, qui ne fait alors que plafonner le prix.",
-          "plan_buy_kwh": "Combien charger depuis le réseau chaque jour, pour toute l'installation, dans les créneaux les moins chers. Vide : plan désactivé.",
+          "plan_buy_kwh": "Combien charger depuis le réseau chaque jour, pour toute l'installation, dans les créneaux les moins chers. Vide : plan désactivé. 0 : rien ce jour-là.",
           "plan_buy_skip": "Heures locales où le plan n'achète jamais, p. ex. 23:30-05:30 (peut passer minuit). Vide : aucune.",
           "plan_export_entities": "Entités avec les prochains prix de revente par créneau, p. ex. export current et next day rates d'Octopus Energy. Avec des kWh à vendre, Tariff Manager décharge dans les créneaux les plus chers de chaque jour ; le seuil haut est alors le prix minimum de vente.",
-          "plan_sell_kwh": "Combien exporter depuis la batterie chaque jour, pour toute l'installation, dans les créneaux les plus chers. Vide : plan désactivé.",
+          "plan_sell_kwh": "Combien exporter depuis la batterie chaque jour, pour toute l'installation, dans les créneaux les plus chers. Vide : plan désactivé. 0 : rien ce jour-là.",
           "plan_sell_skip": "Heures locales où le plan ne vend jamais, p. ex. les heures de charge de la batterie 23:30-05:30 (peut passer minuit) : la charge passe d'abord, une vente prévue alors serait perdue. Les créneaux prévus pour l'achat sont toujours exclus. Vide : aucune."
         }
       },
@@ -168,7 +168,8 @@
       "invalid_plan_window": "Une plage exclue du plan n'est pas une plage horaire : écrivez-la début-fin, p. ex. 23:30-05:30.",
       "charge_current_above_limit": "Trop élevé : votre système charge la batterie à {charge_max} A au maximum ({charge_limits}). Une valeur plus élevée n'a aucun effet.",
       "discharge_current_above_limit": "Trop élevé : votre système décharge la batterie à {discharge_max} A au maximum ({discharge_limits}). Une valeur plus élevée n'a aucun effet.",
-      "invalid_export_power": "La puissance d'export maximale doit être un nombre entier de watts entre 1 et 30000."
+      "invalid_export_power": "La puissance d'export maximale doit être un nombre entier de watts entre 1 et 30000.",
+      "plan_needs_tariff": "Un plan de prix a besoin des réglages de Tariff Manager correspondants : le plan d'achat, du seuil bas, du courant de charge et du courant normal ; le plan de vente, du seuil haut, du courant de décharge de pointe et du courant de décharge normal."
     }
   },
   "issues": {

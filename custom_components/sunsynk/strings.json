@@ -139,10 +139,10 @@
           "manual_min_soc": "Discharge Now ends here. Blank: the Tariff Manager minimum SOC.",
           "manual_discharge_power": "The most Discharge Now exports, e.g. 3000 for 3 kW. Blank: the maximum export power, else the inverter's rated power.",
           "plan_import_entities": "Entities with the coming import prices per slot, e.g. Octopus Energy's current and next day rates, or a Nord Pool sensor. With kWh to buy, Tariff Manager charges in the cheapest slots of each day instead of whenever the price is below the cheap threshold, which then only caps the price.",
-          "plan_buy_kwh": "How much to charge from the grid each day, for the whole system, in the cheapest slots. Blank: plan off.",
+          "plan_buy_kwh": "How much to charge from the grid each day, for the whole system, in the cheapest slots. Blank: plan off. 0: nothing that day.",
           "plan_buy_skip": "Local times the plan never buys in, e.g. 23:30-05:30 (may cross midnight). Blank: none.",
           "plan_export_entities": "Entities with the coming export prices per slot, e.g. Octopus Energy's export current and next day rates. With kWh to sell, Tariff Manager discharges in the dearest slots of each day; the expensive threshold is then the lowest price it sells at.",
-          "plan_sell_kwh": "How much to export from the battery each day, for the whole system, in the dearest slots. Blank: plan off.",
+          "plan_sell_kwh": "How much to export from the battery each day, for the whole system, in the dearest slots. Blank: plan off. 0: nothing that day.",
           "plan_sell_skip": "Local times the plan never sells in, e.g. your battery's charge times 23:30-05:30 (may cross midnight): charging comes first, so a sale planned then is lost. Slots planned for buying are always left out. Blank: none."
         }
       },
@@ -168,7 +168,8 @@
       "invalid_plan_window": "A time to leave out of the plan isn't a time window: write it as start-end, e.g. 23:30-05:30.",
       "charge_current_above_limit": "Too high: your system charges the battery at no more than {charge_max} A ({charge_limits}). A higher value has no effect.",
       "discharge_current_above_limit": "Too high: your system discharges the battery at no more than {discharge_max} A ({discharge_limits}). A higher value has no effect.",
-      "invalid_export_power": "Maximum export power must be a whole number of watts between 1 and 30000."
+      "invalid_export_power": "Maximum export power must be a whole number of watts between 1 and 30000.",
+      "plan_needs_tariff": "A price plan needs Tariff Manager's settings for it: the buy plan needs the cheap threshold, charge current and normal current; the sell plan the expensive threshold, peak discharge current and normal discharge current."
     }
   },
   "issues": {

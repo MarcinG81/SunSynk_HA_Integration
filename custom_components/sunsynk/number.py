@@ -510,7 +510,7 @@ TARIFF_NUMBERS: tuple[TariffNumberEntityDescription, ...] = (
         icon="mdi:battery-arrow-down-outline",
     ),
     # Changed day to day, e.g. from the solar forecast, without Configure
-    # (#42). For the whole system; 0 turns that side of the plan off.
+    # (#42). For the whole system; 0 plans nothing for that day.
     TariffNumberEntityDescription(
         key="plan_buy_kwh",
         name="Tariff Plan kWh to Buy",
