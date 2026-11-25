@@ -17,7 +17,9 @@ is the only slot the firmware lets wrap past midnight, and slots 2-5 carry
 the same settings, so none of the user's own start times is left in the
 middle of the day to take over (#36; before, slots 3-5 kept theirs, and a
 price override could land in one of them and export nothing). This is
-recomputed fresh on every tick. Which one is "currently active" flips
+recomputed fresh on every tick. A LifeLynk has four slots, ended by
+`sellTime5` at 23:59, and gets its own layout: see `_layout` (#51).
+Which one is "currently active" flips
 between them as the day progresses (e.g. slot 1 governs the daytime arc,
 slot 6 governs the overnight arc that wraps into the next day), but their
 relative ordering by time-of-day never does.
@@ -93,10 +95,12 @@ ALL_WEEKDAYS: frozenset[int] = frozenset(range(7))
 # setting_key names for each physical timer slot. The scheduler drives all
 # six: slot 1 holds the earlier boundary and slots 2-6 the later one, so no
 # start time of the user's own schedule is left in the middle of the day to
-# take over from it (#36). `on` is the slot's Grid Charge tick.
+# take over from it (#36). `on` is the slot's Grid Charge tick, `time{n}On`
+# on LifeLynk models (#51).
 _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
     n: {
         "on": f"time{n}on",
+        "on_alt": f"time{n}On",
         "cap": f"cap{n}",
         "pac": f"sellTime{n}Pac",
         "start": f"sellTime{n}",
@@ -108,7 +112,11 @@ _PHYSICAL_KEYS: dict[int, dict[str, str]] = {
 _SELL_FLAG_KEYS = frozenset(
     {key for keys in _PHYSICAL_KEYS.values() for key in (keys["en"], keys["en_alt"])}
 )
-_GRID_CHARGE_KEYS = tuple(keys["on"] for keys in _PHYSICAL_KEYS.values())
+_GRID_CHARGE_KEYS = tuple(
+    key for keys in _PHYSICAL_KEYS.values() for key in (keys["on"], keys["on_alt"])
+)
+# Settings with two names, of which each model has one.
+_ONE_OF_KEYS = _SELL_FLAG_KEYS | frozenset(_GRID_CHARGE_KEYS)
 # Rewrites of a window the inverter doesn't report as written, before giving
 # up until the window changes: an inverter that refuses a value must not be
 # written to on every refresh.
@@ -126,6 +134,21 @@ _MANAGED_SETTING_KEYS = (
     )
     + _GRID_CHARGE_KEYS
 )
+
+
+def _slot_numbers(settings: dict[str, Any]) -> tuple[int, ...]:
+    """The timer slots this inverter has: six on most models, four on a
+    LifeLynk, whose `sellTime5` is slot 4's end rather than a slot (#51).
+    All six until the settings are known, or if fewer than three are
+    reported, which no model has."""
+    slots = tuple(n for n in _PHYSICAL_KEYS if f"cap{n}" in settings)
+    return slots if len(slots) >= 3 else tuple(_PHYSICAL_KEYS)
+
+
+def _grid_charge_key(n: int, settings: dict[str, Any]) -> str:
+    """Slot n's Grid Charge tick under the name this inverter uses."""
+    keys = _PHYSICAL_KEYS[n]
+    return keys["on_alt"] if keys["on_alt"] in settings else keys["on"]
 
 
 def _parse_hhmm(value: str) -> tuple[int, int]:
@@ -534,8 +557,21 @@ class VirtualSlotScheduler:
                 self._serial,
             )
             return False
-        # Each model has only one of the two sell-flag names.
-        missing = set(_MANAGED_SETTING_KEYS) - captured.keys() - _SELL_FLAG_KEYS
+        # Each model has only one of the two sell-flag and Grid Charge names,
+        # and only its own slots (four on a LifeLynk, #51).
+        slots = _slot_numbers(self._settings())
+        missing = {
+            key
+            for n in slots
+            for key in _PHYSICAL_KEYS[n].values()
+            if key not in _ONE_OF_KEYS
+        } - captured.keys()
+        missing |= {
+            _PHYSICAL_KEYS[n]["on"]
+            for n in slots
+            if not {_PHYSICAL_KEYS[n]["on"], _PHYSICAL_KEYS[n]["on_alt"]}
+            & captured.keys()
+        }
         if missing:
             _LOGGER.warning(
                 "Virtual slots [%s]: cannot capture missing settings, they "
@@ -559,10 +595,11 @@ class VirtualSlotScheduler:
             self._put_back = None
             await self._async_persist()
 
+    def _settings(self) -> dict[str, Any]:
+        return (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
+
     def _current_managed_settings(self) -> dict[str, Any]:
-        settings = (
-            (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
-        )
+        settings = self._settings()
         return {key: settings[key] for key in _MANAGED_SETTING_KEYS if key in settings}
 
     def _has_work(self) -> bool:
@@ -778,7 +815,10 @@ class VirtualSlotScheduler:
                 try:
                     await self._coordinator.async_write_settings(
                         self._serial,
-                        {key: 0 for key in _GRID_CHARGE_KEYS},
+                        {
+                            _grid_charge_key(n, self._settings()): 0
+                            for n in _slot_numbers(self._settings())
+                        },
                     )
                 except Exception as err:  # noqa: BLE001
                     success = False
@@ -1236,12 +1276,12 @@ class VirtualSlotScheduler:
         # start bounding slot 1, #21). Started together, these land in the
         # coordinator's queue in the same turn and go out as one System Mode
         # request, which keeps write volume down on parallel systems (#21).
+        windows, active_physical = self._layout(plan, now)
         wrote = await asyncio.gather(
-            self._write_window_if_changed(1, plan.slot1, plan.slot1_start),
             *(
-                self._write_window_if_changed(n, plan.slot6, plan.slot6_start)
-                for n in range(2, 7)
-            ),
+                self._write_window_if_changed(n, resolution, start)
+                for n, resolution, start in windows
+            )
         )
         wrote_current = await self._apply_current_if_changed(plan.active_resolution)
 
@@ -1252,13 +1292,13 @@ class VirtualSlotScheduler:
                 self._serial,
                 plan.active_resolution.source,
                 plan.active_resolution.mode,
-                plan.active_physical,
+                active_physical,
                 plan.next_boundary.isoformat() if plan.next_boundary else "none",
             )
             self._current_source = plan.active_resolution.source
             changed = True
-        if plan.active_physical != self._current_physical_slot:
-            self._current_physical_slot = plan.active_physical
+        if active_physical != self._current_physical_slot:
+            self._current_physical_slot = active_physical
             changed = True
         boundary_changed = plan.next_boundary != self._next_boundary
         if boundary_changed:
@@ -1271,6 +1311,56 @@ class VirtualSlotScheduler:
 
         if changed:
             self._notify_listeners()
+
+    def _layout(
+        self, plan: _TickPlan, now: datetime
+    ) -> tuple[list[tuple[int, Resolution, str]], int]:
+        """What goes on each timer slot, and which slot is in force now.
+
+        With six slots, slot 1 holds the earlier boundary and slots 2-6 the
+        later one, slot 6 wrapping past midnight into slot 1. A LifeLynk has
+        four, and its `sellTime5` ends slot 4 at 23:59 rather than wrapping
+        (#51). There slot 1 starts at 00:00 with what runs over midnight,
+        slot 2 holds the earlier boundary and the rest the later one, which
+        is right whether or not the last slot wraps.
+        """
+        slots = _slot_numbers(self._settings())
+        if len(slots) == 6:
+            return [
+                (1, plan.slot1, plan.slot1_start),
+                *((n, plan.slot6, plan.slot6_start) for n in slots[1:]),
+            ], plan.active_physical
+        midnight = plan.slot1 if plan.slot1_start == "00:00" else plan.slot6
+        windows = [
+            (slots[0], midnight, "00:00"),
+            (slots[1], plan.slot1, plan.slot1_start),
+            *((n, plan.slot6, plan.slot6_start) for n in slots[2:]),
+        ]
+        if plan.active_physical == 1:
+            active = slots[1]
+        elif now.strftime("%H:%M") < plan.slot1_start:
+            active = slots[0]
+        else:
+            active = slots[-1]
+        return windows, active
+
+    def _slot_power_limit(self) -> int | None:
+        """Most a timer slot's power may be on a model without six slots.
+
+        A LifeLynk refuses a slot power above 2000 W although rated at 3600 W
+        (#51), and its range isn't reported, so it gets no more than the
+        highest power in the user's own timer, which it accepted. None on
+        other models, or before the user's timer is captured.
+        """
+        if len(_slot_numbers(self._settings())) == 6 or not self._original_settings:
+            return None
+        powers = []
+        for keys in _PHYSICAL_KEYS.values():
+            try:
+                powers.append(int(self._original_settings.get(keys["pac"]) or 0))
+            except (TypeError, ValueError):
+                continue
+        return max(powers, default=0) or None
 
     async def _write_window_if_changed(
         self, index: int, resolution: Resolution, start: str
@@ -1327,21 +1417,30 @@ class VirtualSlotScheduler:
                 self._max_export_power,
             )
             pac = share
+        model_limit = self._slot_power_limit()
+        if model_limit is not None and pac > model_limit:
+            if resolution.mode == MODE_DISCHARGE:
+                _LOGGER.warning(
+                    "Virtual slots [%s]: lowering sell power from %s W to %s W, "
+                    "the most this inverter's timer slots take",
+                    self._serial,
+                    pac,
+                    model_limit,
+                )
+            pac = model_limit
         sell_en = resolution.mode == MODE_DISCHARGE
         cache_key = (on, cap, pac, start, sell_en)
 
         keys = _PHYSICAL_KEYS[index]
+        settings = self._settings()
         window = {
-            keys["on"]: 1 if on else 0,
+            _grid_charge_key(index, settings): 1 if on else 0,
             keys["cap"]: cap,
             keys["pac"]: pac,
             keys["start"]: start,
         }
         # The per-slot sell flag is sellTime{n}on on some Sunsynk models and
         # sellTime{n}En on Deye ones; write whichever this inverter has (#33).
-        settings = (
-            (self._coordinator.data or {}).get(self._serial, {}).get("settings", {})
-        )
         sell_key = next(
             (key for key in (keys["en"], keys["en_alt"]) if key in settings), None
         )
@@ -1420,14 +1519,18 @@ class VirtualSlotScheduler:
             wrote = False
             if self._last_current_key is _CurrentState.IDLE:
                 return False
-            if self._normal_charge_current is not None:
+            if self._normal_charge_current is not None and self._has_current(
+                "chargeCurrent"
+            ):
                 await self._coordinator.async_write_setting(
                     self._serial,
                     "chargeCurrent",
                     self._safe("chargeCurrent", self._normal_charge_current),
                 )
                 wrote = True
-            if self._normal_discharge_current is not None:
+            if self._normal_discharge_current is not None and self._has_current(
+                "dischargeCurrent"
+            ):
                 await self._coordinator.async_write_setting(
                     self._serial,
                     "dischargeCurrent",
@@ -1445,6 +1548,16 @@ class VirtualSlotScheduler:
         current_key = (key, value)
         if current_key == self._last_current_key:
             return False
+        if not self._has_current(key):
+            _LOGGER.warning(
+                "Virtual slots [%s]: this inverter has no %s setting, the "
+                "window's current of %s A is not set",
+                self._serial,
+                key,
+                value,
+            )
+            self._last_current_key = current_key
+            return False
         await self._coordinator.async_write_setting(
             self._serial, key, self._safe(key, value)
         )
@@ -1453,6 +1566,14 @@ class VirtualSlotScheduler:
             self._currents_to_restore.add(key)
             await self._async_persist()
         return True
+
+    def _has_current(self, key: str) -> bool:
+        """Whether the inverter has this current setting. A LifeLynk reports
+        no chargeCurrent / dischargeCurrent (#51), and writing one would only
+        be refused. Only a model without six timer slots is checked: on the
+        others it is always written, as before."""
+        settings = self._settings()
+        return len(_slot_numbers(settings)) == 6 or key in settings
 
     def _safe(self, key: str, amps: int) -> int:
         """`amps`, lowered if the parallel group would exceed the battery BMS."""
